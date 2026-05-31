@@ -210,7 +210,7 @@
             
             <button class="lang-btn" onclick="changeBillLang('be')"><span>🇧🇪</span><span>BE</span></button>
             <button class="lang-btn" onclick="changeBillLang('hu')"><span>🇭🇺</span><span>HU</span></button>
-            <button class="lang-btn" onclick="changeBillLang('at')"><span>🇦🇹</span><span>AT</span></button>
+            <button class="lang-btn" onclick="changeBillLang('at')"><span>🇦́t</span><span>AT</span></button>
             <button class="lang-btn" onclick="changeBillLang('tw')"><span>🇹🇼</span><span>TW</span></button>
             
             <button class="lang-btn" onclick="changeBillLang('sg')"><span>🇸🇬</span><span>SG</span></button>
@@ -242,7 +242,6 @@
         onDisconnect 
     } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
-    // Import dữ liệu thực đơn và dịch thuật đã được tách ra
     import { menu } from "./menu.js";
     import { dict } from "./dict.js";
 
@@ -256,7 +255,6 @@
         appId: "1:727819537743:web:36078910a5b351866f893a"
     };
 
-    // Khởi tạo Firebase v10
     const app = initializeApp(firebaseConfig);
     const database = getDatabase(app);
     const dbRef = ref(database, 'combetram_v6_data');
@@ -277,6 +275,8 @@
         const el = document.getElementById(elementId);
         if (!el) return;
         const startValue = parseInt(el.innerText.replace(/\D/g, '')) || 0;
+        if (startValue === newValue) return; // Bảo vệ chống Layout Thrashing lặp lại vô ích
+        
         const duration = 800;
         const startTime = performance.now();
         function update(currentTime) {
@@ -290,7 +290,6 @@
         requestAnimationFrame(update);
     }
 
-    // Quản lý trạng thái Presence (Online Count) v10
     const onlineRef = ref(database, '.info/connected');
     const presenceListRef = ref(database, 'combetram_v6_data/presence');
     const myPresenceRef = push(presenceListRef);
@@ -303,7 +302,11 @@
     });
 
     onValue(presenceListRef, (snap) => {
-        document.getElementById('online-val').innerText = snap.numChildren();
+        const onlineValEl = document.getElementById('online-val');
+        const count = snap.numChildren();
+        if (onlineValEl.innerText !== String(count)) {
+            onlineValEl.innerText = count;
+        }
     });
 
     function renderMenu() {
@@ -314,23 +317,26 @@
                 h += `<div class="menu-item" id="row-${i.id}">
                     <div class="item-info"><b>${i.name}</b><small>${i.price.toLocaleString()}đ</small></div>
                     <div class="controls">
-                        <button class="btn-qty btn-sub" id="btn-sub-${i.id}">-</button>
+                        <button class="btn-qty btn-sub" data-item-id="${i.id}">-</button>
                         <span class="qty-num" id="q-${i.id}">0</span>
-                        <button class="btn-qty btn-add" id="btn-add-${i.id}">+</button>
+                        <button class="btn-qty btn-add" data-item-id="${i.id}">+</button>
                     </div>
                 </div>`;
             });
         });
         document.getElementById('menu-list').innerHTML = h;
-
-        menu.flatMap(g => g.items).forEach(i => {
-            document.getElementById(`btn-sub-${i.id}`).addEventListener('click', () => change(i.id, -1));
-            document.getElementById(`btn-add-${i.id}`).addEventListener('click', () => change(i.id, 1));
-        });
     }
     renderMenu();
 
-    // Lắng nghe dữ liệu Realtime v10
+    // SỬA LỖI MEMORY LEAK: Sử dụng duy nhất 1 Event Delegation cho toàn bộ Menu List
+    document.getElementById('menu-list').addEventListener('click', (e) => {
+        const btn = e.target.closest('.btn-qty');
+        if (!btn) return;
+        const itemId = parseInt(btn.dataset.itemId);
+        const delta = btn.classList.contains('btn-add') ? 1 : -1;
+        change(itemId, delta);
+    });
+
     onValue(dbRef, snap => {
         const val = snap.val();
         if(val) {
@@ -371,8 +377,12 @@
         const row = document.getElementById(`row-${id}`);
         const tabBtn = document.getElementById(`tab-${currentTab}`);
         const cls = delta > 0 ? 'flash-add' : 'flash-sub';
-        row.classList.add(cls); tabBtn.classList.add(cls);
-        setTimeout(() => { row.classList.remove(cls); tabBtn.classList.remove(cls); }, 400);
+        if(row) row.classList.add(cls); 
+        if(tabBtn) tabBtn.classList.add(cls);
+        setTimeout(() => { 
+            if(row) row.classList.remove(cls); 
+            if(tabBtn) tabBtn.classList.remove(cls); 
+        }, 400);
     }
 
     function changeBillLang(l) { triggerHaptic('add'); currentBillLang = l; refresh(); }
@@ -391,16 +401,23 @@
                 const row = document.getElementById(`row-${i.id}`);
                 const qSpan = document.getElementById(`q-${i.id}`);
                 if (row && qSpan) {
-                    qSpan.innerText = q;
-                    row.classList.remove('qty-1','qty-2','qty-3','qty-4','qty-5');
-                    if(q >= 5) row.classList.add('qty-5'); else if(q > 0) row.classList.add('qty-' + q);
+                    // TỐI ƯU DOM: Chỉ update text và class nếu số lượng thực tế thay đổi
+                    if (qSpan.innerText !== String(q)) {
+                        qSpan.innerText = q;
+                        row.className = 'menu-item'; // reset class
+                        if(q >= 5) row.classList.add('qty-5'); else if(q > 0) row.classList.add('qty-' + q);
+                    }
                 }
             });
             if(isLock) {
                 let h = ""; let t = 0; let my = data.orders[currentTab] || {};
                 const langData = dict[currentBillLang] || dict['vi'];
-                document.getElementById('txt-total-label').innerText = langData.total;
-                document.getElementById('txt-lang-flag').innerText = langData.flag;
+                
+                // TỐI ƯU DOM: Tránh ghi đè text tĩnh lặp đi lặp lại
+                const lblTotal = document.getElementById('txt-total-label');
+                const lblFlag = document.getElementById('txt-lang-flag');
+                if (lblTotal.innerText !== langData.total) lblTotal.innerText = langData.total;
+                if (lblFlag.innerText !== langData.flag) lblFlag.innerText = langData.flag;
                 
                 let idx = 0;
                 for(let id in my) {
@@ -417,7 +434,14 @@
                         idx++;
                     }
                 }
-                document.getElementById('bill-list').innerHTML = h || "Trống";
+                
+                // TỐI ƯU DOM: Chỉ nạp lại chuỗi HTML nếu danh sách món trong bill thay đổi
+                const billListEl = document.getElementById('bill-list');
+                const newHTML = h || "Trống";
+                if (billListEl.innerHTML !== newHTML) {
+                    billListEl.innerHTML = newHTML;
+                }
+                
                 const bTotal = document.getElementById('bill-total');
                 const tBox = document.getElementById('total-container');
                 if(parseInt(bTotal.innerText.replace(/\D/g,'')) !== t) {
@@ -442,24 +466,38 @@
 
             const timeSpan = document.getElementById(`time-${i}`);
             if(timeSpan) {
+                let targetText = "";
                 if(s > 0 && data.times && data.times[i]) {
                     const diff = Math.floor((now - data.times[i]) / 60000);
-                    timeSpan.innerText = diff > 0 ? "⏱ " + diff + " phút" : "⏱ Mới vào";
-                } else { timeSpan.innerText = ""; }
+                    targetText = diff > 0 ? "⏱ " + diff + " phút" : "⏱ Mới vào";
+                }
+                if (timeSpan.innerText !== targetText) timeSpan.innerText = targetText;
             }
 
             const btn = document.getElementById(`tab-${i}`);
             if(btn) {
                 const originalClasses = i === 7 ? "table-card full-width" : (i >= 8 ? "table-card half-width" : "table-card");
-                btn.className = originalClasses;
-                if(i === currentTab) btn.classList.add('active');
+                let targetClassName = originalClasses;
+                
+                if(i === currentTab) targetClassName += ' active';
                 if(isTabLocked) {
-                    if(i >= 7) btn.classList.add('is-locked-special');
-                    else btn.classList.add('is-locked');
-                } else if(s > 0) { btn.classList.add('has-guest'); }
+                    targetClassName += (i >= 7) ? ' is-locked-special' : ' is-locked';
+                } else if(s > 0) { 
+                    targetClassName += ' has-guest'; 
+                }
+
+                // TỐI ƯU DOM: Chỉ ghi đè class string nếu cấu trúc thực sự thay đổi
+                if (btn.className !== targetClassName) {
+                    btn.className = targetClassName;
+                }
             }
         }
-        document.getElementById('reset-area').style.display = anyGuest ? 'none' : 'block';
+        
+        const resetArea = document.getElementById('reset-area');
+        const targetResetDisplay = anyGuest ? 'none' : 'block';
+        if (resetArea.style.display !== targetResetDisplay) {
+            resetArea.style.display = targetResetDisplay;
+        }
     }
 
     function setLock(v) { triggerHaptic('success'); set(child(dbRef, `locked/${currentTab}`), v); if(!v) currentBillLang='vi'; }
@@ -481,7 +519,6 @@
         }
     }
 
-    // Đưa các hàm xử lý ra phạm vi toàn cục (window)
     window.selectTable = selectTable;
     window.setLock = setLock;
     window.doPay = doPay;
