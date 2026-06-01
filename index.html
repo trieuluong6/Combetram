@@ -575,11 +575,22 @@ else if (code >= 95) {
     const onlineRef = ref(database, '.info/connected');
     const presenceListRef = ref(database, 'combetram_v6_data/presence');
     const myPresenceRef = push(presenceListRef);
-    onValue(onlineRef, (snap) => { if (snap.val() === true) { onDisconnect(myPresenceRef).remove(); set(myPresenceRef, true); } });
     onValue(presenceListRef, (snap) => {
-        const onlineValEl = document.getElementById('online-val');
-        if (onlineValEl.innerText !== String(snap.numChildren())) onlineValEl.innerText = snap.numChildren();
-    });
+
+    const presenceData = snap.val() || {};
+
+    const onlineCount =
+        Object.keys(presenceData).length;
+
+    document.getElementById('online-val').innerText =
+        onlineCount;
+
+    console.log(
+        "Online:",
+        onlineCount
+    );
+
+});
 
     function renderMenu() {
         let h = "";
