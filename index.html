@@ -11,130 +11,80 @@
         h2 { text-align: center; color: var(--primary-red); text-transform: uppercase; font-size: 1.2em; margin: 10px 0; }
         
         /* ==========================================================================
-           CẤU TRÚC ĐỒNG HỒ LẬT TĨNH - ĐÃ SỬA LỖI LẬT ĐÚP (LẬT 2 LẦN)
+           HỆ THỐNG VIÊN THUỐC THỜI TIẾT ĐỘNG (WEATHER PILL) - GÓC TRÁI
            ========================================================================== */
-        .flip-clock-container {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 4px;
-            margin: 12px 0 22px 0;
-            user-select: none;
-        }
-        .flip-unit {
-            display: flex;
-            gap: 3px;
-        }
-        .flip-colon {
-            font-size: 1.8em;
-            font-weight: bold;
+        #weather-hub {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            background: rgba(255, 255, 255, 0.95);
             color: #333;
-            padding: 0 1px;
-            line-height: 40px;
-            height: 40px;
+            padding: 4px 10px;
+            border-radius: 15px;
+            font-size: 0.72em;
+            font-weight: bold;
+            z-index: 1000;
             display: flex;
             align-items: center;
-            animation: blinkColon 1s infinite;
+            gap: 6px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            border: 1px solid #e0e0e0;
+            transition: all 0.5s ease;
         }
-        @keyframes blinkColon { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+        /* Cảnh báo cấp độ gió */
+        #weather-hub.wind-warning { background: #fff9c4; border-color: var(--warning-orange); color: #5d4037; }
+        #weather-hub.wind-danger { background: #ffcdd2; border-color: var(--primary-red); color: #b71c1c; animation: blinkDangerBorder 1s infinite; }
+        @keyframes blinkDangerBorder { 0%, 100% { box-shadow: 0 0 4px var(--primary-red); } 50% { box-shadow: 0 0 12px var(--primary-red); } }
 
-        .flip-card {
-            position: relative;
-            width: 26px;
-            height: 40px;
-            perspective: 150px;
-            font-family: 'Segoe UI', Arial, sans-serif;
-            font-size: 1.7em;
-            font-weight: bold;
-        }
-        .card-half {
-            position: absolute;
-            left: 0;
-            width: 100%;
-            height: 50%;
-            overflow: hidden;
-            background: #fff;
-            color: #000;
-            box-sizing: border-box;
-            text-align: center;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-        }
-        .card-top {
-            top: 0;
-            border-top-left-radius: 5px;
-            border-top-right-radius: 5px;
-            line-height: 40px;
-        }
-        .card-bottom {
-            bottom: 0;
-            border-bottom-left-radius: 5px;
-            border-bottom-right-radius: 5px;
-            line-height: 0px;
-            border-top: 1px solid #f0f0f0;
-        }
-        /* Cánh lật nửa trên xuống */
-        .card-flip-wing {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 50%;
-            overflow: hidden;
-            box-sizing: border-box;
-            text-align: center;
-            border-top-left-radius: 5px;
-            border-top-right-radius: 5px;
-            line-height: 40px;
-            transform-origin: center bottom;
-            backface-visibility: hidden;
-            z-index: 5;
-            background: #fff;
-            color: #000;
-            transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        /* Nửa dưới đợi sẵn đón số mới */
-        .card-flip-wing-back {
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            height: 50%;
-            overflow: hidden;
-            box-sizing: border-box;
-            text-align: center;
-            border-bottom-left-radius: 5px;
-            border-bottom-right-radius: 5px;
-            line-height: 0px;
-            transform-origin: center top;
-            backface-visibility: hidden;
-            z-index: 4;
-            background: #fff;
-            color: #000;
-            border-top: 1px solid #f0f0f0;
-            transform: rotateX(180deg);
-            transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        /* Class kích hoạt khi bắt đầu lật */
-        .flip-card.animate .card-flip-wing {
-            transform: rotateX(-180deg);
-        }
-        .flip-card.animate .card-flip-wing-back {
-            transform: rotateX(0deg);
-        }
+        .weather-divider { width: 1px; height: 12px; background: #ccc; margin: 0 2px; }
+        .weather-group { display: flex; align-items: center; gap: 4px; }
+
+        /* HOẠT ẢNH ICON THỜI TIẾT SVG */
+        .w-icon { width: 18px; height: 18px; fill: currentColor; }
+        .anim-spin { animation: spin 8s linear infinite; transform-origin: center; }
+        .anim-cloud-move { animation: floatCloud 4s ease-in-out infinite; }
+        .anim-rain { animation: rainDrop 0.6s linear infinite; }
+        .anim-lightning { animation: flashLightning 1.5s ease-in-out infinite; }
+        
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+        @keyframes floatCloud { 0%, 100% { transform: translateX(0px); } 50% { transform: translateX(2px); } }
+        @keyframes rainDrop { 0% { transform: translateY(-2px); opacity: 1; } 100% { transform: translateY(4px); opacity: 0; } }
+        @keyframes flashLightning { 0%, 100%, 20%, 40% { opacity: 1; } 10%, 30% { opacity: 0.2; } }
+
+        /* HOẠT ẢNH ICON GIÓ PHÂN CẤP CODES CSS */
+        .wind-line { animation: windBlow 1.5s linear infinite; opacity: 0; }
+        .w-slow { animation-duration: 1.5s; }
+        .w-fast { animation-duration: 0.6s; }
+        .w-storm { animation: windStorm 0.3s linear infinite; transform-origin: center; }
+        
+        @keyframes windBlow { 0% { transform: translateX(-4px); opacity: 0; } 50% { opacity: 1; } 100% { transform: translateX(6px); opacity: 0; } }
+        @keyframes windStorm { 100% { transform: rotate(-360deg); } }
+
+        /* MŨI TÊN XOAY 360 ĐỘ */
+        .wind-arrow { width: 12px; height: 12px; transition: transform 0.8s cubic-bezier(0.4, 0, 0.2, 1); transform-origin: center; fill: currentColor; }
+
+        /* ==========================================================================
+           CẤU TRÚC ĐỒNG HỒ LẬT TĨNH CHUẨN MƯỢT
+           ========================================================================== */
+        .flip-clock-container { display: flex; justify-content: center; align-items: center; gap: 4px; margin: 12px 0 22px 0; user-select: none; }
+        .flip-unit { display: flex; gap: 3px; }
+        .flip-colon { font-size: 1.8em; font-weight: bold; color: #333; padding: 0 1px; line-height: 40px; height: 40px; display: flex; align-items: center; animation: blinkColon 1s infinite; }
+        @keyframes blinkColon { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+        .flip-card { position: relative; width: 26px; height: 40px; perspective: 150px; font-family: 'Segoe UI', Arial, sans-serif; font-size: 1.7em; font-weight: bold; }
+        .card-half { position: absolute; left: 0; width: 100%; height: 50%; overflow: hidden; background: #fff; color: #000; box-sizing: border-box; text-align: center; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+        .card-top { top: 0; border-top-left-radius: 5px; border-top-right-radius: 5px; line-height: 40px; }
+        .card-bottom { bottom: 0; border-bottom-left-radius: 5px; border-bottom-right-radius: 5px; line-height: 0px; border-top: 1px solid #f0f0f0; }
+        .card-flip-wing { position: absolute; top: 0; left: 0; width: 100%; height: 50%; overflow: hidden; box-sizing: border-box; text-align: center; border-top-left-radius: 5px; border-top-right-radius: 5px; line-height: 40px; transform-origin: center bottom; backface-visibility: hidden; z-index: 5; background: #fff; color: #000; transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1); }
+        .card-flip-wing-back { position: absolute; bottom: 0; left: 0; width: 100%; height: 50%; overflow: hidden; box-sizing: border-box; text-align: center; border-bottom-left-radius: 5px; border-bottom-right-radius: 5px; line-height: 0px; transform-origin: center top; backface-visibility: hidden; z-index: 4; background: #fff; color: #000; border-top: 1px solid #f0f0f0; transform: rotateX(180deg); transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1); }
+        .flip-card.animate .card-flip-wing { transform: rotateX(-180deg); }
+        .flip-card.animate .card-flip-wing-back { transform: rotateX(0deg); }
 
         /* GIỮ NGUYÊN TOÀN BỘ CSS GIAO DIỆN HỆ THỐNG CŨ */
-        #presence-count { position: fixed; top: 10px; right: 10px; background: rgba(0,0,0,0.6); color: white; padding: 3px 8px; border-radius: 15px; font-size: 0.7em; z-index: 1000; pointer-events: none;display:flex; align-items:center; gap:6px; }
+        #presence-count { position: fixed; top: 10px; right: 10px; background: rgba(0,0,0,0.6); color: white; padding: 3px 8px; border-radius: 15px; font-size: 0.7em; z-index: 1000; pointer-events: none; display:flex; align-items:center; gap:6px; }
         .online-dot{ display:inline-block; width:10px; height:10px; border-radius:50%; background:#00ff00; animation:blinkOnline 1s infinite; }
         @keyframes blinkOnline{ 0%,100%{ opacity:1; box-shadow:0 0 10px #00ff00; } 50%{ opacity:0.25; box-shadow:0 0 2px #00ff00; } }
         .tables-container { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-bottom: 15px; }
-        .table-card { 
-            background: white; padding: 10px 2px; text-align: center; border-radius: 12px; cursor: pointer; 
-            border: 2px solid #ddd; box-shadow: 0 3px 0 #ccc; display: flex; flex-direction: column; 
-            align-items: center; justify-content: center; min-height: 90px; 
-            position: relative; overflow: hidden;
-            transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-            grid-column: span 2;
-        }
+        .table-card { background: white; padding: 10px 2px; text-align: center; border-radius: 12px; cursor: pointer; border: 2px solid #ddd; box-shadow: 0 3px 0 #ccc; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 90px; position: relative; overflow: hidden; transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94); grid-column: span 2; }
         .full-width { grid-column: span 6; }
         .half-width { grid-column: span 3; }
         .table-card strong, .table-card span { position: relative; z-index: 10; }
@@ -200,6 +150,22 @@
     </style>
 </head>
 <body>
+
+<!-- CONTAINER VIÊN THUỐC THỜI TIẾT THỜI GIAN THỰC GÓC TRÁI -->
+<div id="weather-hub">
+    <!-- Nhóm 1: Icon thời tiết + Nhiệt độ -->
+    <div class="weather-group">
+        <span id="w-icon-container"></span>
+        <span id="w-temp">--°C</span>
+    </div>
+    <div class="weather-divider"></div>
+    <!-- Nhóm 2: Icon Gió phân cấp + Tốc độ gió + Mũi tên hướng gió 360 độ -->
+    <div class="weather-group">
+        <span id="w-wind-icon-container"></span>
+        <span id="w-wind-speed">-- km/h</span>
+        <svg class="wind-arrow" id="w-arrow" viewBox="0 0 24 24"><path d="M4 12l1.41 1.41L11 7.83V20h2V7.83l5.58 5.59L20 12l-8-8-8 8z"/></svg>
+    </div>
+</div>
 
 <div id="presence-count">
     <span class="online-dot"></span>
@@ -338,32 +304,79 @@
     let data = { orders: {}, locked: {}, times: {} };
     let firstLoad = true;
 
-    // LOGIC ĐỒNG HỒ MỚI: TẬP TRUNG SỬA LỖI LẬT 2 LẦN
+    // THƯ VIỆN ĐỒ HỌA MÃ SVG ĐỘNG CHO WEATHER HUB
+    const SVG_ICONS = {
+        sunny: `<svg class="w-icon anim-spin" viewBox="0 0 24 24" style="color:#ffa000;"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`,
+        cloudy: `<svg class="w-icon anim-cloud-move" viewBox="0 0 24 24" style="color:#78909c;"><path d="M19.36 10.04A6 6 0 008 11a4 4 0 10-.71 7.94H19.5a3.5 3.5 0 00-.14-6.9z"/></svg>`,
+        rainy: `<svg class="w-icon" viewBox="0 0 24 24" style="color:#1e88e5;"><path class="anim-cloud-move" d="M19.36 10.04A6 6 0 008 11a4 4 0 10-.71 7.94H19.5a3.5 3.5 0 00-.14-6.9z"/><path class="anim-rain" d="M9 19v2M12 20v2M15 19v2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`,
+        storm: `<svg class="w-icon" viewBox="0 0 24 24" style="color:#5e35b1;"><path class="anim-cloud-move" d="M19.36 10.04A6 6 0 008 11a4 4 0 10-.71 7.94H19.5a3.5 3.5 0 00-.14-6.9z"/><path class="anim-lightning" d="M11 17h3l-3 5v-4H9l3-5z" fill="#ffeb3b"/></svg>`,
+        
+        // Icon gió phân cấp theo tốc độ thực tế
+        windNone: `<svg class="w-icon" viewBox="0 0 24 24" style="color:#b0bec5;"><path d="M2 12h12M4 16h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`,
+        windSlow: `<svg class="w-icon" viewBox="0 0 24 24" style="color:#26a69a;"><g stroke="currentColor" stroke-width="2" stroke-linecap="round"><path class="wind-line w-slow" d="M2 10h14"/></g></svg>`,
+        windFast: `<svg class="w-icon" viewBox="0 0 24 24" style="color:#ef6c00;"><g stroke="currentColor" stroke-width="2" stroke-linecap="round"><path class="wind-line w-fast" d="M2 8h16M4 12h12M1 16h10"/></g></svg>`,
+        windStorm: `<svg class="w-icon w-storm" viewBox="0 0 24 24" style="color:#b71c1c;"><path d="M12 2a10 10 0 00-10 10h2a8 8 0 0114.65-4.65l1.41-1.41A10 10 0 0012 2zm0 16a6 6 0 01-4.24-1.76l-1.42 1.42A8 8 0 0012 22v-2z" fill="currentColor"/></svg>`
+    };
+
+    // HÀM UPDATE GIAO DIỆN THỜI TIẾT ĐỘNG TOÀN DIỆN
+    function updateWeatherDisplay(weatherData) {
+        // Dự phòng nếu data rỗng
+        const status = weatherData?.status || 'sunny';
+        const temp = weatherData?.temp || 30;
+        const windSpeed = weatherData?.windSpeed || 0;
+        const windDir = weatherData?.windDir || 0; // Số độ (0-360)
+
+        // 1. Gán icon thời tiết
+        document.getElementById('w-icon-container').innerHTML = SVG_ICONS[status] || SVG_ICONS.sunny;
+        document.getElementById('w-temp').innerText = `${temp}°C`;
+
+        // 2. Xử lý cấp độ gió và đổi màu viên thuốc cảnh báo
+        const hub = document.getElementById('weather-hub');
+        let windIcon = SVG_ICONS.windNone;
+        hub.className = ''; // Reset class cũ
+
+        if (windSpeed > 5 && windSpeed <= 19) {
+            windIcon = SVG_ICONS.windSlow;
+        } else if (windSpeed >= 20 && windSpeed <= 39) {
+            windIcon = SVG_ICONS.windFast;
+            hub.classList.add('wind-warning'); // Nền vàng
+        } else if (windSpeed >= 40) {
+            windIcon = SVG_ICONS.windStorm;
+            hub.classList.add('wind-danger');  // Viền đỏ nhấp nháy
+        }
+        document.getElementById('w-wind-icon-container').innerHTML = windIcon;
+        document.getElementById('w-wind-speed').innerText = `${windSpeed} km/h`;
+
+        // 3. Xoay mũi tên 360 độ theo hướng gió thực tế
+        document.getElementById('w-arrow').style.transform = `rotate(${windDir}deg)`;
+    }
+
+    // Kết nối Firebase lấy thông tin Weather Realtime
+    onValue(ref(database, 'combetram_v6_data/weather'), (snap) => {
+        if(snap.exists()) {
+            updateWeatherDisplay(snap.val());
+        } else {
+            // Chạy dữ liệu mẫu nếu Firebase chưa cấu hình nhánh weather
+            updateWeatherDisplay({ status: 'cloudy', temp: 31, windSpeed: 14, windDir: 225 });
+        }
+    });
+
+    // LOGIC ĐỒNG HỒ LẬT TĨNH CHUẨN KHÔNG ĐÚP CHỮ
     function updateCardValue(cardId, targetVal) {
         const card = document.getElementById(cardId);
         if (!card) return;
-        
         const topHalf = card.querySelector('.card-top');
         const bottomHalf = card.querySelector('.card-bottom');
         const wing = card.querySelector('.card-flip-wing');
         const wingBack = card.querySelector('.card-flip-wing-back');
 
-        // Nếu số hiện tại đã trùng mục tiêu thì bỏ qua không chạy lại hoạt ảnh
         if (topHalf.innerText === targetVal) return;
 
-        // BƯỚC 1: Thiết lập số cũ làm điểm xuất phát cho cánh lật
         wing.innerText = topHalf.innerText;
         wingBack.innerText = targetVal;
-
-        // BƯỚC 2: Kích hoạt hiệu ứng lật CSS 3D
         card.classList.add('animate');
 
-        // BƯỚC 3: Đồng bộ số sau nền khuất (giữa chu kỳ lật - khoảng 160ms) để không bị đúp chữ
-        setTimeout(() => {
-            topHalf.innerText = targetVal;
-        }, 160);
-
-        // BƯỚC 4: Kết thúc lật (340ms), cập nhật hoàn tất mặt sau và xóa class hiệu ứng để chuẩn bị vòng sau
+        setTimeout(() => { topHalf.innerText = targetVal; }, 160);
         setTimeout(() => {
             bottomHalf.innerText = targetVal;
             wing.innerText = targetVal;
@@ -376,26 +389,18 @@
         const hStr = String(d.getHours()).padStart(2, '0');
         const mStr = String(d.getMinutes()).padStart(2, '0');
         const sStr = String(d.getSeconds()).padStart(2, '0');
-
-        updateCardValue('c-h1', hStr[0]);
-        updateCardValue('c-h2', hStr[1]);
-        updateCardValue('c-m1', mStr[0]);
-        updateCardValue('c-m2', mStr[1]);
-        updateCardValue('c-s1', sStr[0]);
-        updateCardValue('c-s2', sStr[1]);
+        updateCardValue('c-h1', hStr[0]); updateCardValue('c-h2', hStr[1]);
+        updateCardValue('c-m1', mStr[0]); updateCardValue('c-m2', mStr[1]);
+        updateCardValue('c-s1', sStr[0]); updateCardValue('c-s2', sStr[1]);
     }
 
-    // Khởi tạo mặt số ngay lập tức tránh nháy trống khi vừa tải trang
     const currentInit = new Date();
-    const ih = String(currentInit.getHours()).padStart(2, '0');
-    const im = String(currentInit.getMinutes()).padStart(2, '0');
-    const is = String(currentInit.getSeconds()).padStart(2, '0');
+    const ih = String(currentInit.getHours()).padStart(2, '0'), im = String(currentInit.getMinutes()).padStart(2, '0'), is = String(currentInit.getSeconds()).padStart(2, '0');
     ['h1','h2','m1','m2','s1','s2'].forEach((k, idx) => {
         let v = (idx < 2) ? ih[idx] : (idx < 4 ? im[idx-2] : is[idx-4]);
         const c = document.getElementById('c-' + k);
         if(c) c.querySelectorAll('.card-half, .card-flip-wing, .card-flip-wing-back').forEach(el => el.innerText = v);
     });
-
     setInterval(runClock, 1000);
 
     function triggerHaptic(type) {
@@ -410,15 +415,12 @@
         if (!el) return;
         const startValue = parseInt(el.innerText.replace(/\D/g, '')) || 0;
         if (startValue === newValue) return;
-        
-        const duration = 800;
-        const startTime = performance.now();
+        const duration = 800; const startTime = performance.now();
         function update(currentTime) {
             const elapsed = currentTime - startTime;
             const progress = Math.min(elapsed / duration, 1);
             const easeOutQuart = 1 - Math.pow(1 - progress, 4);
-            const currentNumber = Math.floor(startValue + (newValue - startValue) * easeOutQuart);
-            el.innerText = currentNumber.toLocaleString();
+            el.innerText = Math.floor(startValue + (newValue - startValue) * easeOutQuart).toLocaleString();
             if (progress < 1) requestAnimationFrame(update);
         }
         requestAnimationFrame(update);
@@ -427,20 +429,10 @@
     const onlineRef = ref(database, '.info/connected');
     const presenceListRef = ref(database, 'combetram_v6_data/presence');
     const myPresenceRef = push(presenceListRef);
-
-    onValue(onlineRef, (snap) => {
-        if (snap.val() === true) {
-            onDisconnect(myPresenceRef).remove();
-            set(myPresenceRef, true);
-        }
-    });
-
+    onValue(onlineRef, (snap) => { if (snap.val() === true) { onDisconnect(myPresenceRef).remove(); set(myPresenceRef, true); } });
     onValue(presenceListRef, (snap) => {
         const onlineValEl = document.getElementById('online-val');
-        const count = snap.numChildren();
-        if (onlineValEl.innerText !== String(count)) {
-            onlineValEl.innerText = count;
-        }
+        if (onlineValEl.innerText !== String(snap.numChildren())) onlineValEl.innerText = snap.numChildren();
     });
 
     function renderMenu() {
@@ -463,37 +455,26 @@
     renderMenu();
 
     document.getElementById('menu-list').addEventListener('click', (e) => {
-        const btn = e.target.closest('.btn-qty');
-        if (!btn) return;
+        const btn = e.target.closest('.btn-qty'); if (!btn) return;
         const itemId = parseInt(btn.dataset.itemId);
-        const delta = btn.classList.contains('btn-add') ? 1 : -1;
-        change(itemId, delta);
+        change(itemId, btn.classList.contains('btn-add') ? 1 : -1);
     });
 
     onValue(dbRef, snap => {
         const val = snap.val();
         if(val) {
-            if(!firstLoad && JSON.stringify(val.orders) !== JSON.stringify(data.orders)) {
-                document.getElementById('tingSound').play().catch(()=>{});
-            }
-            data = val;
-            if(!data.orders) data.orders = {};
-            if(!data.times) data.times = {};
-            refresh();
-            firstLoad = false;
+            if(!firstLoad && JSON.stringify(val.orders) !== JSON.stringify(data.orders)) document.getElementById('tingSound').play().catch(()=>{});
+            data = val; if(!data.orders) data.orders = {}; if(!data.times) data.times = {};
+            refresh(); firstLoad = false;
         }
     });
 
     function selectTable(n) {
-        triggerHaptic('add');
-        currentTab = (currentTab === n) ? null : n;
-        currentBillLang = 'vi';
+        triggerHaptic('add'); currentTab = (currentTab === n) ? null : n; currentBillLang = 'vi';
         document.getElementById('order-section').style.display = currentTab ? 'block' : 'none';
         if(currentTab) {
             let title = "BÀN " + n;
-            if(n === 7) title = "BÀN TRONG HIÊN";
-            if(n === 8) title = "NGOÀI ĐƯỜNG (TRÁI)";
-            if(n === 9) title = "NGOÀI ĐƯỜNG (PHẢI)";
+            if(n === 7) title = "BÀN TRONG HIÊN"; if(n === 8) title = "NGOÀI ĐƯỜNG (TRÁI)"; if(n === 9) title = "NGOÀI ĐƯỜNG (PHẢI)";
             document.getElementById('table-title').innerText = title;
         }
         refresh();
@@ -504,155 +485,88 @@
         triggerHaptic(delta > 0 ? 'add' : 'sub');
         let order = data.orders[currentTab] || {};
         if(Object.keys(order).length === 0 && delta > 0) set(child(dbRef, `times/${currentTab}`), Date.now());
-        let q = (order[id] || 0) + delta;
-        if(q <= 0) delete order[id]; else order[id] = q;
+        let q = (order[id] || 0) + delta; if(q <= 0) delete order[id]; else order[id] = q;
         set(child(dbRef, `orders/${currentTab}`), order);
-        const row = document.getElementById(`row-${id}`);
-        const tabBtn = document.getElementById(`tab-${currentTab}`);
-        const cls = delta > 0 ? 'flash-add' : 'flash-sub';
-        if(row) row.classList.add(cls); 
-        if(tabBtn) tabBtn.classList.add(cls);
-        setTimeout(() => { 
-            if(row) row.classList.remove(cls); 
-            if(tabBtn) tabBtn.classList.remove(cls); 
-        }, 400);
+        const row = document.getElementById(`row-${id}`), tabBtn = document.getElementById(`tab-${currentTab}`), cls = delta > 0 ? 'flash-add' : 'flash-sub';
+        if(row) row.classList.add(cls); if(tabBtn) tabBtn.classList.add(cls);
+        setTimeout(() => { if(row) row.classList.remove(cls); if(tabBtn) tabBtn.classList.remove(cls); }, 400);
     }
 
-    function changeBillLang(l) {
-        triggerHaptic('add');
-        currentBillLang = l;
-        refresh();
-        document.querySelector('.bill-box')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
+    function changeBillLang(l) { triggerHaptic('add'); currentBillLang = l; refresh(); document.querySelector('.bill-box')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
 
     function refresh() {
-        const all = menu.flatMap(g => g.items);
-        let anyGuest = false;
-        const now = Date.now();
-
+        const all = menu.flatMap(g => g.items); let anyGuest = false; const now = Date.now();
         if(currentTab) {
             const isLock = (data.locked && data.locked[currentTab]) || false;
             document.getElementById('menu-area').style.display = isLock ? 'none' : 'block';
             document.getElementById('bill-area').style.display = isLock ? 'block' : 'none';
             all.forEach(i => {
                 const q = (data.orders[currentTab] && data.orders[currentTab][i.id]) || 0;
-                const row = document.getElementById(`row-${i.id}`);
-                const qSpan = document.getElementById(`q-${i.id}`);
-                if (row && qSpan) {
-                    if (qSpan.innerText !== String(q)) {
-                        qSpan.innerText = q;
-                        row.className = 'menu-item'; 
-                        if(q >= 5) row.classList.add('qty-5'); else if(q > 0) row.classList.add('qty-' + q);
-                    }
+                const row = document.getElementById(`row-${i.id}`), qSpan = document.getElementById(`q-${i.id}`);
+                if (row && qSpan && qSpan.innerText !== String(q)) {
+                    qSpan.innerText = q; row.className = 'menu-item';
+                    if(q >= 5) row.classList.add('qty-5'); else if(q > 0) row.classList.add('qty-' + q);
                 }
             });
             if(isLock) {
-                let h = ""; let t = 0; let my = data.orders[currentTab] || {};
-                const langData = dict[currentBillLang] || dict['vi'];
-                
-                const lblTotal = document.getElementById('txt-total-label');
-                const lblFlag = document.getElementById('txt-lang-flag');
-                if (lblTotal.innerText !== langData.total) lblTotal.innerText = langData.total;
-                if (lblFlag.innerText !== langData.flag) lblFlag.innerText = langData.flag;
-                
+                let h = "", t = 0, my = data.orders[currentTab] || {}, langData = dict[currentBillLang] || dict['vi'];
+                document.getElementById('txt-total-label').innerText = langData.total;
+                document.getElementById('txt-lang-flag').innerText = langData.flag;
                 let idx = 0;
                 for(let id in my) {
                     let itm = all.find(x => x.id == id);
-                    if(itm) { 
-                        let p = itm.price * my[id]; t += p; 
+                    if(itm) {
+                        let p = itm.price * my[id]; t += p;
                         let nameShow = (currentBillLang !== 'vi' && langData.items && langData.items[itm.name]) ? langData.items[itm.name] : itm.name;
                         h += `<div class="bill-row" style="animation-delay: ${idx * 0.08}s">
                                 <span class="item-name">${nameShow}</span>
                                 <span class="item-qty">x${my[id]}</span>
                                 <div class="divider"></div>
                                 <span class="item-price">${p.toLocaleString()}đ</span>
-                              </div>`; 
-                        idx++;
+                              </div>`; idx++;
                     }
                 }
-                
-                const billListEl = document.getElementById('bill-list');
-                const newHTML = h || "Trống";
-                if (billListEl.innerHTML !== newHTML) { billListEl.innerHTML = newHTML; }
-                
-                const bTotal = document.getElementById('bill-total');
-                const tBox = document.getElementById('total-container');
+                document.getElementById('bill-list').innerHTML = h || "Trống";
+                const bTotal = document.getElementById('bill-total'), tBox = document.getElementById('total-container');
                 if(parseInt(bTotal.innerText.replace(/\D/g,'')) !== t) {
-                    animateNumber('bill-total', t);
-                    tBox.classList.add('total-pop');
-                    setTimeout(() => tBox.classList.remove('total-pop'), 400);
+                    animateNumber('bill-total', t); tBox.classList.add('total-pop'); setTimeout(() => tBox.classList.remove('total-pop'), 400);
                 }
             }
         }
 
         for(let i=1; i<=9; i++) {
-            let s = 0; let o = data.orders[i] || {};
-            for(let id in o) { let itm = all.find(x => x.id == id); if(itm) s += itm.price * o[id]; }
-            const isTabLocked = (data.locked && data.locked[i]) || false;
-            if(s > 0 || isTabLocked) anyGuest = true;
-            
-            const sumEl = document.getElementById(`sum-${i}`);
-            if(sumEl) {
-                const curS = parseInt(sumEl.innerText.replace(/\D/g,'')) || 0;
-                if(curS !== s) animateNumber(`sum-${i}`, s);
-            }
-
+            let s = 0, o = data.orders[i] || {}; for(let id in o) { let itm = all.find(x => x.id == id); if(itm) s += itm.price * o[id]; }
+            const isTabLocked = (data.locked && data.locked[i]) || false; if(s > 0 || isTabLocked) anyGuest = true;
+            const sumEl = document.getElementById(`sum-${i}`); if(sumEl && parseInt(sumEl.innerText.replace(/\D/g,'')) !== s) animateNumber(`sum-${i}`, s);
             const timeSpan = document.getElementById(`time-${i}`);
             if(timeSpan) {
-                let targetText = "";
-                if(s > 0 && data.times && data.times[i]) {
-                    const diff = Math.floor((now - data.times[i]) / 60000);
-                    targetText = diff > 0 ? "⏱ " + diff + " phút" : "⏱ Mới vào";
-                }
-                if (timeSpan.innerText !== targetText) timeSpan.innerText = targetText;
+                let txt = ""; if(s > 0 && data.times && data.times[i]) { const diff = Math.floor((now - data.times[i]) / 60000); txt = diff > 0 ? "⏱ " + diff + " phút" : "⏱ Mới vào"; }
+                if (timeSpan.innerText !== txt) timeSpan.innerText = txt;
             }
-
             const btn = document.getElementById(`tab-${i}`);
             if(btn) {
-                const originalClasses = i === 7 ? "table-card full-width" : (i >= 8 ? "table-card half-width" : "table-card");
-                let targetClassName = originalClasses;
-                
+                let targetClassName = i === 7 ? "table-card full-width" : (i >= 8 ? "table-card half-width" : "table-card");
                 if(i === currentTab) targetClassName += ' active';
-                if(isTabLocked) {
-                    targetClassName += (i >= 7) ? ' is-locked-special' : ' is-locked';
-                } else if(s > 0) { 
-                    targetClassName += ' has-guest'; 
-                }
-
-                if (btn.className !== targetClassName) { btn.className = targetClassName; }
+                if(isTabLocked) targetClassName += (i >= 7) ? ' is-locked-special' : ' is-locked'; else if(s > 0) targetClassName += ' has-guest';
+                if (btn.className !== targetClassName) btn.className = targetClassName;
             }
         }
-        
-        const resetArea = document.getElementById('reset-area');
-        const targetResetDisplay = anyGuest ? 'none' : 'block';
-        if (resetArea.style.display !== targetResetDisplay) { resetArea.style.display = targetResetDisplay; }
+        document.getElementById('reset-area').style.display = anyGuest ? 'none' : 'block';
     }
 
     function setLock(v) { triggerHaptic('success'); set(child(dbRef, `locked/${currentTab}`), v); if(!v) currentBillLang='vi'; }
     function doPay() {
         if(confirm("Xác nhận thanh toán?")) {
-            triggerHaptic('success');
-            remove(child(dbRef, `orders/${currentTab}`));
-            remove(child(dbRef, `locked/${currentTab}`));
-            remove(child(dbRef, `times/${currentTab}`));
-            selectTable(null);
+            triggerHaptic('success'); remove(child(dbRef, `orders/${currentTab}`)); remove(child(dbRef, `locked/${currentTab}`)); remove(child(dbRef, `times/${currentTab}`)); selectTable(null);
         }
     }
     function doReset() {
         if(prompt("Mật khẩu xóa dữ liệu:") === "123") {
-            remove(child(dbRef, 'orders')); 
-            remove(child(dbRef, 'locked')); 
-            remove(child(dbRef, 'times'));
-            location.reload();
+            remove(child(dbRef, 'orders')); remove(child(dbRef, 'locked')); remove(child(dbRef, 'times')); location.reload();
         }
     }
 
-    window.selectTable = selectTable;
-    window.setLock = setLock;
-    window.doPay = doPay;
-    window.doReset = doReset;
-    window.changeBillLang = changeBillLang;
-
+    window.selectTable = selectTable; window.setLock = setLock; window.doPay = doPay; window.doReset = doReset; window.changeBillLang = changeBillLang;
     setInterval(refresh, 30000);
 </script>
 </body>
