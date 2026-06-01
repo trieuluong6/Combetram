@@ -6,19 +6,6 @@
     <title data-id="th-modified">Cơm Bé Trâm - Quản lý</title>
 
     <style>
-    /* --- WIDGET TRẠNG THÁI QUÁN --- */
-.status-widget { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; width: 40px; height: 40px; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.06); }
-.light-dot { width: 10px; height: 10px; border-radius: 50%; }
-.light-icon { font-size: 14px; }
-.status-0-3 .light-dot { background: #4caf50; animation: blink-soft 2s infinite; }
-.status-0-3 .light-icon { color: #4caf50; }
-.status-4-6 .light-dot { background: #ff9800; animation: blink-med 1s infinite; }
-.status-4-6 .light-icon { color: #ff9800; }
-.status-7-9 .light-dot { background: #d32f2f; animation: police-rotate 0.4s linear infinite; }
-.status-7-9 .light-icon { color: #d32f2f; animation: police-rotate 0.4s linear infinite; }
-@keyframes blink-soft { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
-@keyframes blink-med { 0%, 100% { opacity: 0.2; } 50% { opacity: 1; } }
-@keyframes police-rotate { 0% { transform: scale(1); filter: brightness(1); } 50% { transform: scale(1.3); filter: brightness(1.5); } 100% { transform: scale(1); filter: brightness(1); } }
         :root { --primary-red: #d32f2f; --success-green: #4caf50; --warning-orange: #ff9800; --blue: #2196f3; }
         body { font-family: 'Segoe UI', Arial, sans-serif; background-color: #f4f7f6; margin: 0; padding: 10px; padding-bottom: 120px; -webkit-tap-highlight-color: transparent; }
         
@@ -232,11 +219,6 @@
         <div class="flip-card" id="c-s1"><div class="card-half card-top">0</div><div class="card-half card-bottom">0</div><div class="card-flip-wing">0</div><div class="card-flip-wing-back">0</div></div>
         <div class="flip-card" id="c-s2"><div class="card-half card-top">0</div><div class="card-half card-bottom">0</div><div class="card-flip-wing">0</div><div class="card-flip-wing-back">0</div></div>
     </div>
-    <div id="status-widget" class="status-widget">
-        <div class="light-dot"></div>
-        <div class="light-icon">🚨</div>
-    </div>
-</div>
 </div>
 
 <div class="tables-container">
@@ -735,7 +717,7 @@ onValue(presenceListRef, (snap) => {
         }
         document.getElementById('reset-area').style.display = anyGuest ? 'none' : 'block';
     }
-     updateStatusWidget();
+
     function setLock(v) { triggerHaptic('success'); set(child(dbRef, `locked/${currentTab}`), v); if(!v) currentBillLang='vi'; }
     function doPay() {
         if(confirm("Xác nhận thanh toán?")) {
@@ -747,24 +729,6 @@ onValue(presenceListRef, (snap) => {
             remove(child(dbRef, 'orders')); remove(child(dbRef, 'locked')); remove(child(dbRef, 'times')); location.reload();
         }
     }
-function updateStatusWidget() {
-    const widget = document.getElementById('status-widget');
-    if (!widget) return;
-    
-    // Đếm số bàn đang có khách (data.orders) hoặc đang khóa (data.locked)
-    let activeTables = 0;
-    for(let i=1; i<=9; i++) {
-        if((data.orders && data.orders[i] && Object.keys(data.orders[i]).length > 0) || (data.locked && data.locked[i])) {
-            activeTables++;
-        }
-    }
-    
-    // Đặt class CSS dựa trên số bàn
-    widget.className = 'status-widget';
-    if (activeTables <= 3) widget.classList.add('status-0-3');
-    else if (activeTables <= 6) widget.classList.add('status-4-6');
-    else widget.classList.add('status-7-9');
-}
 
     window.selectTable = selectTable; window.setLock = setLock; window.doPay = doPay; window.doReset = doReset; window.changeBillLang = changeBillLang;
     setInterval(refresh, 30000);
