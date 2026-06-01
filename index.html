@@ -8,87 +8,128 @@
     <style>
         :root { --primary-red: #d32f2f; --success-green: #4caf50; --warning-orange: #ff9800; --blue: #2196f3; }
         body { font-family: 'Segoe UI', Arial, sans-serif; background-color: #f4f7f6; margin: 0; padding: 10px; padding-bottom: 120px; -webkit-tap-highlight-color: transparent; }
-        h2 { text-align: center; color: var(--primary-red); text-transform: uppercase; font-size: 1.2em; margin: 10px 0 5px 0; }
+        h2 { text-align: center; color: var(--primary-red); text-transform: uppercase; font-size: 1.2em; margin: 10px 0 8px 0; }
         
-        /* CSS CHO ĐỒNG HỒ LẬT NỀN TRẮNG SỐ ĐEN + CÓ GIÂY */
+        /* ==========================================================================
+           CSS ĐỒNG HỒ LẬT 3D CHUẨN (NỀN TRẮNG SỐ ĐEN - CÓ GIÂY BẰNG NHAU)
+           ========================================================================== */
         .flip-clock-container {
             display: flex;
             justify-content: center;
             align-items: center;
-            gap: 3px;
-            margin: 0 auto 15px auto;
+            gap: 4px;
+            margin: 0 auto 18px auto;
+            user-select: none;
         }
         .flip-unit {
             display: flex;
             gap: 2px;
         }
-        .flip-card {
+        .flip-colon {
+            font-size: 1.4em;
+            font-weight: bold;
+            color: #444;
+            padding: 0 1px;
+            display: flex;
+            align-items: center;
+            height: 36px;
+        }
+        /* Khung chứa tấm thẻ lật */
+        .flip-card-wrapper {
             position: relative;
+            width: 24px;
+            height: 36px;
+            perspective: 200px;
+        }
+        /* Các nửa của tấm thẻ */
+        .card-half {
+            position: absolute;
+            left: 0;
+            width: 100%;
+            height: 50%;
+            overflow: hidden;
             background: #ffffff;
             color: #111111;
             font-family: 'Courier New', Courier, monospace;
-            font-size: 1.5em;
+            font-size: 1.6em;
             font-weight: bold;
-            width: 24px;
-            height: 34px;
-            border-radius: 5px;
+            border: 1px solid #cccccc;
+            box-sizing: border-box;
             display: flex;
-            align-items: center;
             justify-content: center;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.15);
-            border: 1px solid #dddddd;
+            backface-visibility: hidden;
         }
-        /* Đường gờ lật ở chính giữa tấm thẻ */
-        .flip-card::after {
-            content: '';
-            position: absolute;
-            left: 0;
-            top: 50%;
-            width: 100%;
-            height: 1px;
-            background: rgba(0,0,0,0.1);
-            box-shadow: 0 1px 0 rgba(255,255,255,0.6);
+        .card-top {
+            top: 0;
+            border-top-left-radius: 5px;
+            border-top-right-radius: 5px;
+            border-bottom: none;
+            align-items: flex-start;
         }
-        /* Định dạng riêng cho cụm số giây nhỏ hơn một chút */
-        .flip-unit-sec .flip-card {
-            font-size: 1.2em;
-            width: 20px;
-            height: 28px;
-            color: #666666;
-        }
-        .flip-colon {
-            font-size: 1.2em;
-            font-weight: bold;
-            color: #666666;
-            padding: 0 1px;
+        .card-top span {
+            transform: translateY(2px);
             line-height: 34px;
         }
-        .flip-colon-sec {
-            line-height: 28px;
+        .card-bottom {
+            bottom: 0;
+            border-bottom-left-radius: 5px;
+            border-bottom-right-radius: 5px;
+            border-top: 1px solid #eeeeee;
+            align-items: flex-end;
+            transform-origin: center top;
+        }
+        .card-bottom span {
+            transform: translateY(-16px);
+            line-height: 34px;
+        }
+        /* Thẻ lật hoạt ảnh động */
+        .card-flip {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 50%;
+            overflow: hidden;
+            background: #ffffff;
+            color: #111111;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 1.6em;
+            font-weight: bold;
+            border: 1px solid #cccccc;
+            border-top-left-radius: 5px;
+            border-top-right-radius: 5px;
+            border-bottom: none;
+            box-sizing: border-box;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            transform-origin: center bottom;
+            backface-visibility: hidden;
+            z-index: 3;
+            transition: transform 0.4s ease-in;
+        }
+        .card-flip span {
+            transform: translateY(2px);
+            line-height: 34px;
+        }
+        .card-flip.flipped {
+            transform: rotateX(-180deg);
+        }
+        /* Đổ bóng nhẹ tạo chiều sâu 3D */
+        .flip-card-wrapper::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            box-shadow: 0 3px 6px rgba(0,0,0,0.1);
+            border-radius: 5px;
+            pointer-events: none;
+            z-index: 1;
         }
 
-        #presence-count { position: fixed; top: 10px; right: 10px; background: rgba(0,0,0,0.6); color: white; padding: 3px 8px; border-radius: 15px; font-size: 0.7em; z-index: 1000; pointer-events: none;display:flex;
-    align-items:center;
-    gap:6px; }
-         .online-dot{
-    display:inline-block;
-    width:10px;
-    height:10px;
-    border-radius:50%;
-    background:#00ff00;
-    animation:blinkOnline 1s infinite;
-}
-
-@keyframes blinkOnline{
-    0%,100%{
-        opacity:1;
-        box-shadow:0 0 10px #00ff00;
-    }
-    50%{
-        opacity:0.25;
-        box-shadow:0 0 2px #00ff00;
-    }
-}
+        /* CSS GIỮ NGUYÊN CỦA GIAO DIỆN CŨ */
+        #presence-count { position: fixed; top: 10px; right: 10px; background: rgba(0,0,0,0.6); color: white; padding: 3px 8px; border-radius: 15px; font-size: 0.7em; z-index: 1000; pointer-events: none;display:flex; align-items:center; gap:6px; }
+        .online-dot{ display:inline-block; width:10px; height:10px; border-radius:50%; background:#00ff00; animation:blinkOnline 1s infinite; }
+        @keyframes blinkOnline{ 0%,100%{ opacity:1; box-shadow:0 0 10px #00ff00; } 50%{ opacity:0.25; box-shadow:0 0 2px #00ff00; } }
         .tables-container { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-bottom: 15px; }
         .table-card { 
             background: white; padding: 10px 2px; text-align: center; border-radius: 12px; cursor: pointer; 
@@ -98,70 +139,34 @@
             transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
             grid-column: span 2;
         }
-        
         .full-width { grid-column: span 6; }
         .half-width { grid-column: span 3; }
-
         .table-card strong, .table-card span { position: relative; z-index: 10; }
         .table-card strong { font-size: 0.85em; color: #333; margin-bottom: 5px; }
         .table-price { color: var(--primary-red); font-weight: bold; font-size: 0.85em; background: rgba(255,255,255,0.8); padding: 2px 6px; border-radius: 4px; }
         .table-time { font-size: 0.7em; color: #666; margin-top: 6px; font-weight: 500; }
-        
         @keyframes pulse-green { 0% { background-color: #fff; } 50% { background-color: #e8f5e9; } 100% { background-color: #fff; } }
         .has-guest { animation: pulse-green 2s infinite; border-color: var(--success-green); }
         .active { border-color: var(--blue) !important; background: #e3f2fd !important; transform: scale(1.05); z-index: 20; animation: none !important; }
-
-        @keyframes pulse-rgb-bg {
-            0% { background-color: #fff1f1; }
-            33% { background-color: #f1fff1; }
-            66% { background-color: #f1f1ff; }
-            100% { background-color: #fff1f1; }
-        }
-
-        @keyframes pulse-rgb-total {
-            0% { background-color: #fff1f1; }
-            25% { background-color: #f1fff1; }
-            50% { background-color: #f1f1ff; }
-            75% { background-color: #fffbf1; }
-            100% { background-color: #fff1f1; }
-        }
-
+        @keyframes pulse-rgb-bg { 0% { background-color: #fff1f1; } 33% { background-color: #f1fff1; } 66% { background-color: #f1f1ff; } 100% { background-color: #fff1f1; } }
+        @keyframes pulse-rgb-total { 0% { background-color: #fff1f1; } 25% { background-color: #f1fff1; } 50% { background-color: #f1f1ff; } 75% { background-color: #fffbf1; } 100% { background-color: #fff1f1; } }
         .is-locked { animation: pulse-rgb-bg 1.5s infinite !important; border-color: transparent !important; }
-        .is-locked::before {
-            content: ""; position: absolute; top: -50%; left: -50%; width: 200%; height: 200%;
-            background: conic-gradient(#ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000);
-            animation: rotate-led 3s linear infinite; z-index: 1;
-        }
-        .is-locked::after {
-            content: ""; position: absolute; inset: 4px; background: inherit; border-radius: 8px; z-index: 2;
-        }
-
+        .is-locked::before { content: ""; position: absolute; top: -50%; left: -50%; width: 200%; height: 200%; background: conic-gradient(#ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000); animation: rotate-led 3s linear infinite; z-index: 1; }
+        .is-locked::after { content: ""; position: absolute; inset: 4px; background: inherit; border-radius: 8px; z-index: 2; }
         .is-locked-special { animation: pulse-rgb-bg 1s infinite !important; border-color: transparent !important; }
-        .is-locked-special::before {
-            content: ""; position: absolute; inset: 0; border-radius: 12px; padding: 4px;
-            background: linear-gradient(45deg, #ff0000, #00ff00, #0000ff, #ff0000);
-            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-            mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-            -webkit-mask-composite: xor; mask-composite: exclude;
-            animation: blink-rgb 1s linear infinite; z-index: 5;
-        }
-
+        .is-locked-special::before { content: ""; position: absolute; inset: 0; border-radius: 12px; padding: 4px; background: linear-gradient(45deg, #ff0000, #00ff00, #0000ff, #ff0000); -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0); mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0); -webkit-mask-composite: xor; mask-composite: exclude; animation: blink-rgb 1s linear infinite; z-index: 5; }
         @keyframes rotate-led { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         @keyframes blink-rgb { 0%, 100% { opacity: 1; filter: hue-rotate(0deg); } 50% { opacity: 0.3; filter: hue-rotate(360deg); } }
-        
         .flash-add { background-color: #c8e6c9 !important; }
         .flash-sub { background-color: #ffcdd2 !important; }
-
         .container { background: white; padding: 15px; border-radius: 15px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); max-width: 600px; margin: auto; }
         .category-title { background: #eee; padding: 8px 12px; font-weight: bold; margin-top: 15px; border-radius: 6px; color: #555; font-size: 0.85em; }
         .menu-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #f0f0f0; padding-left: 10px; border-radius: 8px; margin-bottom: 2px; transition: 0.2s; }
-        
         .qty-1 { background-color: #fffde7; border-left: 5px solid #fff59d; }
         .qty-2 { background-color: #fff9c4; border-left: 5px solid #fff176; }
         .qty-3 { background-color: #fff59d; border-left: 5px solid #ffee58; }
         .qty-4 { background-color: #fff176; border-left: 5px solid #ffeb3b; }
         .qty-5 { background-color: #ffecb3; border-left: 5px solid #ffc107; }
-
         .item-info b { font-size: 0.95em; display: block; margin-bottom: 2px; }
         .item-info small { color: var(--primary-red); font-weight: 600; font-size: 0.85em; }
         .controls { display: flex; align-items: center; gap: 10px; }
@@ -169,57 +174,29 @@
         .btn-sub { background: #f5f5f5; color: #999; }
         .btn-add { background: #e8f5e9; color: var(--success-green); }
         .qty-num { width: 25px; text-align: center; font-weight: bold; font-size: 1.1em; }
-
         .bill-box { border: 2.5px solid #333; padding: 12px; background: #fff; border-radius: 8px; margin-top: 10px; overflow: hidden; }
-        .bill-row { 
-            display: grid; grid-template-columns: 1fr auto 10px auto; align-items: center;
-            padding: 12px 0; border-bottom: 1px dashed #ddd; opacity: 0; transform: translateX(-10px); 
-            animation: slideInBill 0.4s ease forwards;
-        }
+        .bill-row { display: grid; grid-template-columns: 1fr auto 10px auto; align-items: center; padding: 12px 0; border-bottom: 1px dashed #ddd; opacity: 0; transform: translateX(-10px); animation: slideInBill 0.4s ease forwards; }
         .bill-row .item-name { text-align: left; font-size: 1.15em; font-weight: 500; padding-right: 10px; line-height: 1.3; color: #111; }
         .bill-row .item-qty { font-weight: 800; color: #000; text-align: right; min-width: 35px; font-size: 1.25em; }
         .bill-row .divider { height: 100%; border-left: 2px solid #333; margin: 0 10px; grid-column: 3; }
         .bill-row .item-price { color: var(--primary-red); font-weight: 700; text-align: right; min-width: 90px; font-size: 1.1em; }
-
         @keyframes slideInBill { to { opacity: 1; transform: translateX(0); } }
-        
-        .total-container { 
-            display: flex; justify-content: space-between; align-items: center;
-            font-size: 1.2em; font-weight: 900; margin-top: 15px; color: var(--primary-red); 
-            padding: 18px 8px; border-top: 3px solid #333; gap: 5px;
-            animation: pulse-rgb-total 2s infinite ease-in-out;
-            border-radius: 0 0 5px 5px;
-            overflow: hidden;
-        }
+        .total-container { display: flex; justify-content: space-between; align-items: center; font-size: 1.2em; font-weight: 900; margin-top: 15px; color: var(--primary-red); padding: 18px 8px; border-top: 3px solid #333; gap: 5px; animation: pulse-rgb-total 2s infinite ease-in-out; border-radius: 0 0 5px 5px; overflow: hidden; }
         .total-label-wrapper { display: flex; align-items: center; gap: 5px; min-width: 0; flex-shrink: 1; }
         #txt-total-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.85em; }
-        
         #txt-lang-flag { font-size: 1.4em; flex-shrink: 0; }
-
         .arrow-container { flex-grow: 1; display: flex; align-items: center; position: relative; height: 35px; min-width: 20px; }
         .arrow-shaft { height: 10px; background: rgba(0,0,0,0.05); flex-grow: 1; position: relative; border-radius: 5px 0 0 5px; overflow: hidden; }
-        .arrow-shaft::after {
-            content: ''; position: absolute; top: 0; left: -100%; height: 100%; width: 100%;
-            background: linear-gradient(to right, transparent, var(--primary-red), var(--primary-red));
-            animation: shaftFlow 1.2s infinite cubic-bezier(0.4, 0, 0.2, 1);
-        }
+        .arrow-shaft::after { content: ''; position: absolute; top: 0; left: -100%; height: 100%; width: 100%; background: linear-gradient(to right, transparent, var(--primary-red), var(--primary-red)); animation: shaftFlow 1.2s infinite cubic-bezier(0.4, 0, 0.2, 1); }
         .arrow-head { width: 22px; height: 26px; background: rgba(0,0,0,0.05); clip-path: polygon(0% 0%, 100% 50%, 0% 100%); margin-left: -2px; position: relative; display: flex; align-items: center; flex-shrink: 0; }
-        .arrow-head::after {
-            content: ''; position: absolute; inset: 0; background: var(--primary-red); opacity: 0;
-            animation: headGlowRed 1.2s infinite cubic-bezier(0.4, 0, 0.2, 1);
-            filter: drop-shadow(0 0 8px var(--primary-red));
-        }
-
+        .arrow-head::after { content: ''; position: absolute; inset: 0; background: var(--primary-red); opacity: 0; animation: headGlowRed 1.2s infinite cubic-bezier(0.4, 0, 0.2, 1); filter: drop-shadow(0 0 8px var(--primary-red)); }
         @keyframes shaftFlow { 0% { left: -100%; } 60%, 100% { left: 100%; } }
         @keyframes headGlowRed { 0%, 50% { opacity: 0; transform: scale(0.9); } 65% { opacity: 1; transform: scale(1.1); } 85%, 100% { opacity: 0; transform: scale(1); } }
-
         .total-pop { animation: popScale 0.4s ease; }
         @keyframes popScale { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
-
         .btn-action { border: none; padding: 15px; border-radius: 10px; font-weight: bold; width: 100%; margin-top: 12px; color: white; cursor: pointer; font-size: 1.1em; }
         #reset-area { text-align: center; margin-top: 40px; display: none; }
         #reset-area button { color: #ccc; border: 1px solid #eee; background: none; padding: 5px 10px; border-radius: 5px; font-size: 0.7em; }
-        
         .lang-btn { flex: 1; padding: 10px 2px; border: 1px solid #ccc; border-radius: 8px; background: #fff; font-size: 0.75em; font-weight: bold; color: #555; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
         .lang-btn span:first-child { font-size: 1.8em; line-height: 1; }
         .lang-btn:active { background: #f0f0f0; }
@@ -234,21 +211,42 @@
 </div>
 <h2>CƠM BÉ TRÂM</h2>
 
-<!-- KHU VỰC ĐỒNG HỒ LẬT NỀN TRẮNG SỐ ĐEN CÓ GIÂY -->
+<!-- GIAO DIỆN ĐỒNG HỒ LẬT 3D CHUẨN CÓ SỐ GIÂY BẰNG NHAU -->
 <div class="flip-clock-container">
+    <!-- GIỜ -->
     <div class="flip-unit">
-        <div class="flip-card" id="h-1">0</div>
-        <div class="flip-card" id="h-2">0</div>
+        <div class="flip-card-wrapper" id="wrap-h1">
+            <div class="card-half card-top"><span>0</span></div>
+            <div class="card-half card-bottom"><span>0</span></div>
+        </div>
+        <div class="flip-card-wrapper" id="wrap-h2">
+            <div class="card-half card-top"><span>0</span></div>
+            <div class="card-half card-bottom"><span>0</span></div>
+        </div>
     </div>
     <div class="flip-colon">:</div>
+    <!-- PHÚT -->
     <div class="flip-unit">
-        <div class="flip-card" id="m-1">0</div>
-        <div class="flip-card" id="m-2">0</div>
+        <div class="flip-card-wrapper" id="wrap-m1">
+            <div class="card-half card-top"><span>0</span></div>
+            <div class="card-half card-bottom"><span>0</span></div>
+        </div>
+        <div class="flip-card-wrapper" id="wrap-m2">
+            <div class="card-half card-top"><span>0</span></div>
+            <div class="card-half card-bottom"><span>0</span></div>
+        </div>
     </div>
-    <div class="flip-colon flip-colon-sec">:</div>
-    <div class="flip-unit flip-unit-sec">
-        <div class="flip-card" id="s-1">0</div>
-        <div class="flip-card" id="s-2">0</div>
+    <div class="flip-colon">:</div>
+    <!-- GIÂY -->
+    <div class="flip-unit">
+        <div class="flip-card-wrapper" id="wrap-s1">
+            <div class="card-half card-top"><span>0</span></div>
+            <div class="card-half card-bottom"><span>0</span></div>
+        </div>
+        <div class="flip-card-wrapper" id="wrap-s2">
+            <div class="card-half card-top"><span>0</span></div>
+            <div class="card-half card-bottom"><span>0</span></div>
+        </div>
     </div>
 </div>
 
@@ -362,21 +360,62 @@
     let data = { orders: {}, locked: {}, times: {} };
     let firstLoad = true;
 
-    // HÀM HOẠT ĐỘNG ĐỒNG HỒ (CẬP NHẬT TỚI SỐ GIÂY)
+    // LOGIC ĐỒNG HỒ LẬT 3D CHUẨN
+    function flipCard(wrapperId, targetValue) {
+        const wrapper = document.getElementById(wrapperId);
+        if (!wrapper) return;
+        const topHalf = wrapper.querySelector('.card-top span');
+        const bottomHalf = wrapper.querySelector('.card-bottom span');
+        
+        // Nếu giá trị cũ đã trùng với giá trị mới thì bỏ qua
+        if (bottomHalf.innerText === targetValue) return;
+
+        // Tạo phần tử lật trung gian
+        const flipEl = document.createElement('div');
+        flipEl.className = 'card-flip';
+        flipEl.innerHTML = `<span>${topHalf.innerText}</span>`;
+        wrapper.appendChild(flipEl);
+
+        // Chuẩn bị dữ liệu số mới cho nửa trên và nửa dưới ẩn sau tấm lật
+        topHalf.innerText = targetValue;
+
+        // Bắt đầu kích hoạt animation xoay lật góc 3D
+        requestAnimationFrame(() => {
+            flipEl.classList.add('flipped');
+        });
+
+        // Khi hiệu ứng lật hoàn tất nửa chu kỳ, cập nhật nửa dưới và xóa thẻ tạm
+        setTimeout(() => {
+            bottomHalf.innerText = targetValue;
+            flipEl.remove();
+        }, 400);
+    }
+
     function updateFlipClock() {
         const now = new Date();
         const hrs = String(now.getHours()).padStart(2, '0');
         const mins = String(now.getMinutes()).padStart(2, '0');
         const secs = String(now.getSeconds()).padStart(2, '0');
         
-        document.getElementById('h-1').innerText = hrs[0];
-        document.getElementById('h-2').innerText = hrs[1];
-        document.getElementById('m-1').innerText = mins[0];
-        document.getElementById('m-2').innerText = mins[1];
-        document.getElementById('s-1').innerText = secs[0];
-        document.getElementById('s-2').innerText = secs[1];
+        flipCard('wrap-h1', hrs[0]);
+        flipCard('wrap-h2', hrs[1]);
+        flipCard('wrap-m1', mins[0]);
+        flipCard('wrap-m2', mins[1]);
+        flipCard('wrap-s1', secs[0]);
+        flipCard('wrap-s2', secs[1]);
     }
-    updateFlipClock();
+    // Khởi tạo trạng thái ban đầu lập tức cho các ô số
+    const nowInit = new Date();
+    const hrsI = String(nowInit.getHours()).padStart(2, '0');
+    const minsI = String(nowInit.getMinutes()).padStart(2, '0');
+    const secsI = String(nowInit.getSeconds()).padStart(2, '0');
+    document.querySelector('#wrap-h1 .card-top span').innerText = document.querySelector('#wrap-h1 .card-bottom span').innerText = hrsI[0];
+    document.querySelector('#wrap-h2 .card-top span').innerText = document.querySelector('#wrap-h2 .card-bottom span').innerText = hrsI[1];
+    document.querySelector('#wrap-m1 .card-top span').innerText = document.querySelector('#wrap-m1 .card-bottom span').innerText = minsI[0];
+    document.querySelector('#wrap-m2 .card-top span').innerText = document.querySelector('#wrap-m2 .card-bottom span').innerText = minsI[1];
+    document.querySelector('#wrap-s1 .card-top span').innerText = document.querySelector('#wrap-s1 .card-bottom span').innerText = secsI[0];
+    document.querySelector('#wrap-s2 .card-top span').innerText = document.querySelector('#wrap-s2 .card-bottom span').innerText = secsI[1];
+
     setInterval(updateFlipClock, 1000);
 
     function triggerHaptic(type) {
@@ -386,7 +425,6 @@
         else if (type === 'success') window.navigator.vibrate(60);
     }
 
-    //[cite: 1]
     function animateNumber(elementId, newValue) {
         const el = document.getElementById(elementId);
         if (!el) return;
