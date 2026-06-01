@@ -8,8 +8,65 @@
     <style>
         :root { --primary-red: #d32f2f; --success-green: #4caf50; --warning-orange: #ff9800; --blue: #2196f3; }
         body { font-family: 'Segoe UI', Arial, sans-serif; background-color: #f4f7f6; margin: 0; padding: 10px; padding-bottom: 120px; -webkit-tap-highlight-color: transparent; }
-        h2 { text-align: center; color: var(--primary-red); text-transform: uppercase; font-size: 1.2em; margin: 10px 0; }
+        h2 { text-align: center; color: var(--primary-red); text-transform: uppercase; font-size: 1.2em; margin: 10px 0 5px 0; }
         
+        /* CSS CHO ĐỒNG HỒ LẬT NỀN TRẮNG SỐ ĐEN + CÓ GIÂY */
+        .flip-clock-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 3px;
+            margin: 0 auto 15px auto;
+        }
+        .flip-unit {
+            display: flex;
+            gap: 2px;
+        }
+        .flip-card {
+            position: relative;
+            background: #ffffff;
+            color: #111111;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 1.5em;
+            font-weight: bold;
+            width: 24px;
+            height: 34px;
+            border-radius: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+            border: 1px solid #dddddd;
+        }
+        /* Đường gờ lật ở chính giữa tấm thẻ */
+        .flip-card::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 50%;
+            width: 100%;
+            height: 1px;
+            background: rgba(0,0,0,0.1);
+            box-shadow: 0 1px 0 rgba(255,255,255,0.6);
+        }
+        /* Định dạng riêng cho cụm số giây nhỏ hơn một chút */
+        .flip-unit-sec .flip-card {
+            font-size: 1.2em;
+            width: 20px;
+            height: 28px;
+            color: #666666;
+        }
+        .flip-colon {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #666666;
+            padding: 0 1px;
+            line-height: 34px;
+        }
+        .flip-colon-sec {
+            line-height: 28px;
+        }
+
         #presence-count { position: fixed; top: 10px; right: 10px; background: rgba(0,0,0,0.6); color: white; padding: 3px 8px; border-radius: 15px; font-size: 0.7em; z-index: 1000; pointer-events: none;display:flex;
     align-items:center;
     gap:6px; }
@@ -177,6 +234,24 @@
 </div>
 <h2>CƠM BÉ TRÂM</h2>
 
+<!-- KHU VỰC ĐỒNG HỒ LẬT NỀN TRẮNG SỐ ĐEN CÓ GIÂY -->
+<div class="flip-clock-container">
+    <div class="flip-unit">
+        <div class="flip-card" id="h-1">0</div>
+        <div class="flip-card" id="h-2">0</div>
+    </div>
+    <div class="flip-colon">:</div>
+    <div class="flip-unit">
+        <div class="flip-card" id="m-1">0</div>
+        <div class="flip-card" id="m-2">0</div>
+    </div>
+    <div class="flip-colon flip-colon-sec">:</div>
+    <div class="flip-unit flip-unit-sec">
+        <div class="flip-card" id="s-1">0</div>
+        <div class="flip-card" id="s-2">0</div>
+    </div>
+</div>
+
 <div class="tables-container">
     <div class="table-card" id="tab-1" onclick="selectTable(1)"><strong>Bàn 1</strong><span class="table-price" id="sum-1">0đ</span><span class="table-time" id="time-1"></span></div>
     <div class="table-card" id="tab-2" onclick="selectTable(2)"><strong>Bàn 2</strong><span class="table-price" id="sum-2">0đ</span><span class="table-time" id="time-2"></span></div>
@@ -287,6 +362,23 @@
     let data = { orders: {}, locked: {}, times: {} };
     let firstLoad = true;
 
+    // HÀM HOẠT ĐỘNG ĐỒNG HỒ (CẬP NHẬT TỚI SỐ GIÂY)
+    function updateFlipClock() {
+        const now = new Date();
+        const hrs = String(now.getHours()).padStart(2, '0');
+        const mins = String(now.getMinutes()).padStart(2, '0');
+        const secs = String(now.getSeconds()).padStart(2, '0');
+        
+        document.getElementById('h-1').innerText = hrs[0];
+        document.getElementById('h-2').innerText = hrs[1];
+        document.getElementById('m-1').innerText = mins[0];
+        document.getElementById('m-2').innerText = mins[1];
+        document.getElementById('s-1').innerText = secs[0];
+        document.getElementById('s-2').innerText = secs[1];
+    }
+    updateFlipClock();
+    setInterval(updateFlipClock, 1000);
+
     function triggerHaptic(type) {
         if (!window.navigator || !window.navigator.vibrate) return;
         if (type === 'add') window.navigator.vibrate(15);
@@ -294,11 +386,12 @@
         else if (type === 'success') window.navigator.vibrate(60);
     }
 
+    //[cite: 1]
     function animateNumber(elementId, newValue) {
         const el = document.getElementById(elementId);
         if (!el) return;
         const startValue = parseInt(el.innerText.replace(/\D/g, '')) || 0;
-        if (startValue === newValue) return; // Bảo vệ chống Layout Thrashing lặp lại vô ích
+        if (startValue === newValue) return; 
         
         const duration = 800;
         const startTime = performance.now();
@@ -351,7 +444,6 @@
     }
     renderMenu();
 
-    // SỬA LỖI MEMORY LEAK: Sử dụng duy nhất 1 Event Delegation cho toàn bộ Menu List
     document.getElementById('menu-list').addEventListener('click', (e) => {
         const btn = e.target.closest('.btn-qty');
         if (!btn) return;
@@ -409,15 +501,14 @@
     }
 
     function changeBillLang(l) {
-    triggerHaptic('add');
-    currentBillLang = l;
-    refresh();
-
-    document.querySelector('.bill-box')?.scrollIntoView({
-        behavior: 'smooth',
-        block: 'start'
-    });
-}
+        triggerHaptic('add');
+        currentBillLang = l;
+        refresh();
+        document.querySelector('.bill-box')?.scrollIntoView({
+            behavior: 'smooth',
+            block: 'start'
+        });
+    }
 
     function refresh() {
         const all = menu.flatMap(g => g.items);
@@ -433,10 +524,9 @@
                 const row = document.getElementById(`row-${i.id}`);
                 const qSpan = document.getElementById(`q-${i.id}`);
                 if (row && qSpan) {
-                    // TỐI ƯU DOM: Chỉ update text và class nếu số lượng thực tế thay đổi
                     if (qSpan.innerText !== String(q)) {
                         qSpan.innerText = q;
-                        row.className = 'menu-item'; // reset class
+                        row.className = 'menu-item'; 
                         if(q >= 5) row.classList.add('qty-5'); else if(q > 0) row.classList.add('qty-' + q);
                     }
                 }
@@ -445,7 +535,6 @@
                 let h = ""; let t = 0; let my = data.orders[currentTab] || {};
                 const langData = dict[currentBillLang] || dict['vi'];
                 
-                // TỐI ƯU DOM: Tránh ghi đè text tĩnh lặp đi lặp lại
                 const lblTotal = document.getElementById('txt-total-label');
                 const lblFlag = document.getElementById('txt-lang-flag');
                 if (lblTotal.innerText !== langData.total) lblTotal.innerText = langData.total;
@@ -467,7 +556,6 @@
                     }
                 }
                 
-                // TỐI ƯU DOM: Chỉ nạp lại chuỗi HTML nếu danh sách món trong bill thay đổi
                 const billListEl = document.getElementById('bill-list');
                 const newHTML = h || "Trống";
                 if (billListEl.innerHTML !== newHTML) {
@@ -518,7 +606,6 @@
                     targetClassName += ' has-guest'; 
                 }
 
-                // TỐI ƯU DOM: Chỉ ghi đè class string nếu cấu trúc thực sự thay đổi
                 if (btn.className !== targetClassName) {
                     btn.className = targetClassName;
                 }
