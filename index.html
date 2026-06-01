@@ -572,23 +572,30 @@ else if (code >= 95) {
         requestAnimationFrame(update);
     }
 
-    const onlineRef = ref(database, '.info/connected');
-    const presenceListRef = ref(database, 'combetram_v6_data/presence');
-    const myPresenceRef = push(presenceListRef);
-    onValue(presenceListRef, (snap) => {
+    const onlineRef = ref(database,'.info/connected');
 
-    const presenceData = snap.val() || {};
+const presenceListRef =
+ref(database,'combetram_v6_data/presence');
 
-    const onlineCount =
-        Object.keys(presenceData).length;
+const myPresenceRef =
+push(presenceListRef);
+
+onValue(onlineRef, (snap) => {
+
+    if (snap.val() === true) {
+
+        onDisconnect(myPresenceRef).remove();
+
+        set(myPresenceRef, true);
+
+    }
+
+});
+
+onValue(presenceListRef, (snap) => {
 
     document.getElementById('online-val').innerText =
-        onlineCount;
-
-    console.log(
-        "Online:",
-        onlineCount
-    );
+        snap.numChildren();
 
 });
 
