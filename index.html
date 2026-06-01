@@ -178,23 +178,6 @@
         .btn-action { border: none; padding: 15px; border-radius: 10px; font-weight: bold; width: 100%; margin-top: 12px; color: white; cursor: pointer; font-size: 1.1em; }
         #reset-area { text-align: center; margin-top: 40px; display: none; }
         #reset-area button { color: #ccc; border: 1px solid #eee; background: none; padding: 5px 10px; border-radius: 5px; font-size: 0.7em; }
-        @keyframes moneyGreenFlash {
-    0% { background:#4caf50; color:#fff; }
-    100% { background:transparent; color:inherit; }
-}
-
-@keyframes moneyRedFlash {
-    0% { background:#f44336; color:#fff; }
-    100% { background:transparent; color:inherit; }
-}
-
-.money-up {
-    animation: moneyGreenFlash 0.8s ease;
-}
-
-.money-down {
-    animation: moneyRedFlash 0.8s ease;
-}
     </style>
 </head>
 <body>
@@ -676,9 +659,6 @@ onValue(presenceListRef, (snap) => {
     function changeBillLang(l) { triggerHaptic('add'); currentBillLang = l; refresh(); document.querySelector('.bill-box')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
 
     function refresh() {
-        let firstLoad = true;
-
-const lastTableTotals = {};
         const all = menu.flatMap(g => g.items); let anyGuest = false; const now = Date.now();
         if(currentTab) {
             const isLock = (data.locked && data.locked[currentTab]) || false;
@@ -721,39 +701,7 @@ const lastTableTotals = {};
         for(let i=1; i<=9; i++) {
             let s = 0, o = data.orders[i] || {}; for(let id in o) { let itm = all.find(x => x.id == id); if(itm) s += itm.price * o[id]; }
             const sTabLocked = (data.locked && data.locked[i]) || false; if(s > 0 || sTabLocked) anyGuest = true;
-            const sumEl = document.getElementById(`sum-${i}`);
-
-if (sumEl) {
-
-    const oldTotal = lastTableTotals[i] ?? 0;
-
-    if (oldTotal !== s) {
-
-        animateNumber(`sum-${i}`, s);
-
-        if (!firstLoad) {
-
-            if (s > oldTotal) {
-
-                sumEl.classList.remove('money-down');
-                void sumEl.offsetWidth;
-                sumEl.classList.add('money-up');
-
-            } else if (s < oldTotal) {
-
-                sumEl.classList.remove('money-up');
-                void sumEl.offsetWidth;
-                sumEl.classList.add('money-down');
-
-            }
-
-        }
-
-        lastTableTotals[i] = s;
-
-    }
-
-}
+            const sumEl = document.getElementById(`sum-${i}`); if(sumEl && parseInt(sumEl.innerText.replace(/\D/g,'')) !== s) animateNumber(`sum-${i}`, s);
             const timeSpan = document.getElementById(`time-${i}`);
             if(timeSpan) {
                 let txt = ""; if(s > 0 && data.times && data.times[i]) { const diff = Math.floor((now - data.times[i]) / 60000); txt = diff > 0 ? "⏱ " + diff + " phút" : "⏱ Mới vào"; }
