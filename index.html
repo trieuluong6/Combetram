@@ -408,7 +408,16 @@
         }, 400);
     }
 
-    function changeBillLang(l) { triggerHaptic('add'); currentBillLang = l; refresh(); }
+    function changeBillLang(l) {
+    triggerHaptic('add');
+    currentBillLang = l;
+    refresh();
+
+    document.querySelector('.bill-box')?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start'
+    });
+}
 
     function refresh() {
         const all = menu.flatMap(g => g.items);
