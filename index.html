@@ -11,96 +11,119 @@
         h2 { text-align: center; color: var(--primary-red); text-transform: uppercase; font-size: 1.2em; margin: 10px 0; }
         
         /* ==========================================================================
-           CSS ĐỒNG HỒ LẬT 3D - SỬA LỖI CẮT CHỮ VÀ HIỆU ỨNG GIÂY
+           CẤU TRÚC ĐỒNG HỒ LẬT 3D TĨNH - KHÔNG LỖI CHỮ - HIỆU ỨNG SIÊU MƯỢT
            ========================================================================== */
         .flip-clock-container {
             display: flex;
             justify-content: center;
             align-items: center;
             gap: 4px;
-            margin: 10px 0 20px 0;
+            margin: 12px 0 22px 0;
             user-select: none;
         }
         .flip-unit {
             display: flex;
-            gap: 2px;
+            gap: 3px;
         }
         .flip-colon {
-            font-size: 1.6em;
+            font-size: 1.8em;
             font-weight: bold;
             color: #333;
-            padding: 0 2px;
-            line-height: 46px;
-            height: 46px;
+            padding: 0 1px;
+            line-height: 40px;
+            height: 40px;
             display: flex;
             align-items: center;
+            animation: blinkColon 1s infinite;
         }
-        .flip-card-wrapper {
+        @keyframes blinkColon { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+        .flip-card {
             position: relative;
-            width: 28px;
-            height: 44px;
-            perspective: 200px;
-            background: #ffffff;
-            border-radius: 6px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.15);
-            border: 1px solid #ccc;
+            width: 26px;
+            height: 40px;
+            perspective: 150px;
+            font-family: 'Segoe UI', Arial, sans-serif;
+            font-size: 1.7em;
+            font-weight: bold;
         }
-        /* Cố định nửa trên và nửa dưới không bị lệch dòng */
+        /* Các mảnh cấu trúc của một ô số */
         .card-half {
             position: absolute;
             left: 0;
             width: 100%;
             height: 50%;
             overflow: hidden;
-            background: #ffffff;
-            color: #000000;
-            font-family: 'Segoe UI', Arial, sans-serif;
-            font-size: 1.8em;
-            font-weight: bold;
-            text-align: center;
+            background: #fff;
+            color: #000;
             box-sizing: border-box;
+            text-align: center;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
         }
         .card-top {
             top: 0;
             border-top-left-radius: 5px;
             border-top-right-radius: 5px;
-            line-height: 44px; /* Khớp tuyệt đối với chiều cao tổng */
+            line-height: 40px; /* Khớp chuẩn bằng chiều cao tổng */
         }
         .card-bottom {
             bottom: 0;
             border-bottom-left-radius: 5px;
             border-bottom-right-radius: 5px;
-            line-height: 0px; /* Đẩy chữ lên trên chính xác */
-            border-top: 1px solid #f2f2f2;
+            line-height: 0px; /* Triệt tiêu đẩy dòng để chữ nối liền khớp nhau */
+            border-top: 1px solid #f0f0f0;
         }
-        /* Thẻ lật cánh bướm 3D */
-        .card-flip {
+        /* Phần cánh bướm chuyển động lật */
+        .card-flip-wing {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 50%;
             overflow: hidden;
-            background: #ffffff;
-            color: #000000;
-            font-family: 'Segoe UI', Arial, sans-serif;
-            font-size: 1.8em;
-            font-weight: bold;
+            box-sizing: border-box;
             text-align: center;
             border-top-left-radius: 5px;
             border-top-right-radius: 5px;
-            box-sizing: border-box;
-            line-height: 44px;
+            line-height: 40px;
             transform-origin: center bottom;
             backface-visibility: hidden;
-            z-index: 3;
-            transition: transform 0.3s ease-in-out;
+            z-index: 5;
+            background: #fff;
+            color: #000;
+            transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
         }
-        .card-flip.flipped {
+        /* Mặt sau cánh bướm khi lật xuống xuống */
+        .card-flip-wing-back {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 50%;
+            overflow: hidden;
+            box-sizing: border-box;
+            text-align: center;
+            border-bottom-left-radius: 5px;
+            border-bottom-right-radius: 5px;
+            line-height: 0px;
+            transform-origin: center top;
+            backface-visibility: hidden;
+            z-index: 4;
+            background: #fff;
+            color: #000;
+            border-top: 1px solid #f0f0f0;
+            transform: rotateX(180deg);
+            transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        /* Kích hoạt class lật thông qua JavaScript khiển mượt mà */
+        .flip-card.animate .card-flip-wing {
             transform: rotateX(-180deg);
         }
+        .flip-card.animate .card-flip-wing-back {
+            transform: rotateX(0deg);
+        }
 
-        /* GIỮ NGUYÊN TOÀN BỘ CSS GIAO DIỆN CŨ CỦA BẠN */
+        /* GIỮ NGUYÊN HOÀN TOÀN CSS GIAO DIỆN HỆ THỐNG CŨ CỦA BẠN */
         #presence-count { position: fixed; top: 10px; right: 10px; background: rgba(0,0,0,0.6); color: white; padding: 3px 8px; border-radius: 15px; font-size: 0.7em; z-index: 1000; pointer-events: none;display:flex; align-items:center; gap:6px; }
         .online-dot{ display:inline-block; width:10px; height:10px; border-radius:50%; background:#00ff00; animation:blinkOnline 1s infinite; }
         @keyframes blinkOnline{ 0%,100%{ opacity:1; box-shadow:0 0 10px #00ff00; } 50%{ opacity:0.25; box-shadow:0 0 2px #00ff00; } }
@@ -158,6 +181,10 @@
         .total-container { display: flex; justify-content: space-between; align-items: center; font-size: 1.2em; font-weight: 900; margin-top: 15px; color: var(--primary-red); padding: 18px 8px; border-top: 3px solid #333; gap: 5px; animation: pulse-rgb-total 2s infinite ease-in-out; border-radius: 0 0 5px 5px; overflow: hidden; }
         .total-label-wrapper { display: flex; align-items: center; gap: 5px; min-width: 0; flex-shrink: 1; }
         #txt-total-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.85em; }
+        .lang-btn { flex: 1; padding: 10px 2px; border: 1px solid #ccc; border-radius: 8px; background: #fff; font-size: 0.75em; font-weight: bold; color: #555; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
+        .lang-btn span:first-child { font-size: 1.8em; line-height: 1; }
+        .lang-btn:active { background: #f0f0f0; }
+        .lang-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 20px; }
         #txt-lang-flag { font-size: 1.4em; flex-shrink: 0; }
         .arrow-container { flex-grow: 1; display: flex; align-items: center; position: relative; height: 35px; min-width: 20px; }
         .arrow-shaft { height: 10px; background: rgba(0,0,0,0.05); flex-grow: 1; position: relative; border-radius: 5px 0 0 5px; overflow: hidden; }
@@ -171,10 +198,6 @@
         .btn-action { border: none; padding: 15px; border-radius: 10px; font-weight: bold; width: 100%; margin-top: 12px; color: white; cursor: pointer; font-size: 1.1em; }
         #reset-area { text-align: center; margin-top: 40px; display: none; }
         #reset-area button { color: #ccc; border: 1px solid #eee; background: none; padding: 5px 10px; border-radius: 5px; font-size: 0.7em; }
-        .lang-btn { flex: 1; padding: 10px 2px; border: 1px solid #ccc; border-radius: 8px; background: #fff; font-size: 0.75em; font-weight: bold; color: #555; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
-        .lang-btn span:first-child { font-size: 1.8em; line-height: 1; }
-        .lang-btn:active { background: #f0f0f0; }
-        .lang-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 20px; }
     </style>
 </head>
 <body>
@@ -187,18 +210,36 @@
 
 <div class="flip-clock-container">
     <div class="flip-unit">
-        <div class="flip-card-wrapper" id="wrap-h1"><div class="card-half card-top">0</div><div class="card-half card-bottom">0</div></div>
-        <div class="flip-card-wrapper" id="wrap-h2"><div class="card-half card-top">0</div><div class="card-half card-bottom">0</div></div>
+        <div class="flip-card" id="c-h1">
+            <div class="card-half card-top">0</div><div class="card-half card-bottom">0</div>
+            <div class="card-flip-wing">0</div><div class="card-flip-wing-back">0</div>
+        </div>
+        <div class="flip-card" id="c-h2">
+            <div class="card-half card-top">0</div><div class="card-half card-bottom">0</div>
+            <div class="card-flip-wing">0</div><div class="card-flip-wing-back">0</div>
+        </div>
     </div>
     <div class="flip-colon">:</div>
     <div class="flip-unit">
-        <div class="flip-card-wrapper" id="wrap-m1"><div class="card-half card-top">0</div><div class="card-half card-bottom">0</div></div>
-        <div class="flip-card-wrapper" id="wrap-m2"><div class="card-half card-top">0</div><div class="card-half card-bottom">0</div></div>
+        <div class="flip-card" id="c-m1">
+            <div class="card-half card-top">0</div><div class="card-half card-bottom">0</div>
+            <div class="card-flip-wing">0</div><div class="card-flip-wing-back">0</div>
+        </div>
+        <div class="flip-card" id="c-m2">
+            <div class="card-half card-top">0</div><div class="card-half card-bottom">0</div>
+            <div class="card-flip-wing">0</div><div class="card-flip-wing-back">0</div>
+        </div>
     </div>
     <div class="flip-colon">:</div>
     <div class="flip-unit">
-        <div class="flip-card-wrapper" id="wrap-s1"><div class="card-half card-top">0</div><div class="card-half card-bottom">0</div></div>
-        <div class="flip-card-wrapper" id="wrap-s2"><div class="card-half card-top">0</div><div class="card-half card-bottom">0</div></div>
+        <div class="flip-card" id="c-s1">
+            <div class="card-half card-top">0</div><div class="card-half card-bottom">0</div>
+            <div class="card-flip-wing">0</div><div class="card-flip-wing-back">0</div>
+        </div>
+        <div class="flip-card" id="c-s2">
+            <div class="card-half card-top">0</div><div class="card-half card-bottom">0</div>
+            <div class="card-flip-wing">0</div><div class="card-flip-wing-back">0</div>
+        </div>
     </div>
 </div>
 
@@ -298,60 +339,59 @@
     let data = { orders: {}, locked: {}, times: {} };
     let firstLoad = true;
 
-    // LOGIC HOẠT ẢNH ĐỒNG HỒ LẬT 3D CHUẨN XÁC
-    function flipCard(wrapperId, targetValue) {
-        const wrapper = document.getElementById(wrapperId);
-        if (!wrapper) return;
+    // LOGIC ĐỒNG HỒ LẬT TĨNH SIÊU TỐC - KHÔNG BAO GIỜ LỖI GIÂY
+    function updateCardValue(cardId, targetVal) {
+        const card = document.getElementById(cardId);
+        if (!card) return;
         
-        const topHalf = wrapper.querySelector('.card-top');
-        const bottomHalf = wrapper.querySelector('.card-bottom');
-        
-        if (bottomHalf.innerText === targetValue) return;
+        const topHalf = card.querySelector('.card-top');
+        const bottomHalf = card.querySelector('.card-bottom');
+        const wing = card.querySelector('.card-flip-wing');
+        const wingBack = card.querySelector('.card-flip-wing-back');
 
-        const flipEl = document.createElement('div');
-        flipEl.className = 'card-flip';
-        flipEl.innerText = topHalf.innerText;
-        wrapper.appendChild(flipEl);
+        // Nếu giá trị hiện tại trùng mục tiêu thì dừng, không lật lặp lại vô ích
+        if (topHalf.innerText === targetVal) return;
 
-        topHalf.innerText = targetValue;
+        // Gán dữ liệu chuẩn bị lật cánh bướm
+        wing.innerText = topHalf.innerText;
+        wingBack.innerText = targetVal;
+        topHalf.innerText = targetVal;
 
-        requestAnimationFrame(() => {
-            flipEl.classList.add('flipped');
-        });
+        card.classList.add('animate');
 
         setTimeout(() => {
-            bottomHalf.innerText = targetValue;
-            flipEl.remove();
-        }, 280);
+            bottomHalf.innerText = targetVal;
+            wing.innerText = targetVal;
+            card.classList.remove('animate');
+        }, 340);
     }
 
-    function updateFlipClock() {
-        const now = new Date();
-        const hrs = String(now.getHours()).padStart(2, '0');
-        const mins = String(now.getMinutes()).padStart(2, '0');
-        const secs = String(now.getSeconds()).padStart(2, '0');
-        
-        flipCard('wrap-h1', hrs[0]);
-        flipCard('wrap-h2', hrs[1]);
-        flipCard('wrap-m1', mins[0]);
-        flipCard('wrap-m2', mins[1]);
-        flipCard('wrap-s1', secs[0]); // Đã ép chạy hoạt ảnh lật riêng biệt cho số giây thứ nhất
-        flipCard('wrap-s2', secs[1]); // Đã ép chạy hoạt ảnh lật riêng biệt cho số giây thứ hai
+    function runClock() {
+        const d = new Date();
+        const hStr = String(d.getHours()).padStart(2, '0');
+        const mStr = String(d.getMinutes()).padStart(2, '0');
+        const sStr = String(d.getSeconds()).padStart(2, '0');
+
+        updateCardValue('c-h1', hStr[0]);
+        updateCardValue('c-h2', hStr[1]);
+        updateCardValue('c-m1', mStr[0]);
+        updateCardValue('c-m2', mStr[1]);
+        updateCardValue('c-s1', sStr[0]); // Chạy hiệu ứng mượt tuyệt đối cho số giây cuối thứ 1
+        updateCardValue('c-s2', sStr[1]); // Chạy hiệu ứng mượt tuyệt đối cho số giây cuối thứ 2
     }
 
-    // Nạp giá trị thời gian thực ngay khi mở trang để tránh bị trống
-    const initTime = new Date();
-    const initHrs = String(initTime.getHours()).padStart(2, '0');
-    const initMins = String(initTime.getMinutes()).padStart(2, '0');
-    const initSecs = String(initTime.getSeconds()).padStart(2, '0');
-    document.getElementById('wrap-h1').querySelectorAll('.card-half').forEach(el => el.innerText = initHrs[0]);
-    document.getElementById('wrap-h2').querySelectorAll('.card-half').forEach(el => el.innerText = initHrs[1]);
-    document.getElementById('wrap-m1').querySelectorAll('.card-half').forEach(el => el.innerText = initMins[0]);
-    document.getElementById('wrap-m2').querySelectorAll('.card-half').forEach(el => el.innerText = initMins[1]);
-    document.getElementById('wrap-s1').querySelectorAll('.card-half').forEach(el => el.innerText = initSecs[0]);
-    document.getElementById('wrap-s2').querySelectorAll('.card-half').forEach(el => el.innerText = initSecs[1]);
+    // Nạp giao diện tĩnh lập tức khi mở trang, tránh hiện tượng nhấp nháy hoặc bị trống 00
+    const currentInit = new Date();
+    const ih = String(currentInit.getHours()).padStart(2, '0');
+    const im = String(currentInit.getMinutes()).padStart(2, '0');
+    const is = String(currentInit.getSeconds()).padStart(2, '0');
+    ['h1','h2','m1','m2','s1','s2'].forEach((k, idx) => {
+        let v = (idx < 2) ? ih[idx] : (idx < 4 ? im[idx-2] : is[idx-4]);
+        const c = document.getElementById('c-' + k);
+        if(c) c.querySelectorAll('.card-half, .card-flip-wing, .card-flip-wing-back').forEach(el => el.innerText = v);
+    });
 
-    setInterval(updateFlipClock, 1000);
+    setInterval(runClock, 1000);
 
     function triggerHaptic(type) {
         if (!window.navigator || !window.navigator.vibrate) return;
