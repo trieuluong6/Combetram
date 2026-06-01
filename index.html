@@ -10,8 +10,28 @@
         body { font-family: 'Segoe UI', Arial, sans-serif; background-color: #f4f7f6; margin: 0; padding: 10px; padding-bottom: 120px; -webkit-tap-highlight-color: transparent; }
         h2 { text-align: center; color: var(--primary-red); text-transform: uppercase; font-size: 1.2em; margin: 10px 0; }
         
-        #presence-count { position: fixed; top: 10px; right: 10px; background: rgba(0,0,0,0.6); color: white; padding: 3px 8px; border-radius: 15px; font-size: 0.7em; z-index: 1000; pointer-events: none; }
+        #presence-count { position: fixed; top: 10px; right: 10px; background: rgba(0,0,0,0.6); color: white; padding: 3px 8px; border-radius: 15px; font-size: 0.7em; z-index: 1000; pointer-events: none;display:flex;
+    align-items:center;
+    gap:6px; }
+         .online-dot{
+    display:inline-block;
+    width:10px;
+    height:10px;
+    border-radius:50%;
+    background:#00ff00;
+    animation:blinkOnline 1s infinite;
+}
 
+@keyframes blinkOnline{
+    0%,100%{
+        opacity:1;
+        box-shadow:0 0 10px #00ff00;
+    }
+    50%{
+        opacity:0.25;
+        box-shadow:0 0 2px #00ff00;
+    }
+}
         .tables-container { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-bottom: 15px; }
         .table-card { 
             background: white; padding: 10px 2px; text-align: center; border-radius: 12px; cursor: pointer; 
@@ -151,7 +171,10 @@
 </head>
 <body>
 
-<div id="presence-count">👥 Online: <span id="online-val">1</span></div>
+<div id="presence-count">
+    <span class="online-dot"></span>
+    👥 Online: <span id="online-val">1</span>
+</div>
 <h2>CƠM BÉ TRÂM</h2>
 
 <div class="tables-container">
