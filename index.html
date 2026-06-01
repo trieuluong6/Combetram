@@ -8,25 +8,25 @@
     <style>
         :root { --primary-red: #d32f2f; --success-green: #4caf50; --warning-orange: #ff9800; --blue: #2196f3; }
         body { font-family: 'Segoe UI', Arial, sans-serif; background-color: #f4f7f6; margin: 0; padding: 10px; padding-bottom: 120px; -webkit-tap-highlight-color: transparent; }
-        h2 { text-align: center; color: var(--primary-red); text-transform: uppercase; font-size: 1.2em; margin: 10px 0 15px 0; }
+        h2 { text-align: center; color: var(--primary-red); text-transform: uppercase; font-size: 1.2em; margin: 10px 0; }
         
         /* ==========================================================================
-           CSS ĐỒNG HỒ LẬT 3D - ĐÃ SỬA LỖI HIỂN THỊ CHỮ VÀ ĐỒNG BỘ SIZE GIÂY
+           CSS ĐỒNG HỒ LẬT 3D - SỬA LỖI CẮT CHỮ VÀ HIỆU ỨNG GIÂY
            ========================================================================== */
         .flip-clock-container {
             display: flex;
             justify-content: center;
             align-items: center;
-            gap: 6px;
-            margin: 0 auto 20px auto;
+            gap: 4px;
+            margin: 10px 0 20px 0;
             user-select: none;
         }
         .flip-unit {
             display: flex;
-            gap: 3px;
+            gap: 2px;
         }
         .flip-colon {
-            font-size: 1.8em;
+            font-size: 1.6em;
             font-weight: bold;
             color: #333;
             padding: 0 2px;
@@ -35,18 +35,17 @@
             display: flex;
             align-items: center;
         }
-        /* Khung bao quanh thẻ lật */
         .flip-card-wrapper {
             position: relative;
-            width: 32px;
-            height: 46px;
+            width: 28px;
+            height: 44px;
             perspective: 200px;
             background: #ffffff;
             border-radius: 6px;
-            box-shadow: 0 3px 6px rgba(0,0,0,0.15);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.15);
             border: 1px solid #ccc;
         }
-        /* Cấu trúc nửa trên / nửa dưới */
+        /* Cố định nửa trên và nửa dưới không bị lệch dòng */
         .card-half {
             position: absolute;
             left: 0;
@@ -54,8 +53,8 @@
             height: 50%;
             overflow: hidden;
             background: #ffffff;
-            color: #111111;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            color: #000000;
+            font-family: 'Segoe UI', Arial, sans-serif;
             font-size: 1.8em;
             font-weight: bold;
             text-align: center;
@@ -65,16 +64,16 @@
             top: 0;
             border-top-left-radius: 5px;
             border-top-right-radius: 5px;
-            line-height: 46px; /* Căn chữ chuẩn khớp chiều cao tổng */
+            line-height: 44px; /* Khớp tuyệt đối với chiều cao tổng */
         }
         .card-bottom {
             bottom: 0;
             border-bottom-left-radius: 5px;
             border-bottom-right-radius: 5px;
-            line-height: 0px; /* Đẩy chữ lên khớp nửa dưới */
-            border-top: 1px solid #f0f0f0;
+            line-height: 0px; /* Đẩy chữ lên trên chính xác */
+            border-top: 1px solid #f2f2f2;
         }
-        /* Thẻ lật hoạt ảnh động 3D */
+        /* Thẻ lật cánh bướm 3D */
         .card-flip {
             position: absolute;
             top: 0;
@@ -83,25 +82,25 @@
             height: 50%;
             overflow: hidden;
             background: #ffffff;
-            color: #111111;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            color: #000000;
+            font-family: 'Segoe UI', Arial, sans-serif;
             font-size: 1.8em;
             font-weight: bold;
             text-align: center;
             border-top-left-radius: 5px;
             border-top-right-radius: 5px;
             box-sizing: border-box;
-            line-height: 46px;
+            line-height: 44px;
             transform-origin: center bottom;
             backface-visibility: hidden;
             z-index: 3;
-            transition: transform 0.35s ease-in-out;
+            transition: transform 0.3s ease-in-out;
         }
         .card-flip.flipped {
             transform: rotateX(-180deg);
         }
 
-        /* GIỮ NGUYÊN TOÀN BỘ CSS GIAO DIỆN CŨ ĐÃ TỐI ƯU */
+        /* GIỮ NGUYÊN TOÀN BỘ CSS GIAO DIỆN CŨ CỦA BẠN */
         #presence-count { position: fixed; top: 10px; right: 10px; background: rgba(0,0,0,0.6); color: white; padding: 3px 8px; border-radius: 15px; font-size: 0.7em; z-index: 1000; pointer-events: none;display:flex; align-items:center; gap:6px; }
         .online-dot{ display:inline-block; width:10px; height:10px; border-radius:50%; background:#00ff00; animation:blinkOnline 1s infinite; }
         @keyframes blinkOnline{ 0%,100%{ opacity:1; box-shadow:0 0 10px #00ff00; } 50%{ opacity:0.25; box-shadow:0 0 2px #00ff00; } }
@@ -188,36 +187,18 @@
 
 <div class="flip-clock-container">
     <div class="flip-unit">
-        <div class="flip-card-wrapper" id="wrap-h1">
-            <div class="card-half card-top">0</div>
-            <div class="card-half card-bottom">0</div>
-        </div>
-        <div class="flip-card-wrapper" id="wrap-h2">
-            <div class="card-half card-top">0</div>
-            <div class="card-half card-bottom">0</div>
-        </div>
+        <div class="flip-card-wrapper" id="wrap-h1"><div class="card-half card-top">0</div><div class="card-half card-bottom">0</div></div>
+        <div class="flip-card-wrapper" id="wrap-h2"><div class="card-half card-top">0</div><div class="card-half card-bottom">0</div></div>
     </div>
     <div class="flip-colon">:</div>
     <div class="flip-unit">
-        <div class="flip-card-wrapper" id="wrap-m1">
-            <div class="card-half card-top">0</div>
-            <div class="card-half card-bottom">0</div>
-        </div>
-        <div class="flip-card-wrapper" id="wrap-m2">
-            <div class="card-half card-top">0</div>
-            <div class="card-half card-bottom">0</div>
-        </div>
+        <div class="flip-card-wrapper" id="wrap-m1"><div class="card-half card-top">0</div><div class="card-half card-bottom">0</div></div>
+        <div class="flip-card-wrapper" id="wrap-m2"><div class="card-half card-top">0</div><div class="card-half card-bottom">0</div></div>
     </div>
     <div class="flip-colon">:</div>
     <div class="flip-unit">
-        <div class="flip-card-wrapper" id="wrap-s1">
-            <div class="card-half card-top">0</div>
-            <div class="card-half card-bottom">0</div>
-        </div>
-        <div class="flip-card-wrapper" id="wrap-s2">
-            <div class="card-half card-top">0</div>
-            <div class="card-half card-bottom">0</div>
-        </div>
+        <div class="flip-card-wrapper" id="wrap-s1"><div class="card-half card-top">0</div><div class="card-half card-bottom">0</div></div>
+        <div class="flip-card-wrapper" id="wrap-s2"><div class="card-half card-top">0</div><div class="card-half card-bottom">0</div></div>
     </div>
 </div>
 
@@ -264,27 +245,22 @@
             <button class="lang-btn" onclick="changeBillLang('en')"><span>🇺🇸</span><span>EN</span></button>
             <button class="lang-btn" onclick="changeBillLang('fr')"><span>🇫🇷</span><span>FR</span></button>
             <button class="lang-btn" onclick="changeBillLang('kr')"><span>🇰🇷</span><span>KR</span></button>
-
             <button class="lang-btn" onclick="changeBillLang('jp')"><span>🇯🇵</span><span>JP</span></button>
             <button class="lang-btn" onclick="changeBillLang('th')"><span>🇹🇭</span><span>TH</span></button>
             <button class="lang-btn" onclick="changeBillLang('it')"><span>🇮🇹</span><span>IT</span></button>
             <button class="lang-btn" onclick="changeBillLang('pt')"><span>🇵🇹</span><span>PT</span></button>
-
             <button class="lang-btn" onclick="changeBillLang('es')"><span>🇪🇸</span><span>ES</span></button>
             <button class="lang-btn" onclick="changeBillLang('cn')"><span>🇨🇳</span><span>CN</span></button>
             <button class="lang-btn" onclick="changeBillLang('de')"><span>🇩🇪</span><span>DE</span></button>
             <button class="lang-btn" onclick="changeBillLang('ru')"><span>🇷🇺</span><span>RU</span></button>
-            
             <button class="lang-btn" onclick="changeBillLang('be')"><span>🇧🇪</span><span>BE</span></button>
             <button class="lang-btn" onclick="changeBillLang('hu')"><span>🇭🇺</span><span>HU</span></button>
             <button class="lang-btn" onclick="changeBillLang('at')"><span>🇦́t</span><span>AT</span></button>
             <button class="lang-btn" onclick="changeBillLang('tw')"><span>🇹🇼</span><span>TW</span></button>
-            
             <button class="lang-btn" onclick="changeBillLang('sg')"><span>🇸🇬</span><span>SG</span></button>
             <button class="lang-btn" onclick="changeBillLang('id')"><span>🇮🇩</span><span>ID</span></button>
             <button class="lang-btn" onclick="changeBillLang('my')"><span>🇲🇾</span><span>MY</span></button>
             <button class="lang-btn" onclick="changeBillLang('in')"><span>🇮🇳</span><span>IN</span></button>
-
             <button class="lang-btn" onclick="changeBillLang('fi')"><span>🇫🇮</span><span>FI</span></button>
             <button class="lang-btn" onclick="changeBillLang('nl')"><span>🇳🇱</span><span>NL</span></button>
             <button class="lang-btn" onclick="changeBillLang('se')"><span>🇸🇪</span><span>SE</span></button>
@@ -298,16 +274,7 @@
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-app.js";
-    import { 
-        getDatabase, 
-        ref, 
-        child, 
-        set, 
-        remove, 
-        onValue, 
-        push, 
-        onDisconnect 
-    } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-database.js";
+    import { getDatabase, ref, child, set, remove, onValue, push, onDisconnect } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-database.js";
 
     import { menu } from "./menu.js";
     import { dict } from "./dict.js";
@@ -331,7 +298,7 @@
     let data = { orders: {}, locked: {}, times: {} };
     let firstLoad = true;
 
-    // JAVASCRIPT LOGIC HIỆU ỨNG LẬT 3D CHUẨN XÁC
+    // LOGIC HOẠT ẢNH ĐỒNG HỒ LẬT 3D CHUẨN XÁC
     function flipCard(wrapperId, targetValue) {
         const wrapper = document.getElementById(wrapperId);
         if (!wrapper) return;
@@ -339,28 +306,23 @@
         const topHalf = wrapper.querySelector('.card-top');
         const bottomHalf = wrapper.querySelector('.card-bottom');
         
-        // Tránh chạy lại hiệu ứng lật nếu số không đổi
         if (bottomHalf.innerText === targetValue) return;
 
-        // Tạo một thẻ tạm dùng để diễn tả chuyển động lật úp xuống
         const flipEl = document.createElement('div');
         flipEl.className = 'card-flip';
         flipEl.innerText = topHalf.innerText;
         wrapper.appendChild(flipEl);
 
-        // Thay đổi trước giá trị ở mặt trên ẩn phía sau
         topHalf.innerText = targetValue;
 
-        // Kích hoạt xoay 3D xoay úp xuống
         requestAnimationFrame(() => {
             flipEl.classList.add('flipped');
         });
 
-        // Kết thúc chuyển động: đồng bộ số mặt dưới và dọn dẹp thẻ tạm
         setTimeout(() => {
             bottomHalf.innerText = targetValue;
             flipEl.remove();
-        }, 350);
+        }, 280);
     }
 
     function updateFlipClock() {
@@ -373,23 +335,22 @@
         flipCard('wrap-h2', hrs[1]);
         flipCard('wrap-m1', mins[0]);
         flipCard('wrap-m2', mins[1]);
-        flipCard('wrap-s1', secs[0]);
-        flipCard('wrap-s2', secs[1]);
+        flipCard('wrap-s1', secs[0]); // Đã ép chạy hoạt ảnh lật riêng biệt cho số giây thứ nhất
+        flipCard('wrap-s2', secs[1]); // Đã ép chạy hoạt ảnh lật riêng biệt cho số giây thứ hai
     }
 
-    // Set giá trị ban đầu tránh đồng hồ bị trống 0 khi vừa load trang
+    // Nạp giá trị thời gian thực ngay khi mở trang để tránh bị trống
     const initTime = new Date();
     const initHrs = String(initTime.getHours()).padStart(2, '0');
     const initMins = String(initTime.getMinutes()).padStart(2, '0');
     const initSecs = String(initTime.getSeconds()).padStart(2, '0');
-    document.getElementById('wrap-h1').querySelector('.card-top').innerText = document.getElementById('wrap-h1').querySelector('.card-bottom').innerText = initHrs[0];
-    document.getElementById('wrap-h2').querySelector('.card-top').innerText = document.getElementById('wrap-h2').querySelector('.card-bottom').innerText = initHrs[1];
-    document.getElementById('wrap-m1').querySelector('.card-top').innerText = document.getElementById('wrap-m1').querySelector('.card-bottom').innerText = initMins[0];
-    document.getElementById('wrap-m2').querySelector('.card-top').innerText = document.getElementById('wrap-m2').querySelector('.card-bottom').innerText = initMins[1];
-    document.getElementById('wrap-s1').querySelector('.card-top').innerText = document.getElementById('wrap-s1').querySelector('.card-bottom').innerText = initSecs[0];
-    document.getElementById('wrap-s2').querySelector('.card-top').innerText = document.getElementById('wrap-s2').querySelector('.card-bottom').innerText = initSecs[1];
+    document.getElementById('wrap-h1').querySelectorAll('.card-half').forEach(el => el.innerText = initHrs[0]);
+    document.getElementById('wrap-h2').querySelectorAll('.card-half').forEach(el => el.innerText = initHrs[1]);
+    document.getElementById('wrap-m1').querySelectorAll('.card-half').forEach(el => el.innerText = initMins[0]);
+    document.getElementById('wrap-m2').querySelectorAll('.card-half').forEach(el => el.innerText = initMins[1]);
+    document.getElementById('wrap-s1').querySelectorAll('.card-half').forEach(el => el.innerText = initSecs[0]);
+    document.getElementById('wrap-s2').querySelectorAll('.card-half').forEach(el => el.innerText = initSecs[1]);
 
-    // Chạy cập nhật liên tục mỗi giây
     setInterval(updateFlipClock, 1000);
 
     function triggerHaptic(type) {
@@ -516,10 +477,7 @@
         triggerHaptic('add');
         currentBillLang = l;
         refresh();
-        document.querySelector('.bill-box')?.scrollIntoView({
-            behavior: 'smooth',
-            block: 'start'
-        });
+        document.querySelector('.bill-box')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
     function refresh() {
@@ -570,9 +528,7 @@
                 
                 const billListEl = document.getElementById('bill-list');
                 const newHTML = h || "Trống";
-                if (billListEl.innerHTML !== newHTML) {
-                    billListEl.innerHTML = newHTML;
-                }
+                if (billListEl.innerHTML !== newHTML) { billListEl.innerHTML = newHTML; }
                 
                 const bTotal = document.getElementById('bill-total');
                 const tBox = document.getElementById('total-container');
@@ -618,17 +574,13 @@
                     targetClassName += ' has-guest'; 
                 }
 
-                if (btn.className !== targetClassName) {
-                    btn.className = targetClassName;
-                }
+                if (btn.className !== targetClassName) { btn.className = targetClassName; }
             }
         }
         
         const resetArea = document.getElementById('reset-area');
         const targetResetDisplay = anyGuest ? 'none' : 'block';
-        if (resetArea.style.display !== targetResetDisplay) {
-            resetArea.style.display = targetResetDisplay;
-        }
+        if (resetArea.style.display !== targetResetDisplay) { resetArea.style.display = targetResetDisplay; }
     }
 
     function setLock(v) { triggerHaptic('success'); set(child(dbRef, `locked/${currentTab}`), v); if(!v) currentBillLang='vi'; }
