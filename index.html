@@ -428,20 +428,47 @@ night_partlyCloudy: `
             const resData = await response.json();
             const current = resData.current;
 
-            let status = 'sunny';
+        let status = 'sunny';
 const code = current.weather_code;
 
-if (code === 1)
+// Open-Meteo Weather Codes
+if (code === 0) {
+
+    // Trời quang
+    status = 'sunny';
+
+}
+else if (code === 1) {
+
+    // Chủ yếu quang
     status = 'partlyCloudy';
 
-else if (code >= 2 && code <= 3)
+}
+else if (code === 2) {
+
+    // Mây rải rác
+    status = 'partlyCloudy';
+
+}
+else if (code === 3) {
+
+    // Nhiều mây
     status = 'cloudy';
 
-else if ((code >= 51 && code <= 67) || (code >= 80 && code <= 82))
+}
+else if (
+    (code >= 51 && code <= 67) ||
+    (code >= 80 && code <= 82)
+) {
+
     status = 'rainy';
 
-else if (code >= 95)
+}
+else if (code >= 95) {
+
     status = 'storm';
+
+}
 
             // Cập nhật vào bộ nhớ đệm
             weatherCache = {
