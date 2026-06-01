@@ -18,7 +18,7 @@
             align-items: center;
             margin-bottom: 10px;
             padding: 0 4px;
-            height: 30px; /* Định vị chiều cao cố định để thẳng hàng tuyệt đối */
+            height: 30px;
         }
 
         /* VIÊN THUỐC THỜI TIẾT THỜI GIAN THỰC GÓC TRÁI */
@@ -36,6 +36,7 @@
             border: 1px solid #e2e8f0;
             transition: all 0.4s ease;
             height: 22px;
+            box-sizing: border-box;
         }
         #weather-hub.wind-warning { background: #fffde7; border-color: var(--warning-orange); color: #5d4037; }
         #weather-hub.wind-danger { background: #ffebee; border-color: var(--primary-red); color: #b71c1c; animation: blinkDangerBorder 1s infinite; }
@@ -44,12 +45,12 @@
         .weather-divider { width: 1px; height: 12px; background: #cbd5e1; margin: 0 2px; }
         .weather-group { display: flex; align-items: center; gap: 4px; }
 
-        /* SỐ NGƯỜI ONLINE GÓC PHẢI - THẲNG HÀNG VỚI THỜI TIẾT */
+        /* SỐ NGƯỜI ONLINE GÓC PHẢI - ĐỒNG BỘ TRẮNG CHỮ ĐEN */
         #presence-count {
-            background: rgba(0, 0, 0, 0.65);
-            color: white;
+            background: #ffffff;
+            color: #333;
             padding: 4px 10px;
-            border-radius: 15px;
+            border-radius: 20px;
             font-size: 0.72em;
             font-weight: bold;
             display: flex;
@@ -57,21 +58,25 @@
             gap: 5px;
             height: 22px;
             box-sizing: border-box;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+            border: 1px solid #e2e8f0;
         }
-        .online-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #00ff00; animation: blinkOnline 1s infinite; }
-        @keyframes blinkOnline { 0%, 100% { opacity: 1; box-shadow: 0 0 8px #00ff00; } 50% { opacity: 0.3; box-shadow: 0 0 2px #00ff00; } }
+        .online-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #4caf50; animation: blinkOnline 1s infinite; }
+        @keyframes blinkOnline { 0%, 100% { opacity: 1; box-shadow: 0 0 8px #4caf50; } 50% { opacity: 0.3; box-shadow: 0 0 2px #4caf50; } }
 
-        /* TIÊU ĐỀ TÊN QUÁN - CĂN GIỮA, KHÔNG BỊ ĐÈ */
+        /* TIÊU ĐỀ TÊN QUÁN */
         .header-title { text-align: center; color: var(--primary-red); text-transform: uppercase; font-size: 1.4em; font-weight: 900; margin: 5px 0 15px 0; letter-spacing: 0.5px; }
 
         /* HOẠT ẢNH ICON THỜI TIẾT SVG CHUẨN ĐẸP */
         .w-icon { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; display: block; }
         .anim-spin { animation: spin 10s linear infinite; transform-origin: center; }
+        .anim-pulse { animation: pulseMoon 4s ease-in-out infinite; transform-origin: center; }
         .anim-cloud-move { animation: floatCloud 3s ease-in-out infinite; }
         .anim-rain { animation: rainDrop 0.8s linear infinite; }
         .anim-lightning { animation: flashLightning 2s ease-in-out infinite; }
         
         @keyframes spin { 100% { transform: rotate(360deg); } }
+        @keyframes pulseMoon { 0%, 100% { transform: scale(1); opacity: 0.9; } 50% { transform: scale(1.08); opacity: 1; } }
         @keyframes floatCloud { 0%, 100% { transform: translateX(0px); } 50% { transform: translateX(2.5px); } }
         @keyframes rainDrop { 0% { transform: translateY(-2px); opacity: 0; } 50% { opacity: 1; } 100% { transform: translateY(4px); opacity: 0; } }
         @keyframes flashLightning { 0%, 100%, 20%, 40% { opacity: 1; } 10%, 30% { opacity: 0.1; } }
@@ -93,22 +98,22 @@
         .wind-arrow { width: 12px; height: 12px; transition: transform 0.8s cubic-bezier(0.4, 0, 0.2, 1); transform-origin: center; fill: currentColor; }
 
         /* ==========================================================================
-           CẤU TRÚC ĐỒNG HỒ LẬT TĨNH CHUẨN MƯỢT
+           CẤU TRÚC ĐỒNG HỒ LẬT TĨNH CHUẨN MƯỢT (ĐÃ PHÓNG TO THẨM MỸ)
            ========================================================================== */
-        .flip-clock-container { display: flex; justify-content: center; align-items: center; gap: 3px; user-select: none; margin-bottom: 20px; }
+        .flip-clock-container { display: flex; justify-content: center; align-items: center; gap: 4px; user-select: none; margin-bottom: 20px; }
         .flip-unit { display: flex; gap: 2px; }
-        .flip-colon { font-size: 1.4em; font-weight: bold; color: #333; padding: 0 1px; line-height: 34px; height: 34px; display: flex; align-items: center; animation: blinkColon 1s infinite; }
+        .flip-colon { font-size: 1.75em; font-weight: bold; color: #333; padding: 0 1px; line-height: 42px; height: 42px; display: flex; align-items: center; animation: blinkColon 1s infinite; }
         @keyframes blinkColon { 0%, 100% { opacity: 1; } 50% { opacity: 0.2; } }
-        .flip-card { position: relative; width: 22px; height: 34px; perspective: 100px; font-family: 'Segoe UI', Arial, sans-serif; font-size: 1.4em; font-weight: bold; }
+        .flip-card { position: relative; width: 26px; height: 42px; perspective: 100px; font-family: 'Segoe UI', Arial, sans-serif; font-size: 1.75em; font-weight: bold; }
         .card-half { position: absolute; left: 0; width: 100%; height: 50%; overflow: hidden; background: #fff; color: #000; box-sizing: border-box; text-align: center; box-shadow: 0 1px 2px rgba(0,0,0,0.08); border: 1px solid #e2e8f0; }
-        .card-top { top: 0; border-top-left-radius: 4px; border-top-right-radius: 4px; line-height: 34px; border-bottom: none; }
-        .card-bottom { bottom: 0; border-bottom-left-radius: 4px; border-bottom-right-radius: 4px; line-height: 0px; border-top: 1px solid #f1f5f9; }
-        .card-flip-wing { position: absolute; top: 0; left: 0; width: 100%; height: 50%; overflow: hidden; box-sizing: border-box; text-align: center; border-top-left-radius: 4px; border-top-right-radius: 4px; line-height: 34px; transform-origin: center bottom; backface-visibility: hidden; z-index: 5; background: #fff; color: #000; border: 1px solid #e2e8f0; border-bottom: none; transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1); }
-        .card-flip-wing-back { position: absolute; bottom: 0; left: 0; width: 100%; height: 50%; overflow: hidden; box-sizing: border-box; text-align: center; border-bottom-left-radius: 4px; border-bottom-right-radius: 4px; line-height: 0px; transform-origin: center top; backface-visibility: hidden; z-index: 4; background: #fff; color: #000; border: 1px solid #e2e8f0; border-top: 1px solid #f1f5f9; transform: rotateX(180deg); transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1); }
+        .card-top { top: 0; border-top-left-radius: 5px; border-top-right-radius: 5px; line-height: 42px; border-bottom: none; }
+        .card-bottom { bottom: 0; border-bottom-left-radius: 5px; border-bottom-right-radius: 5px; line-height: 0px; border-top: 1px solid #f1f5f9; }
+        .card-flip-wing { position: absolute; top: 0; left: 0; width: 100%; height: 50%; overflow: hidden; box-sizing: border-box; text-align: center; border-top-left-radius: 5px; border-top-right-radius: 5px; line-height: 42px; transform-origin: center bottom; backface-visibility: hidden; z-index: 5; background: #fff; color: #000; border: 1px solid #e2e8f0; border-bottom: none; transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1); }
+        .card-flip-wing-back { position: absolute; bottom: 0; left: 0; width: 100%; height: 50%; overflow: hidden; box-sizing: border-box; text-align: center; border-bottom-left-radius: 5px; border-bottom-right-radius: 5px; line-height: 0px; transform-origin: center top; backface-visibility: hidden; z-index: 4; background: #fff; color: #000; border: 1px solid #e2e8f0; border-top: 1px solid #f1f5f9; transform: rotateX(180deg); transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1); }
         .flip-card.animate .card-flip-wing { transform: rotateX(-180deg); }
         .flip-card.animate .card-flip-wing-back { transform: rotateX(0deg); }
 
-        /* GIỮ NGUYÊN TOÀN BỘ CSS HỆ THỐNG QUẢN LÝ BÀN ĂN CŨ */
+        /* GIỮ NGUYÊN TOÀN BỘ CSS HỆ THỐNG QUẢN LÝ BÀN ĂN */
         .tables-container { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-bottom: 15px; }
         .table-card { background: white; padding: 10px 2px; text-align: center; border-radius: 12px; cursor: pointer; border: 2px solid #ddd; box-shadow: 0 3px 0 #ccc; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 90px; position: relative; overflow: hidden; transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94); grid-column: span 2; }
         .full-width { grid-column: span 6; }
@@ -312,24 +317,45 @@
     let data = { orders: {}, locked: {}, times: {} };
     let firstLoad = true;
 
-    // THƯ VIỆN SVG VẼ CÁC TRẠNG THÁI WEATHER CHUẨN KỸ THUẬT
+    // CACHE DỮ LIỆU GỐC ĐỂ PHỤC VỤ GIẢ LẬP ĐỘNG KHÔNG CALL API LIÊN TỤC
+    let weatherCache = { status: 'cloudy', temp: 31, windSpeed: 14, windDir: 135 };
+
+    // THƯ VIỆN SVG CHỨA CẢ THỜI TIẾT BAN NGÀY VÀ CÁC TRẠNG THÁI TRĂNG ĐÊM
     const SVG_ICONS = {
         sunny: `<svg class="w-icon anim-spin" viewBox="0 0 24 24" style="color:#ffa000;"><circle cx="12" cy="12" r="4" fill="#ffa000"/><path d="M12 2v2M12 20v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M2 12h2M20 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>`,
+        
+        // CÁC THỂ LOẠI TRĂNG CHO TRỜI QUANG BAN ĐÊM
+        night_fullmoon: `<svg class="w-icon anim-pulse" viewBox="0 0 24 24" style="color:#fbc02d;"><circle cx="12" cy="12" r="7" fill="#fff59d" stroke="#fbc02d" stroke-width="1.5"/></svg>`,
+        night_crescent: `<svg class="w-icon anim-pulse" viewBox="0 0 24 24" style="color:#fbc02d;"><path d="M12 3a9 9 0 1 0 9 9 9.75 9.75 0 0 1-9-9z" fill="#fff59d" stroke="#fbc02d" stroke-width="1.5"/></svg>`,
+        night_nomoon: `<svg class="w-icon" viewBox="0 0 24 24" style="color:#94a3b8;"><circle cx="12" cy="12" r="1.5" fill="currentColor"/><circle cx="6" cy="7" r="1" fill="currentColor"/><circle cx="18" cy="8" r="1" fill="currentColor"/><circle cx="15" cy="17" r="1.2" fill="currentColor"/><circle cx="8" cy="16" r="1" fill="currentColor"/></svg>`,
+
         cloudy: `<svg class="w-icon anim-cloud-move" viewBox="0 0 24 24" style="color:#78909c;"><path d="M18 10a5 5 0 0 0-9.53-1.8 4 4 0 0 0-3.47 4A4 4 0 0 0 9 16h9a4 4 0 0 0 0-8z" fill="#b0bec5"/></svg>`,
         rainy: `<svg class="w-icon" viewBox="0 0 24 24" style="color:#1e88e5;"><path class="anim-cloud-move" d="M18 10a5 5 0 0 0-9.53-1.8 4 4 0 0 0-3.47 4A4 4 0 0 0 9 16h9a4 4 0 0 0 0-8z" fill="#90a4ae"/><path class="anim-rain" d="M9 18v2M12 19v2M15 18v2"/></svg>`,
         storm: `<svg class="w-icon" viewBox="0 0 24 24" style="color:#455a64;"><path class="anim-cloud-move" d="M18 10a5 5 0 0 0-9.53-1.8 4 4 0 0 0-3.47 4A4 4 0 0 0 9 16h9a4 4 0 0 0 0-8z" fill="#37474f"/><path class="anim-lightning" d="M12 15l-2 3h4l-2 3" fill="#ffeb3b" stroke="none"/></svg>`,
         
-        // Icon gió động phân cấp theo dải tốc độ km/h
         windNone: `<svg class="w-icon" viewBox="0 0 24 24" style="color:#94a3b8;"><path d="M5 12h14M7 16h10"/></svg>`,
         windSlow: `<svg class="w-icon" viewBox="0 0 24 24" style="color:#0d9488;"><path class="wind-line w-slow" d="M3 9h12M5 13h14"/></svg>`,
         windFast: `<svg class="w-icon" viewBox="0 0 24 24" style="color:#ea580c;"><path class="wind-line w-fast" d="M2 7h16M5 12h12M3 17h10"/></svg>`,
         windStorm: `<svg class="w-icon w-storm" viewBox="0 0 24 24" style="color:#991b1b;"><circle cx="12" cy="12" r="9" stroke-dasharray="6 4"/><path d="M12 7v10M7 12h10"/></svg>`
     };
 
-    // HÀM HIỂN THỊ DỮ LIỆU LÊN GIAO DIỆN WEATHER HUB
     function renderWeather(status, temp, windSpeed, windDir) {
-        document.getElementById('w-icon-container').innerHTML = SVG_ICONS[status] || SVG_ICONS.sunny;
-        document.getElementById('w-temp').innerText = `${Math.round(temp)}°C`;
+        let finalStatus = status;
+        
+        // KIỂM TRA ĐIỀU KIỆN BAN ĐÊM (Từ 18h tối đến trước 6h sáng)
+        const hour = new Date().getHours();
+        if (hour >= 18 || hour < 6) {
+            if (status === 'sunny') {
+                const dayOfMonth = new Date().getDate();
+                // Phân bổ loại mặt trăng theo ngày trong tháng để tạo tính ngẫu nhiên thực tế
+                if (dayOfMonth % 3 === 0) finalStatus = 'night_fullmoon';
+                else if (dayOfMonth % 3 === 1) finalStatus = 'night_crescent';
+                else finalStatus = 'night_nomoon';
+            }
+        }
+
+        document.getElementById('w-icon-container').innerHTML = SVG_ICONS[finalStatus] || SVG_ICONS.sunny;
+        document.getElementById('w-temp').innerText = `${temp.toFixed(1)}°C`;
 
         const hub = document.getElementById('weather-hub');
         let windIcon = SVG_ICONS.windNone;
@@ -349,12 +375,9 @@
         document.getElementById('w-arrow').style.transform = `rotate(${windDir}deg)`;
     }
 
-    // --------------------------------------------------------------------------
-    // TÍCH HỢP HỆ THỐNG FETCH API THỜI TIẾT THỜI GIAN THỰC (OPEN-METEO)
-    // --------------------------------------------------------------------------
+    // TÍCH HỢP HỆ THỐNG FETCH API THỜI TIẾT THỜI GIAN THỰC (OPEN-METEO) - GIỮ NGUYÊN 10 PHÚT/LẦN
     async function fetchRealtimeWeather() {
         try {
-            // Tọa độ mẫu của Đà Nẵng (Có thể đổi sang tọa độ chính xác quán của bạn)
             const lat = 16.0544;
             const lon = 108.2022;
             const response = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code,wind_speed_10m,wind_direction_10m`);
@@ -362,27 +385,47 @@
             const resData = await response.json();
             const current = resData.current;
 
-            const temp = current.temperature_2m;
-            const windSpeed = current.wind_speed_10m; // km/h
-            const windDir = current.wind_direction_10m; // Hướng gió góc quay độ
-            const code = current.weather_code;
-
-            // Ánh xạ Weather Code quốc tế của tổ chức khí tượng sang 4 nhóm giao diện của bạn
             let status = 'sunny';
+            const code = current.weather_code;
             if (code >= 1 && code <= 3) status = 'cloudy';
             else if ((code >= 51 && code <= 67) || (code >= 80 && code <= 82)) status = 'rainy';
             else if (code >= 95) status = 'storm';
 
-            renderWeather(status, temp, windSpeed, windDir);
+            // Cập nhật vào bộ nhớ đệm
+            weatherCache = {
+                status: status,
+                temp: current.temperature_2m,
+                windSpeed: current.wind_speed_10m,
+                windDir: current.wind_direction_10m
+            };
+
+            renderWeather(weatherCache.status, weatherCache.temp, weatherCache.windSpeed, weatherCache.windDir);
         } catch (err) {
             console.error("Lỗi gọi API thời tiết:", err);
-            // Backup nếu API nghẽn mạng thì hiển thị dữ liệu mặc định trời mát mẻ
-            renderWeather('cloudy', 31, 14, 135);
+            renderWeather(weatherCache.status, weatherCache.temp, weatherCache.windSpeed, weatherCache.windDir);
         }
     }
-    // Khởi chạy lấy thời tiết thực tế ngay khi mở trang, và tự động tải lại sau mỗi 10 phút
+
+    // GIẢ LẬP BIẾN ĐỘNG THỜI TIẾT NHẸ MỖI 1 GIÂY (KHÔNG CALL API)
+    function simulateWeatherFluctuation() {
+        // Tạo biên độ thay đổi cực nhỏ tránh nhảy số giật cục
+        const tempOffset = (Math.random() - 0.5) * 0.4;       // biến động tầm ±0.2 độ
+        const windSpeedOffset = (Math.random() - 0.5) * 0.6;  // biến động tầm ±0.3 km/h
+        const windDirOffset = Math.floor((Math.random() - 0.5) * 4); // biến động tầm ±2 độ
+
+        const simulatedTemp = Math.max(10, Math.min(45, weatherCache.temp + tempOffset));
+        const simulatedWindSpeed = Math.max(0, Math.min(120, weatherCache.windSpeed + windSpeedOffset));
+        const simulatedWindDir = (weatherCache.windDir + windDirOffset + 360) % 360;
+
+        renderWeather(weatherCache.status, simulatedTemp, simulatedWindSpeed, simulatedWindDir);
+    }
+
+    // Khởi chạy lấy dữ liệu từ API gốc lần đầu và thiết lập vòng lặp định kỳ 10 phút
     fetchRealtimeWeather();
     setInterval(fetchRealtimeWeather, 600000);
+
+    // Vòng lặp giả lập dao động thời tiết mượt mà mỗi 1 giây
+    setInterval(simulateWeatherFluctuation, 1000);
 
 
     // HOẠT ẢNH ĐỒNG HỒ LẬT TĨNH CHUẨN MƯỢT KHÔNG ĐÚP CHỮ
