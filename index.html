@@ -318,7 +318,7 @@
     let firstLoad = true;
 
     // CACHE DỮ LIỆU GỐC ĐỂ PHỤC VỤ GIẢ LẬP ĐỘNG KHÔNG CALL API LIÊN TỤC
-    let weatherCache = { status: 'cloudy', temp: 31, windSpeed: 14, windDir: 135 };
+    let weatherCache = { status: 'cloudy', temp: 31, windSpeed: 14.0, windDir: 135 };
 
     // THƯ VIỆN SVG CHỨA CẢ THỜI TIẾT BAN NGÀY VÀ CÁC TRẠNG THÁI TRĂNG ĐÊM
     const SVG_ICONS = {
@@ -347,7 +347,6 @@
         if (hour >= 18 || hour < 6) {
             if (status === 'sunny') {
                 const dayOfMonth = new Date().getDate();
-                // Phân bổ loại mặt trăng theo ngày trong tháng để tạo tính ngẫu nhiên thực tế
                 if (dayOfMonth % 3 === 0) finalStatus = 'night_fullmoon';
                 else if (dayOfMonth % 3 === 1) finalStatus = 'night_crescent';
                 else finalStatus = 'night_nomoon';
@@ -371,7 +370,8 @@
             hub.classList.add('wind-danger');  
         }
         document.getElementById('w-wind-icon-container').innerHTML = windIcon;
-        document.getElementById('w-wind-speed').innerText = `${Math.round(windSpeed)} km/h`;
+        // HIỂN THỊ SỐ THẬP PHÂN PHÍA SAU CHO TỐC ĐỘ GIÓ
+        document.getElementById('w-wind-speed').innerText = `${windSpeed.toFixed(1)} km/h`;
         document.getElementById('w-arrow').style.transform = `rotate(${windDir}deg)`;
     }
 
@@ -406,12 +406,12 @@
         }
     }
 
-    // GIẢ LẬP BIẾN ĐỘNG THỜI TIẾT NHẸ MỖI 1 GIÂY (KHÔNG CALL API)
+    // GIẢ LẬP BIẾN ĐỘNG THỜI TIẾT NHẸ MỖI 5 GIÂY (ĐÃ TĂNG THỜI GIAN THEO YÊU CẦU)
     function simulateWeatherFluctuation() {
         // Tạo biên độ thay đổi cực nhỏ tránh nhảy số giật cục
-        const tempOffset = (Math.random() - 0.5) * 0.4;       // biến động tầm ±0.2 độ
-        const windSpeedOffset = (Math.random() - 0.5) * 0.6;  // biến động tầm ±0.3 km/h
-        const windDirOffset = Math.floor((Math.random() - 0.5) * 4); // biến động tầm ±2 độ
+        const tempOffset = (Math.random() - 0.5) * 0.4;       
+        const windSpeedOffset = (Math.random() - 0.5) * 0.6;  
+        const windDirOffset = Math.floor((Math.random() - 0.5) * 4); 
 
         const simulatedTemp = Math.max(10, Math.min(45, weatherCache.temp + tempOffset));
         const simulatedWindSpeed = Math.max(0, Math.min(120, weatherCache.windSpeed + windSpeedOffset));
@@ -424,8 +424,8 @@
     fetchRealtimeWeather();
     setInterval(fetchRealtimeWeather, 600000);
 
-    // Vòng lặp giả lập dao động thời tiết mượt mà mỗi 1 giây
-    setInterval(simulateWeatherFluctuation, 1000);
+    // VÒNG LẶP GIẢ LẬP DAO ĐỘNG THỜI TIẾT MỖI 5 GIÂY (5000ms) TỰ NHIÊN HƠN
+    setInterval(simulateWeatherFluctuation, 5000);
 
 
     // HOẠT ẢNH ĐỒNG HỒ LẬT TĨNH CHUẨN MƯỢT KHÔNG ĐÚP CHỮ
@@ -603,7 +603,7 @@
 
         for(let i=1; i<=9; i++) {
             let s = 0, o = data.orders[i] || {}; for(let id in o) { let itm = all.find(x => x.id == id); if(itm) s += itm.price * o[id]; }
-            const isTabLocked = (data.locked && data.locked[i]) || false; if(s > 0 || isTabLocked) anyGuest = true;
+            const sTabLocked = (data.locked && data.locked[i]) || false; if(s > 0 || sTabLocked) anyGuest = true;
             const sumEl = document.getElementById(`sum-${i}`); if(sumEl && parseInt(sumEl.innerText.replace(/\D/g,'')) !== s) animateNumber(`sum-${i}`, s);
             const timeSpan = document.getElementById(`time-${i}`);
             if(timeSpan) {
@@ -614,7 +614,7 @@
             if(btn) {
                 let targetClassName = i === 7 ? "table-card full-width" : (i >= 8 ? "table-card half-width" : "table-card");
                 if(i === currentTab) targetClassName += ' active';
-                if(isTabLocked) targetClassName += (i >= 7) ? ' is-locked-special' : ' is-locked'; else if(s > 0) targetClassName += ' has-guest';
+                if(sTabLocked) targetClassName += (i >= 7) ? ' is-locked-special' : ' is-locked'; else if(s > 0) targetClassName += ' has-guest';
                 if (btn.className !== targetClassName) btn.className = targetClassName;
             }
         }
