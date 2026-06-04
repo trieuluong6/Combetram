@@ -1,4 +1,4 @@
-// dict_3.js
+// dict.js
 export const dict = {
   vi: { flag: "🇻🇳", total: "TỔNG", items: {} },
   
