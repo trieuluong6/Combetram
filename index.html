@@ -16,7 +16,7 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 10px;
+            margin-bottom: 5px;
             padding: 0 4px;
             height: 30px;
         }
@@ -64,8 +64,92 @@
         .online-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #4caf50; animation: blinkOnline 1s infinite; }
         @keyframes blinkOnline { 0%, 100% { opacity: 1; box-shadow: 0 0 8px #4caf50; } 50% { opacity: 0.3; box-shadow: 0 0 2px #4caf50; } }
 
+        /* ==========================================================================
+           HUY HIỆU TRẠNG THÁI KHÁCH HÀNG (VẮNG/BÌNH THƯỜNG/ĐÔNG)
+           ========================================================================== */
+        .status-container {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 5px;
+            margin-top: 10px;
+        }
+        .status-badge {
+            background: #ffffff;
+            padding: 4px 14px;
+            border-radius: 20px;
+            font-size: 0.75em;
+            font-weight: 800;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+            border: 2px solid #e2e8f0;
+            position: relative;
+            overflow: hidden;
+            text-transform: uppercase;
+        }
+        /* Style Text/Icon nằm đè lên nền */
+        .status-badge span { position: relative; z-index: 3; }
+
+        /* 0-3 Bàn: Vắng khách (Nhấp nháy chậm) */
+        .status-empty {
+            color: #2e7d32;
+            border-color: #a5d6a7;
+            background: #e8f5e9;
+            animation: pulse-empty 2.5s infinite ease-in-out;
+        }
+        @keyframes pulse-empty {
+            0%, 100% { opacity: 1; transform: scale(1); box-shadow: 0 0 0px #81c784; }
+            50% { opacity: 0.7; transform: scale(0.98); box-shadow: 0 0 8px #81c784; }
+        }
+
+        /* 4-6 Bàn: Bình thường (Nhấp nháy nhanh vừa) */
+        .status-normal {
+            color: #e65100;
+            border-color: #ffcc80;
+            background: #fff3e0;
+            animation: pulse-normal 1.2s infinite ease-in-out;
+        }
+        @keyframes pulse-normal {
+            0%, 100% { opacity: 1; transform: scale(1); box-shadow: 0 0 0px #ffb74d; }
+            50% { opacity: 0.7; transform: scale(0.96); box-shadow: 0 0 10px #ffb74d; }
+        }
+
+        /* 7-9 Bàn: Đông khách (Đèn Police xoay) */
+        .status-crowded {
+            color: #fff;
+            border-color: transparent;
+            background: transparent;
+        }
+        .status-crowded::before {
+            content: "";
+            position: absolute;
+            top: -150%; left: -50%; width: 200%; height: 300%;
+            background: conic-gradient(
+                from 0deg,
+                #ff0000 0deg 40deg,
+                transparent 40deg 180deg,
+                #0044ff 180deg 220deg,
+                transparent 220deg 360deg
+            );
+            animation: police-spin 0.45s linear infinite;
+            z-index: 1;
+        }
+        .status-crowded::after {
+            content: "";
+            position: absolute;
+            inset: 2px;
+            background: #111; /* Nền đen tôn viền sáng */
+            border-radius: 18px;
+            z-index: 2;
+        }
+        @keyframes police-spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
         /* TIÊU ĐỀ TÊN QUÁN */
-        .header-title { text-align: center; color: var(--primary-red); text-transform: uppercase; font-size: 1.4em; font-weight: 900; margin: 5px 0 15px 0; letter-spacing: 0.5px; }
+        .header-title { text-align: center; color: var(--primary-red); text-transform: uppercase; font-size: 1.4em; font-weight: 900; margin: 10px 0 15px 0; letter-spacing: 0.5px; }
 
         /* HOẠT ẢNH ICON THỜI TIẾT SVG CHUẨN ĐẸP */
         .w-icon { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; display: block; }
@@ -97,9 +181,7 @@
         /* MŨI TÊN XOAY HƯỚNG GIÓ 360 ĐỘ */
         .wind-arrow { width: 12px; height: 12px; transition: transform 0.8s cubic-bezier(0.4, 0, 0.2, 1); transform-origin: center; fill: currentColor; }
 
-        /* ==========================================================================
-           CẤU TRÚC ĐỒNG HỒ LẬT TĨNH CHUẨN MƯỢT (ĐÃ PHÓNG TO THẨM MỸ)
-           ========================================================================== */
+        /* CẤU TRÚC ĐỒNG HỒ LẬT TĨNH CHUẨN MƯỢT */
         .flip-clock-container { display: flex; justify-content: center; align-items: center; gap: 4px; user-select: none; margin-bottom: 20px; }
         .flip-unit { display: flex; gap: 2px; }
         .flip-colon { font-size: 1.75em; font-weight: bold; color: #333; padding: 0 1px; line-height: 42px; height: 42px; display: flex; align-items: center; animation: blinkColon 1s infinite; }
@@ -113,7 +195,7 @@
         .flip-card.animate .card-flip-wing { transform: rotateX(-180deg); }
         .flip-card.animate .card-flip-wing-back { transform: rotateX(0deg); }
 
-        /* GIỮ NGUYÊN TOÀN BỘ CSS HỆ THỐNG QUẢN LÝ BÀN ĂN */
+        /* HỆ THỐNG QUẢN LÝ BÀN ĂN */
         .tables-container { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-bottom: 15px; }
         .table-card { background: white; padding: 10px 2px; text-align: center; border-radius: 12px; cursor: pointer; border: 2px solid #ddd; box-shadow: 0 3px 0 #ccc; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 90px; position: relative; overflow: hidden; transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94); grid-column: span 2; }
         .full-width { grid-column: span 6; }
@@ -199,6 +281,13 @@
     <div id="presence-count">
         <span class="online-dot"></span>
         👥 Online: <span id="online-val">1</span>
+    </div>
+</div>
+
+<div class="status-container">
+    <div id="crowd-status" class="status-badge status-empty">
+        <span id="crowd-icon">🟢</span>
+        <span id="crowd-text">Vắng khách</span>
     </div>
 </div>
 
@@ -377,24 +466,15 @@ night_partlyCloudy: `
         // KIỂM TRA ĐIỀU KIỆN BAN ĐÊM (Từ 18h tối đến trước 6h sáng)
         const hour = new Date().getHours();
         if (hour >= 18 || hour < 6) {
+            const dayOfMonth = new Date().getDate();
+            let moonType;
+            if (dayOfMonth % 3 === 0) moonType = 'night_fullmoon';
+            else if (dayOfMonth % 3 === 1) moonType = 'night_crescent';
+            else moonType = 'night_nomoon';
 
-    const dayOfMonth = new Date().getDate();
-
-    let moonType;
-
-    if (dayOfMonth % 3 === 0)
-        moonType = 'night_fullmoon';
-    else if (dayOfMonth % 3 === 1)
-        moonType = 'night_crescent';
-    else
-        moonType = 'night_nomoon';
-
-    if (status === 'sunny')
-        finalStatus = moonType;
-
-    else if (status === 'partlyCloudy')
-        finalStatus = 'night_partlyCloudy';
-}
+            if (status === 'sunny') finalStatus = moonType;
+            else if (status === 'partlyCloudy') finalStatus = 'night_partlyCloudy';
+        }
 
         document.getElementById('w-icon-container').innerHTML = SVG_ICONS[finalStatus] || SVG_ICONS.sunny;
         document.getElementById('w-temp').innerText = `${temp.toFixed(1)}°C`;
@@ -418,7 +498,7 @@ night_partlyCloudy: `
         document.getElementById('w-arrow').style.transform = `rotate(${windDir}deg)`;
     }
 
-    // TÍCH HỢP HỆ THỐNG FETCH API THỜI TIẾT THỜI GIAN THỰC (OPEN-METEO) - GIỮ NGUYÊN 10 PHÚT/LẦN
+    // TÍCH HỢP HỆ THỐNG FETCH API THỜI TIẾT THỜI GIAN THỰC (OPEN-METEO)
     async function fetchRealtimeWeather() {
         try {
             const lat = 16.0544;
@@ -428,49 +508,14 @@ night_partlyCloudy: `
             const resData = await response.json();
             const current = resData.current;
 
-        let status = 'sunny';
-const code = current.weather_code;
+            let status = 'sunny';
+            const code = current.weather_code;
 
-// Open-Meteo Weather Codes
-if (code === 0) {
+            if (code === 0) status = 'sunny';
+            else if (code === 1 || code === 2 || code === 3) status = 'partlyCloudy';
+            else if ((code >= 51 && code <= 67) || (code >= 80 && code <= 82)) status = 'rainy';
+            else if (code >= 95) status = 'storm';
 
-    // Trời quang
-    status = 'sunny';
-
-}
-else if (code === 1) {
-
-    // Chủ yếu quang
-    status = 'partlyCloudy';
-
-}
-else if (code === 2) {
-
-    // Mây rải rác
-    status = 'partlyCloudy';
-
-}
-else if (code === 3) {
-
-    // Nhiều mây
-    status = 'partlyCloudy';
-
-}
-else if (
-    (code >= 51 && code <= 67) ||
-    (code >= 80 && code <= 82)
-) {
-
-    status = 'rainy';
-
-}
-else if (code >= 95) {
-
-    status = 'storm';
-
-}
-
-            // Cập nhật vào bộ nhớ đệm
             weatherCache = {
                 status: status,
                 temp: current.temperature_2m,
@@ -485,9 +530,7 @@ else if (code >= 95) {
         }
     }
 
-    // GIẢ LẬP BIẾN ĐỘNG THỜI TIẾT NHẸ MỖI 5 GIÂY (ĐÃ TĂNG THỜI GIAN THEO YÊU CẦU)
     function simulateWeatherFluctuation() {
-        // Tạo biên độ thay đổi cực nhỏ tránh nhảy số giật cục
         const tempOffset = (Math.random() - 0.5) * 0.4;       
         const windSpeedOffset = (Math.random() - 0.5) * 0.6;  
         const windDirOffset = Math.floor((Math.random() - 0.5) * 4); 
@@ -499,15 +542,10 @@ else if (code >= 95) {
         renderWeather(weatherCache.status, simulatedTemp, simulatedWindSpeed, simulatedWindDir);
     }
 
-    // Khởi chạy lấy dữ liệu từ API gốc lần đầu và thiết lập vòng lặp định kỳ 10 phút
     fetchRealtimeWeather();
     setInterval(fetchRealtimeWeather, 600000);
-
-    // VÒNG LẶP GIẢ LẬP DAO ĐỘNG THỜI TIẾT MỖI 5 GIÂY (5000ms) TỰ NHIÊN HƠN
     setInterval(simulateWeatherFluctuation, 5000);
 
-
-    // HOẠT ẢNH ĐỒNG HỒ LẬT TĨNH CHUẨN MƯỢT KHÔNG ĐÚP CHỮ
     function updateCardValue(cardId, targetVal) {
         const card = document.getElementById(cardId);
         if (!card) return;
@@ -573,31 +611,19 @@ else if (code >= 95) {
     }
 
     const onlineRef = ref(database,'.info/connected');
+    const presenceListRef = ref(database,'combetram_v6_data/presence');
+    const myPresenceRef = push(presenceListRef);
 
-const presenceListRef =
-ref(database,'combetram_v6_data/presence');
+    onValue(onlineRef, (snap) => {
+        if (snap.val() === true) {
+            onDisconnect(myPresenceRef).remove();
+            set(myPresenceRef, true);
+        }
+    });
 
-const myPresenceRef =
-push(presenceListRef);
-
-onValue(onlineRef, (snap) => {
-
-    if (snap.val() === true) {
-
-        onDisconnect(myPresenceRef).remove();
-
-        set(myPresenceRef, true);
-
-    }
-
-});
-
-onValue(presenceListRef, (snap) => {
-
-    document.getElementById('online-val').innerText =
-        snap.numChildren();
-
-});
+    onValue(presenceListRef, (snap) => {
+        document.getElementById('online-val').innerText = snap.numChildren();
+    });
 
     function renderMenu() {
         let h = "";
@@ -660,6 +686,8 @@ onValue(presenceListRef, (snap) => {
 
     function refresh() {
         const all = menu.flatMap(g => g.items); let anyGuest = false; const now = Date.now();
+        let activeTablesCount = 0; // Biến đếm số lượng bàn đang hoạt động
+
         if(currentTab) {
             const isLock = (data.locked && data.locked[currentTab]) || false;
             document.getElementById('menu-area').style.display = isLock ? 'none' : 'block';
@@ -698,9 +726,18 @@ onValue(presenceListRef, (snap) => {
             }
         }
 
+        // Quét qua 9 bàn để cập nhật UI từng bàn và đếm số bàn đang bận
         for(let i=1; i<=9; i++) {
-            let s = 0, o = data.orders[i] || {}; for(let id in o) { let itm = all.find(x => x.id == id); if(itm) s += itm.price * o[id]; }
-            const sTabLocked = (data.locked && data.locked[i]) || false; if(s > 0 || sTabLocked) anyGuest = true;
+            let s = 0, o = data.orders[i] || {}; 
+            for(let id in o) { 
+                let itm = all.find(x => x.id == id); 
+                if(itm) s += itm.price * o[id]; 
+            }
+            const sTabLocked = (data.locked && data.locked[i]) || false; 
+            if(s > 0 || sTabLocked) {
+                anyGuest = true;
+                activeTablesCount++; // Bàn có khách -> tăng biến đếm
+            }
             const sumEl = document.getElementById(`sum-${i}`); if(sumEl && parseInt(sumEl.innerText.replace(/\D/g,'')) !== s) animateNumber(`sum-${i}`, s);
             const timeSpan = document.getElementById(`time-${i}`);
             if(timeSpan) {
@@ -715,6 +752,28 @@ onValue(presenceListRef, (snap) => {
                 if (btn.className !== targetClassName) btn.className = targetClassName;
             }
         }
+
+        // --- XỬ LÝ LOGIC HUY HIỆU TRẠNG THÁI KHÁCH ---
+        const crowdEl = document.getElementById('crowd-status');
+        const crowdTxt = document.getElementById('crowd-text');
+        const crowdIcon = document.getElementById('crowd-icon');
+
+        if (crowdEl && crowdTxt && crowdIcon) {
+            if (activeTablesCount <= 3) {
+                crowdEl.className = 'status-badge status-empty';
+                crowdTxt.innerText = 'Vắng khách';
+                crowdIcon.innerText = '🟢';
+            } else if (activeTablesCount <= 6) {
+                crowdEl.className = 'status-badge status-normal';
+                crowdTxt.innerText = 'Bình thường';
+                crowdIcon.innerText = '🟡';
+            } else {
+                crowdEl.className = 'status-badge status-crowded';
+                crowdTxt.innerText = 'ĐÔNG KHÁCH';
+                crowdIcon.innerText = '🚨';
+            }
+        }
+
         document.getElementById('reset-area').style.display = anyGuest ? 'none' : 'block';
     }
 
