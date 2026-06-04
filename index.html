@@ -635,8 +635,12 @@ night_partlyCloudy: `
     });
 
     onValue(presenceListRef, (snap) => {
-        document.getElementById('online-val').innerText = snap.numChildren();
-    });
+    const data = snap.val();
+    // Lấy dữ liệu object, nếu có thì đếm số lượng key (mỗi key là 1 ID tab), nếu không có thì gán = 0
+    const count = data ? Object.keys(data).length : 0;
+    
+    document.getElementById('online-val').innerText = count;
+});
 
     function renderMenu() {
         let h = "";
