@@ -463,6 +463,44 @@
         }
 
         /* ==========================================================================
+           CURSOR ĐỒNG NGHIỆP: CHẤM MÀU "ĐANG XEM BÀN NÀO" (KIỂU GOOGLE SHEETS)
+           ========================================================================== */
+        .remote-cursor {
+            position: fixed;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            border: 2px solid #fff;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.35);
+            pointer-events: none;
+            z-index: 200;
+            transform: translate(-50%, -50%);
+            transition: top 0.5s cubic-bezier(0.22, 0.61, 0.36, 1), left 0.5s cubic-bezier(0.22, 0.61, 0.36, 1), opacity 0.25s ease;
+            opacity: 0;
+        }
+        .remote-cursor.visible { opacity: 1; }
+        body.dark-mode .remote-cursor { border-color: #1c232b; }
+
+        /* ==========================================================================
+           RIPPLE CHẠM CỦA NGƯỜI KHÁC: HIỆN THEO MÀU RIÊNG CỦA TỪNG NGƯỜI
+           ========================================================================== */
+        .remote-tap {
+            position: fixed;
+            width: 46px;
+            height: 46px;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 250;
+            transform: translate(-50%, -50%) scale(0);
+            opacity: 0.85;
+            animation: remoteTapEffect 0.6s ease-out forwards;
+        }
+        @keyframes remoteTapEffect {
+            0%   { transform: translate(-50%, -50%) scale(0.2); opacity: 0.85; }
+            100% { transform: translate(-50%, -50%) scale(2.2); opacity: 0; }
+        }
+
+        /* ==========================================================================
            MICRO-INTERACTION: CONFETTI KHI CHỐT ĐƠN
            ========================================================================== */
         .confetti-piece {
@@ -909,19 +947,135 @@ night_partlyCloudy: `
         requestAnimationFrame(update);
     }
 
+    // ==========================================================================
+    // PRESENCE: SỐ NGƯỜI ONLINE + MÀU RIÊNG CHO MỖI THIẾT BỊ
+    // ==========================================================================
+    const USER_COLORS = ['#e53935', '#1e88e5', '#43a047', '#fb8c00', '#8e24aa', '#00acc1', '#d81b60', '#6d4c41', '#3949ab', '#c0ca33'];
+    const myColor = USER_COLORS[Math.floor(Math.random() * USER_COLORS.length)];
+
     const onlineRef = ref(database,'.info/connected');
     const presenceListRef = ref(database,'combetram_v6_data/presence');
     const myPresenceRef = push(presenceListRef);
+    const myPresenceId = myPresenceRef.key;
+
+    // Node lưu "đang xem bàn nào" của từng thiết bị (giống cursor Google Sheets)
+    const cursorsRef = ref(database, 'combetram_v6_data/cursors');
+    const myCursorRef = child(cursorsRef, myPresenceId);
+
+    // Node lưu sự kiện "vừa chạm ở đâu" của từng thiết bị
+    const tapsRef = ref(database, 'combetram_v6_data/taps');
+    const myTapRef = child(tapsRef, myPresenceId);
 
     onValue(onlineRef, (snap) => {
         if (snap.val() === true) {
+            // KHI MẤT KẾT NỐI: TỰ DỌN DẸP TOÀN BỘ DỮ LIỆU CỦA THIẾT BỊ NÀY
             onDisconnect(myPresenceRef).remove();
-            set(myPresenceRef, true);
+            onDisconnect(myCursorRef).remove();
+            onDisconnect(myTapRef).remove();
+            set(myPresenceRef, { color: myColor, ts: Date.now() });
+            console.log('[presence] đã kết nối, id =', myPresenceId, 'color =', myColor);
+        } else {
+            console.log('[presence] mất kết nối tới Firebase (.info/connected = false)');
         }
     });
 
     onValue(presenceListRef, (snap) => {
-        document.getElementById('online-val').innerText = snap.numChildren();
+        const count = snap.numChildren();
+        document.getElementById('online-val').innerText = count;
+        console.log('[presence] số người online:', count, Object.keys(snap.val() || {}));
+    }, (err) => {
+        console.error('[presence] LỖI ĐỌC presence - kiểm tra Firebase Rules (read):', err);
+    });
+
+    // ==========================================================================
+    // CURSOR ĐỒNG NGHIỆP: HIỂN THỊ CHẤM MÀU "ĐANG XEM BÀN NÀO" - BAY MƯỢT KHI ĐỔI BÀN
+    // ==========================================================================
+    const remoteCursorEls = {}; // { presenceId: HTMLElement }
+
+    function positionCursorOnTable(el, tableNum, offsetIndex) {
+        const card = document.getElementById('tab-' + tableNum);
+        if (!card) { el.classList.remove('visible'); return; }
+        const rect = card.getBoundingClientRect();
+        // Xếp các chấm cạnh nhau ở góc trên-trái của table-card nếu có nhiều người cùng xem
+        const x = rect.left + 12 + (offsetIndex * 16);
+        const y = rect.top + 12;
+        el.style.left = x + 'px';
+        el.style.top = y + 'px';
+        el.classList.add('visible');
+    }
+
+    function renderRemoteCursors(snapVal) {
+        const entries = Object.entries(snapVal || {}).filter(([id, c]) => id !== myPresenceId && c && c.table);
+        // Xóa cursor không còn tồn tại
+        Object.keys(remoteCursorEls).forEach(id => {
+            if (!entries.find(([eid]) => eid === id)) {
+                remoteCursorEls[id].remove();
+                delete remoteCursorEls[id];
+            }
+        });
+        // Đếm số người đang xem mỗi bàn để xếp chấm không đè nhau
+        const countPerTable = {};
+        entries.forEach(([id, c]) => {
+            const idx = countPerTable[c.table] || 0;
+            countPerTable[c.table] = idx + 1;
+            let el = remoteCursorEls[id];
+            if (!el) {
+                el = document.createElement('div');
+                el.className = 'remote-cursor';
+                document.body.appendChild(el);
+                remoteCursorEls[id] = el;
+            }
+            el.style.background = c.color || '#999';
+            positionCursorOnTable(el, c.table, idx);
+        });
+    }
+
+    let lastCursorSnap = null;
+    onValue(cursorsRef, (snap) => { lastCursorSnap = snap.val(); renderRemoteCursors(lastCursorSnap); });
+
+    // Cập nhật lại vị trí cursor khi xoay màn hình / cuộn (table-card có thể đổi vị trí trên viewport)
+    window.addEventListener('resize', () => renderRemoteCursors(lastCursorSnap));
+    window.addEventListener('scroll', () => renderRemoteCursors(lastCursorSnap), { passive: true });
+
+    // Hàm để gọi mỗi khi NGƯỜI DÙNG NÀY chuyển/đóng bàn -> ghi lên Firebase
+    function broadcastCursor(tableNum) {
+        if (tableNum) set(myCursorRef, { table: tableNum, color: myColor, ts: Date.now() });
+        else remove(myCursorRef);
+    }
+
+    // ==========================================================================
+    // RIPPLE CHẠM CỦA ĐỒNG NGHIỆP: HIỆN THEO MÀU RIÊNG, VỊ TRÍ TƯƠNG ĐỐI (%) MÀN HÌNH
+    // ==========================================================================
+    let lastSeenTapTs = {};
+    onValue(tapsRef, (snap) => {
+        const val = snap.val() || {};
+        Object.entries(val).forEach(([id, tap]) => {
+            if (id === myPresenceId || !tap) return;
+            if (lastSeenTapTs[id] === tap.ts) return; // đã hiển thị rồi
+            lastSeenTapTs[id] = tap.ts;
+            showRemoteTap(tap.x, tap.y, tap.color);
+        });
+    });
+
+    function showRemoteTap(xPercent, yPercent, color) {
+        const el = document.createElement('div');
+        el.className = 'remote-tap';
+        el.style.left = (xPercent * window.innerWidth) + 'px';
+        el.style.top = (yPercent * window.innerHeight) + 'px';
+        el.style.background = color || '#999';
+        document.body.appendChild(el);
+        setTimeout(() => el.remove(), 650);
+    }
+
+    // Broadcast tọa độ chạm của CHÍNH THIẾT BỊ NÀY lên Firebase (throttle ~150ms)
+    let lastTapBroadcast = 0;
+    document.addEventListener('pointerdown', (e) => {
+        const now = Date.now();
+        if (now - lastTapBroadcast < 150) return;
+        lastTapBroadcast = now;
+        const xPercent = e.clientX / window.innerWidth;
+        const yPercent = e.clientY / window.innerHeight;
+        set(myTapRef, { x: xPercent, y: yPercent, color: myColor, ts: now });
     });
 
     function renderMenu() {
@@ -963,6 +1117,7 @@ night_partlyCloudy: `
         const wasOpenForSameTable = (currentTab === n);
         currentTab = wasOpenForSameTable ? null : n; currentBillLang = 'vi';
         billWasShown = false; // mỗi lần mở/đổi bàn, hiệu ứng in hóa đơn sẽ chạy lại nếu bill đang ở trạng thái chốt
+        broadcastCursor(currentTab); // báo cho đồng nghiệp biết mình đang xem bàn nào (hoặc đã đóng)
         const section = document.getElementById('order-section');
         if(currentTab) {
             let title = "BÀN " + n;
