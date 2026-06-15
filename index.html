@@ -854,7 +854,7 @@ night_partlyCloudy: `
     function triggerHaptic(type) {
         // RUNG MẠNH - DÙNG CHUNG CHO MỌI THAO TÁC (không phân biệt loại nữa)
         if (window.navigator && window.navigator.vibrate) {
-            window.navigator.vibrate([40, 30, 40]);
+            window.navigator.vibrate([18, 25, 18]);
         } else {
             // IOS KHÔNG HỖ TRỢ VIBRATION API -> GIẢ LẬP HAPTIC BẰNG HIỆU ỨNG RUNG HÌNH ẢNH
             visualHapticFallback();
@@ -971,13 +971,21 @@ night_partlyCloudy: `
             // MỞ: hiện block trước, rồi thêm class để kích hoạt transition slide+fade
             section.style.display = 'block';
             requestAnimationFrame(() => requestAnimationFrame(() => section.classList.add('section-visible')));
+            refresh();
+            // NẾU BÀN NÀY ĐÃ CHỐT ĐƠN (ĐANG XEM BILL) -> TỰ CUỘN ĐẾN PHẦN BILL
+            const isLockedTable = (data.locked && data.locked[n]) || false;
+            if(isLockedTable) {
+                setTimeout(() => {
+                    document.querySelector('.bill-box')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 350); // chờ animation slide/fade của order-section hoàn tất
+            }
         } else {
             // ĐÓNG: bỏ class để chạy transition fade-out, rồi mới display:none
             section.classList.remove('section-visible');
             document.getElementById('scroll-to-checkout')?.classList.add('hidden');
             setTimeout(() => { if(!currentTab) section.style.display = 'none'; }, 320);
+            refresh();
         }
-        refresh();
     }
 
     function change(id, delta) {
