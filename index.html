@@ -434,31 +434,30 @@
             bottom: auto;
             left: auto;
             transform: translateY(-50%);
-            width: 40px;
-            height: 40px;
+            width: 44px;
+            height: 44px;
             border-radius: 50%;
-            border: 1px solid var(--glass-border);
-            background: var(--glass-bg);
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
-            color: var(--text-main);
-            font-size: 1.3em;
+            border: none;
+            background: var(--warning-orange);
+            color: #fff;
+            font-size: 1.5em;
+            font-weight: 900;
             line-height: 1;
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            opacity: 0.55;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+            opacity: 0.92;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.25);
             z-index: 50;
             animation: bobArrow 1.6s ease-in-out infinite;
-            transition: opacity 0.25s ease, background 0.4s ease, border-color 0.4s ease, color 0.4s ease;
+            transition: opacity 0.25s ease, transform 0.15s ease;
         }
-        #scroll-to-checkout:active { opacity: 0.9; transform: translateY(-50%) scale(0.92); }
+        #scroll-to-checkout:active { opacity: 1; transform: translateY(-50%) scale(0.9); }
         #scroll-to-checkout.hidden { display: none; }
         @keyframes bobArrow {
             0%, 100% { transform: translateY(-50%) translateY(0); }
-            50% { transform: translateY(-50%) translateY(5px); }
+            50% { transform: translateY(-50%) translateY(6px); }
         }
     </style>
 </head>
