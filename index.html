@@ -423,6 +423,41 @@
             0% { transform: translateY(0) rotate(0deg); opacity: 1; }
             100% { transform: translateY(100vh) rotate(540deg); opacity: 0; }
         }
+
+        /* ==========================================================================
+           NÚT NỔI MŨI TÊN XUỐNG - CUỘN NHANH TỚI NÚT "CHỐT ĐƠN & XEM BILL"
+           ========================================================================== */
+        #scroll-to-checkout {
+            position: fixed;
+            left: 50%;
+            bottom: 90px;
+            transform: translateX(-50%);
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: 1px solid var(--glass-border);
+            background: var(--glass-bg);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            color: var(--text-main);
+            font-size: 1.3em;
+            line-height: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            opacity: 0.55;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+            z-index: 50;
+            animation: bobArrow 1.6s ease-in-out infinite;
+            transition: opacity 0.25s ease, background 0.4s ease, border-color 0.4s ease, color 0.4s ease;
+        }
+        #scroll-to-checkout:active { opacity: 0.9; transform: translateX(-50%) scale(0.92); }
+        #scroll-to-checkout.hidden { display: none; }
+        @keyframes bobArrow {
+            0%, 100% { transform: translateX(-50%) translateY(0); }
+            50% { transform: translateX(-50%) translateY(5px); }
+        }
     </style>
 </head>
 <body>
@@ -492,9 +527,10 @@
 
 <div id="order-section" class="container" style="display:none;">
     <h3 id="table-title" style="text-align: center; margin-top:0; color:var(--blue);"></h3>
-    <div id="menu-area">
+    <div id="menu-area" style="position: relative;">
         <div id="menu-list"></div>
-        <button class="btn-action" style="background: var(--warning-orange)" onclick="setLock(true)">CHỐT ĐƠN & XEM BILL</button>
+        <button class="btn-action" id="btn-checkout" style="background: var(--warning-orange)" onclick="setLock(true)">CHỐT ĐƠN & XEM BILL</button>
+        <button id="scroll-to-checkout" onclick="scrollToCheckout()" aria-label="Cuộn xuống nút chốt đơn">⌄</button>
     </div>
     <div id="bill-area" style="display:none;">
         <div class="bill-box">
@@ -840,6 +876,7 @@ night_partlyCloudy: `
         } else {
             // ĐÓNG: bỏ class để chạy transition fade-out, rồi mới display:none
             section.classList.remove('section-visible');
+            document.getElementById('scroll-to-checkout')?.classList.add('hidden');
             setTimeout(() => { if(!currentTab) section.style.display = 'none'; }, 320);
         }
         refresh();
@@ -869,6 +906,9 @@ night_partlyCloudy: `
             const isLock = (data.locked && data.locked[currentTab]) || false;
             document.getElementById('menu-area').style.display = isLock ? 'none' : 'block';
             document.getElementById('bill-area').style.display = isLock ? 'block' : 'none';
+            // NÚT NỔI CUỘN XUỐNG: chỉ hiện khi đang xem menu (chưa chốt đơn)
+            const scrollBtn = document.getElementById('scroll-to-checkout');
+            if(scrollBtn) scrollBtn.classList.toggle('hidden', isLock);
             all.forEach(i => {
                 const q = (data.orders[currentTab] && data.orders[currentTab][i.id]) || 0;
                 const row = document.getElementById(`row-${i.id}`), qSpan = document.getElementById(`q-${i.id}`);
@@ -967,6 +1007,12 @@ night_partlyCloudy: `
         if(!v) currentBillLang='vi';
         // MICRO-INTERACTION: CONFETTI KHI CHỐT ĐƠN & XEM BILL
         if(v) launchConfetti();
+        // TỰ CUỘN VỀ PHẦN BILL SAU KHI CHỐT ĐƠN (chờ DOM cập nhật xong qua refresh)
+        if(v) {
+            setTimeout(() => {
+                document.querySelector('.bill-box')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 100);
+        }
     }
     function doPay() {
         if(confirm("Xác nhận thanh toán?")) {
@@ -1041,7 +1087,15 @@ night_partlyCloudy: `
     }
     initDarkMode();
 
-    window.selectTable = selectTable; window.setLock = setLock; window.doPay = doPay; window.doReset = doReset; window.changeBillLang = changeBillLang; window.toggleDarkMode = toggleDarkMode;
+    // ==========================================================================
+    // NÚT NỔI MŨI TÊN XUỐNG: CUỘN NHANH TỚI NÚT "CHỐT ĐƠN & XEM BILL"
+    // ==========================================================================
+    function scrollToCheckout() {
+        triggerHaptic('add');
+        document.getElementById('btn-checkout')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    window.selectTable = selectTable; window.setLock = setLock; window.doPay = doPay; window.doReset = doReset; window.changeBillLang = changeBillLang; window.toggleDarkMode = toggleDarkMode; window.scrollToCheckout = scrollToCheckout;
     setInterval(refresh, 30000);
 </script>
 </body>
