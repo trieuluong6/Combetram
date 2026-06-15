@@ -429,35 +429,35 @@
            ========================================================================== */
         #scroll-to-checkout {
             position: fixed;
-            right: 14px;
-            top: 50%;
-            bottom: auto;
+            right: 16px;
+            bottom: 130px;
+            top: auto;
             left: auto;
-            transform: translateY(-50%);
-            width: 44px;
-            height: 44px;
+            transform: none;
+            width: 38px;
+            height: 38px;
             border-radius: 50%;
             border: none;
             background: var(--warning-orange);
             color: #fff;
-            font-size: 1.5em;
+            font-size: 1.3em;
             font-weight: 900;
             line-height: 1;
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            opacity: 0.92;
+            opacity: 0.85;
             box-shadow: 0 4px 12px rgba(0,0,0,0.25);
             z-index: 50;
             animation: bobArrow 1.6s ease-in-out infinite;
             transition: opacity 0.25s ease, transform 0.15s ease;
         }
-        #scroll-to-checkout:active { opacity: 1; transform: translateY(-50%) scale(0.9); }
+        #scroll-to-checkout:active { opacity: 1; transform: scale(0.9); }
         #scroll-to-checkout.hidden { display: none; }
         @keyframes bobArrow {
-            0%, 100% { transform: translateY(-50%) translateY(0); }
-            50% { transform: translateY(-50%) translateY(6px); }
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(6px); }
         }
     </style>
 </head>
