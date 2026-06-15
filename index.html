@@ -429,9 +429,11 @@
            ========================================================================== */
         #scroll-to-checkout {
             position: fixed;
-            left: 50%;
-            bottom: 90px;
-            transform: translateX(-50%);
+            right: 14px;
+            top: 50%;
+            bottom: auto;
+            left: auto;
+            transform: translateY(-50%);
             width: 40px;
             height: 40px;
             border-radius: 50%;
@@ -452,11 +454,11 @@
             animation: bobArrow 1.6s ease-in-out infinite;
             transition: opacity 0.25s ease, background 0.4s ease, border-color 0.4s ease, color 0.4s ease;
         }
-        #scroll-to-checkout:active { opacity: 0.9; transform: translateX(-50%) scale(0.92); }
+        #scroll-to-checkout:active { opacity: 0.9; transform: translateY(-50%) scale(0.92); }
         #scroll-to-checkout.hidden { display: none; }
         @keyframes bobArrow {
-            0%, 100% { transform: translateX(-50%) translateY(0); }
-            50% { transform: translateX(-50%) translateY(5px); }
+            0%, 100% { transform: translateY(-50%) translateY(0); }
+            50% { transform: translateY(-50%) translateY(5px); }
         }
     </style>
 </head>
