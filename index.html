@@ -531,7 +531,6 @@
     <div id="menu-area" style="position: relative;">
         <div id="menu-list"></div>
         <button class="btn-action" id="btn-checkout" style="background: var(--warning-orange)" onclick="setLock(true)">CHỐT ĐƠN & XEM BILL</button>
-        <button id="scroll-to-checkout" onclick="scrollToCheckout()" aria-label="Cuộn xuống nút chốt đơn">⌄</button>
     </div>
     <div id="bill-area" style="display:none;">
         <div class="bill-box">
@@ -582,6 +581,9 @@
 
 <div id="reset-area"><button onclick="doReset()">Xóa dữ liệu ngày mới</button></div>
 <audio id="tingSound" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" preload="auto"></audio>
+
+<!-- NÚT NỔI MŨI TÊN XUỐNG: đặt trực tiếp trong body để position:fixed hoạt động đúng (không bị ảnh hưởng bởi transform của #order-section) -->
+<button id="scroll-to-checkout" class="hidden" onclick="scrollToCheckout()" aria-label="Cuộn xuống nút chốt đơn">⌄</button>
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-app.js";
