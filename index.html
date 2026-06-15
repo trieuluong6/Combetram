@@ -339,6 +339,49 @@
         .bill-row .divider { height: 100%; border-left: 2px solid var(--text-main); margin: 0 10px; grid-column: 3; transition: border-color 0.4s ease; }
         .bill-row .item-price { color: var(--primary-red); font-weight: 700; text-align: right; min-width: 90px; font-size: 1.1em; }
         @keyframes slideInBill { to { opacity: 1; transform: translateX(0); } }
+
+        /* ==========================================================================
+           HIỆU ỨNG "IN HÓA ĐƠN" - BILL CUỘN RA NHƯ GIẤY TỪ MÁY IN
+           ========================================================================== */
+        #bill-area {
+            transform-origin: top center;
+        }
+        #bill-area.printing-out {
+            animation: printOutBill 0.7s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+        }
+        @keyframes printOutBill {
+            0%   { clip-path: inset(0 0 100% 0); transform: scaleY(0.85) translateY(-10px); opacity: 0.4; }
+            8%   { clip-path: inset(0 0 100% 0); transform: scaleY(0.85) translateY(-10px); opacity: 0.4; }
+            100% { clip-path: inset(0 0 0% 0); transform: scaleY(1) translateY(0); opacity: 1; }
+        }
+        /* THE "MÁY IN" - thanh nhỏ phía trên bill, mô phỏng khe ra giấy */
+        .printer-slot {
+            height: 10px;
+            background: linear-gradient(180deg, var(--text-muted), var(--bg-card));
+            border-radius: 4px 4px 0 0;
+            margin-bottom: -2px;
+            position: relative;
+            box-shadow: 0 2px 4px var(--shadow-card);
+            opacity: 0;
+        }
+        #bill-area.printing-out .printer-slot {
+            animation: printerSlotFlash 0.7s ease-out both;
+        }
+        @keyframes printerSlotFlash {
+            0% { opacity: 1; }
+            8% { opacity: 1; }
+            100% { opacity: 0; }
+        }
+        /* RĂNG CƯA TRÊN MÉP GIẤY - giống xé từ cuộn máy in */
+        .bill-box::before {
+            content: "";
+            display: block;
+            height: 8px;
+            margin: -12px -12px 12px -12px;
+            background: repeating-linear-gradient(135deg, transparent 0 6px, var(--bg-body) 6px 12px);
+            background-color: var(--bg-card);
+            border-bottom: 1px dashed var(--bg-bill-divider);
+        }
         .total-container { display: flex; justify-content: space-between; align-items: center; font-size: 1.2em; font-weight: 900; margin-top: 15px; color: var(--primary-red); padding: 18px 8px; border-top: 3px solid var(--text-main); gap: 5px; animation: pulse-rgb-total 2s infinite ease-in-out; border-radius: 0 0 5px 5px; overflow: hidden; transition: border-color 0.4s ease; }
         body.dark-mode .total-container { animation: pulse-rgb-total-dark 2s infinite ease-in-out; }
         .total-label-wrapper { display: flex; align-items: center; gap: 5px; min-width: 0; flex-shrink: 1; }
@@ -533,6 +576,7 @@
         <button class="btn-action" id="btn-checkout" style="background: var(--warning-orange)" onclick="setLock(true)">CHỐT ĐƠN & XEM BILL</button>
     </div>
     <div id="bill-area" style="display:none;">
+        <div class="printer-slot"></div>
         <div class="bill-box">
             <div id="bill-list"></div>
             <div class="total-container" id="total-container">
@@ -610,6 +654,7 @@
     let currentTab = null;
     let data = { orders: {}, locked: {}, times: {} };
     let firstLoad = true;
+    let billWasShown = false; // theo dõi để chỉ chạy hiệu ứng "in hóa đơn" khi bill MỚI xuất hiện
 
     // CACHE DỮ LIỆU GỐC ĐỂ PHỤC VỤ GIẢ LẬP ĐỘNG KHÔNG CALL API LIÊN TỤC
     let weatherCache = { status: 'cloudy', temp: 31, windSpeed: 14.0, windDir: 135 };
@@ -794,9 +839,15 @@ night_partlyCloudy: `
 
     function triggerHaptic(type) {
         if (!window.navigator || !window.navigator.vibrate) return;
-        if (type === 'add') window.navigator.vibrate(15);
-        else if (type === 'sub') window.navigator.vibrate([20, 40, 20]);
-        else if (type === 'success') window.navigator.vibrate(60);
+        switch(type) {
+            case 'add':     window.navigator.vibrate(12); break;            // tích món: rung ngắn, gọn
+            case 'sub':     window.navigator.vibrate([10, 30, 10]); break;  // trừ món: 2 nhịp ngắn, phân biệt với add
+            case 'success': window.navigator.vibrate([15, 40, 15, 40, 60]); break; // thanh toán: nhịp tăng dần, cảm giác "xong việc"
+            case 'lock':    window.navigator.vibrate([40, 60, 80]); break;  // chốt đơn: rung mạnh dần như tiếng máy in chạy
+            case 'nav':     window.navigator.vibrate(8); break;             // chuyển bàn/tab: rung rất nhẹ
+            case 'warning': window.navigator.vibrate([30, 50, 30, 50, 30]); break; // cảnh báo: rung dồn liên tục
+            default:        window.navigator.vibrate(15);
+        }
     }
 
     function animateNumber(elementId, newValue) {
@@ -804,13 +855,35 @@ night_partlyCloudy: `
         if (!el) return;
         const startValue = parseInt(el.innerText.replace(/\D/g, '')) || 0;
         if (startValue === newValue) return;
-        const duration = 800; const startTime = performance.now();
+        const diff = newValue - startValue;
+        const duration = 750; const startTime = performance.now();
+        // EASING "ĐẾM TIỀN": tăng/giảm nhanh ở đầu (giống tiền chạy số), hơi nảy nhẹ rồi khớp đúng số cuối (không overshoot quá số thật)
+        function easeCountMoney(t) {
+            if (t < 0.7) {
+                // 70% thời gian đầu: chạy nhanh theo easeOutCubic
+                const p = t / 0.7;
+                return (1 - Math.pow(1 - p, 3)) * 0.92;
+            }
+            // 30% cuối: chạy chậm dần, "gõ nhịp" về đúng số như tiếng máy tính tiền chốt số
+            const p = (t - 0.7) / 0.3;
+            return 0.92 + (1 - Math.pow(1 - p, 2)) * 0.08;
+        }
         function update(currentTime) {
             const elapsed = currentTime - startTime;
             const progress = Math.min(elapsed / duration, 1);
-            const easeOutQuart = 1 - Math.pow(1 - progress, 4);
-            el.innerText = Math.floor(startValue + (newValue - startValue) * easeOutQuart).toLocaleString();
+            const eased = easeCountMoney(progress);
+            let val = startValue + diff * eased;
+            // Giai đoạn cuối làm tròn theo bước 1.000đ để cảm giác "chốt số" rõ ràng, dứt khoát
+            if (progress > 0.85) {
+                const step = 1000;
+                val = Math.round(val / step) * step;
+            }
+            val = Math.round(val);
+            // Không vượt quá giá trị đích
+            val = diff >= 0 ? Math.min(val, newValue) : Math.max(val, newValue);
+            el.innerText = val.toLocaleString();
             if (progress < 1) requestAnimationFrame(update);
+            else el.innerText = newValue.toLocaleString();
         }
         requestAnimationFrame(update);
     }
@@ -865,9 +938,10 @@ night_partlyCloudy: `
     });
 
     function selectTable(n) {
-        triggerHaptic('add');
+        triggerHaptic('nav');
         const wasOpenForSameTable = (currentTab === n);
         currentTab = wasOpenForSameTable ? null : n; currentBillLang = 'vi';
+        billWasShown = false; // mỗi lần mở/đổi bàn, hiệu ứng in hóa đơn sẽ chạy lại nếu bill đang ở trạng thái chốt
         const section = document.getElementById('order-section');
         if(currentTab) {
             let title = "BÀN " + n;
@@ -899,7 +973,7 @@ night_partlyCloudy: `
         setTimeout(() => { if(row) row.classList.remove(cls); if(tabBtn) tabBtn.classList.remove(cls); }, 400);
     }
 
-    function changeBillLang(l) { triggerHaptic('add'); currentBillLang = l; refresh(); document.querySelector('.bill-box')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+    function changeBillLang(l) { triggerHaptic('nav'); currentBillLang = l; refresh(); document.querySelector('.bill-box')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
 
     function refresh() {
         const all = menu.flatMap(g => g.items); let anyGuest = false; const now = Date.now();
@@ -908,7 +982,17 @@ night_partlyCloudy: `
         if(currentTab) {
             const isLock = (data.locked && data.locked[currentTab]) || false;
             document.getElementById('menu-area').style.display = isLock ? 'none' : 'block';
-            document.getElementById('bill-area').style.display = isLock ? 'block' : 'none';
+            const billArea = document.getElementById('bill-area');
+            billArea.style.display = isLock ? 'block' : 'none';
+            // HIỆU ỨNG "IN HÓA ĐƠN": chỉ chạy 1 lần khi bill chuyển từ ẨN -> HIỆN
+            if(isLock && !billWasShown) {
+                billArea.classList.remove('printing-out');
+                requestAnimationFrame(() => requestAnimationFrame(() => billArea.classList.add('printing-out')));
+                billWasShown = true;
+            } else if(!isLock) {
+                billWasShown = false;
+                billArea.classList.remove('printing-out');
+            }
             // NÚT NỔI CUỘN XUỐNG: chỉ hiện khi đang xem menu (chưa chốt đơn)
             const scrollBtn = document.getElementById('scroll-to-checkout');
             if(scrollBtn) scrollBtn.classList.toggle('hidden', isLock);
@@ -1005,7 +1089,7 @@ night_partlyCloudy: `
     }
 
     function setLock(v) {
-        triggerHaptic('success');
+        triggerHaptic(v ? 'lock' : 'nav');
         set(child(dbRef, `locked/${currentTab}`), v);
         if(!v) currentBillLang='vi';
         // MICRO-INTERACTION: CONFETTI KHI CHỐT ĐƠN & XEM BILL
@@ -1075,7 +1159,7 @@ night_partlyCloudy: `
         if(btn) btn.innerText = isDark ? '☀️' : '🌙';
     }
     function toggleDarkMode() {
-        triggerHaptic('add');
+        triggerHaptic('nav');
         const isDark = !document.body.classList.contains('dark-mode');
         applyDarkMode(isDark);
         try { localStorage.setItem('combetram_dark_mode', isDark ? 'on' : 'off'); } catch(e) {}
@@ -1094,7 +1178,7 @@ night_partlyCloudy: `
     // NÚT NỔI MŨI TÊN XUỐNG: CUỘN NHANH TỚI NÚT "CHỐT ĐƠN & XEM BILL"
     // ==========================================================================
     function scrollToCheckout() {
-        triggerHaptic('add');
+        triggerHaptic('nav');
         document.getElementById('btn-checkout')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 
