@@ -309,7 +309,7 @@
         body.dark-mode .flash-sub { background-color: #5c2b2b !important; }
         .container { background: var(--bg-card); padding: 15px; border-radius: 15px; box-shadow: 0 4px 20px var(--shadow-card); max-width: 600px; margin: auto; transition: background 0.4s ease; }
         .category-title { background: var(--bg-category); padding: 8px 12px; font-weight: bold; margin-top: 15px; border-radius: 6px; color: var(--text-muted); font-size: 0.85em; transition: background 0.4s ease, color 0.4s ease; }
-        .menu-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--bg-menu-row-border); padding-left: 10px; border-radius: 8px; margin-bottom: 2px; transition: 0.2s, background 0.4s ease, border-color 0.4s ease; }
+        .menu-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--bg-menu-row-border); padding-left: 10px; border-radius: 8px; margin-bottom: 2px; position: relative; transition: 0.2s, background 0.4s ease, border-color 0.4s ease; }
         .qty-1 { background-color: #fffde7; border-left: 5px solid #fff59d; }
         .qty-2 { background-color: #fff9c4; border-left: 5px solid #fff176; }
         .qty-3 { background-color: #fff59d; border-left: 5px solid #ffee58; }
@@ -499,6 +499,59 @@
             0%   { transform: translate(-50%, -50%) scale(0.2); opacity: 0.85; }
             100% { transform: translate(-50%, -50%) scale(2.2); opacity: 0; }
         }
+
+        /* ==========================================================================
+           TRAIL "ĐUÔI SAO CHỔI" KHI CURSOR ĐỒNG NGHIỆP BAY TỪ BÀN NÀY SANG BÀN KHÁC
+           ========================================================================== */
+        .cursor-trail {
+            position: fixed;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 199;
+            transform: translate(-50%, -50%);
+            animation: trailFade 0.5s ease-out forwards;
+        }
+        @keyframes trailFade {
+            0%   { opacity: 0.55; transform: translate(-50%, -50%) scale(1); }
+            100% { opacity: 0; transform: translate(-50%, -50%) scale(0.3); }
+        }
+
+        /* ==========================================================================
+           AURA PULSING QUANH TABLE-CARD KHI CÓ ĐỒNG NGHIỆP ĐANG XEM
+           ========================================================================== */
+        .table-card.has-viewer {
+            animation: viewerAuraPulse 1.8s ease-in-out infinite;
+        }
+        @keyframes viewerAuraPulse {
+            0%, 100% { box-shadow: 0 3px 0 var(--border-card), 0 0 0px 0px var(--viewer-color, transparent); }
+            50%      { box-shadow: 0 3px 0 var(--border-card), 0 0 14px 3px var(--viewer-color, transparent); }
+        }
+
+        /* ==========================================================================
+           CLICK-TO-FOCUS ĐỒNG BỘ: HIGHLIGHT DÒNG MÓN ĐANG ĐƯỢC ĐỒNG NGHIỆP TÁY MÁY
+           ========================================================================== */
+        .menu-item.remote-focus {
+            box-shadow: inset 0 0 0 2px var(--focus-color, transparent);
+            transition: box-shadow 0.25s ease;
+        }
+        .remote-focus-tag {
+            position: absolute;
+            top: -7px;
+            right: 8px;
+            font-size: 0.62em;
+            font-weight: 700;
+            padding: 1px 6px;
+            border-radius: 8px;
+            color: #fff;
+            opacity: 0;
+            transform: translateY(2px);
+            transition: opacity 0.25s ease, transform 0.25s ease;
+            pointer-events: none;
+            z-index: 5;
+        }
+        .remote-focus-tag.visible { opacity: 1; transform: translateY(0); }
 
         /* ==========================================================================
            MICRO-INTERACTION: CONFETTI KHI CHỐT ĐƠN
@@ -966,12 +1019,17 @@ night_partlyCloudy: `
     const tapsRef = ref(database, 'combetram_v6_data/taps');
     const myTapRef = child(tapsRef, myPresenceId);
 
+    // Node lưu "đang táy máy món nào ở bàn nào" - click-to-focus đồng bộ kiểu Google Docs
+    const focusRef = ref(database, 'combetram_v6_data/focus');
+    const myFocusRef = child(focusRef, myPresenceId);
+
     onValue(onlineRef, (snap) => {
         if (snap.val() === true) {
             // KHI MẤT KẾT NỐI: TỰ DỌN DẸP TOÀN BỘ DỮ LIỆU CỦA THIẾT BỊ NÀY
             onDisconnect(myPresenceRef).remove();
             onDisconnect(myCursorRef).remove();
             onDisconnect(myTapRef).remove();
+            onDisconnect(myFocusRef).remove();
             set(myPresenceRef, { color: myColor, ts: Date.now() })
                 .then(() => console.log('[presence] ghi presence thành công'))
                 .catch(e => console.error('[presence] LỖI GHI PRESENCE - kiểm tra Firebase Rules:', e.message));
@@ -986,14 +1044,35 @@ night_partlyCloudy: `
     // CURSOR ĐỒNG NGHIỆP: HIỂN THỊ CHẤM MÀU "ĐANG XEM BÀN NÀO" - BAY MƯỢT KHI ĐỔI BÀN
     // ==========================================================================
     const remoteCursorEls = {}; // { presenceId: HTMLElement }
+    const lastCursorPos = {};   // { presenceId: {x, y} } - để biết điểm xuất phát khi vẽ trail
 
-    function positionCursorOnTable(el, tableNum, offsetIndex) {
+    function spawnTrail(x, y, color) {
+        const trail = document.createElement('div');
+        trail.className = 'cursor-trail';
+        trail.style.left = x + 'px';
+        trail.style.top = y + 'px';
+        trail.style.background = color || '#999';
+        document.body.appendChild(trail);
+        setTimeout(() => trail.remove(), 500);
+    }
+
+    function positionCursorOnTable(id, el, tableNum, offsetIndex, color) {
         const card = document.getElementById('tab-' + tableNum);
         if (!card) { el.classList.remove('visible'); return; }
         const rect = card.getBoundingClientRect();
         // Xếp các chấm cạnh nhau ở góc trên-trái của table-card nếu có nhiều người cùng xem
         const x = rect.left + 12 + (offsetIndex * 16);
         const y = rect.top + 12;
+        const prev = lastCursorPos[id];
+        // TRAIL "ĐUÔI SAO CHỔI": nếu vị trí đổi đáng kể (chuyển bàn), rải vài vệt mờ dọc đường bay
+        if (prev && (Math.abs(prev.x - x) > 6 || Math.abs(prev.y - y) > 6)) {
+            const steps = 4;
+            for (let s = 1; s <= steps; s++) {
+                const t = s / (steps + 1);
+                setTimeout(() => spawnTrail(prev.x + (x - prev.x) * t, prev.y + (y - prev.y) * t, color), s * 28);
+            }
+        }
+        lastCursorPos[id] = { x, y };
         el.style.left = x + 'px';
         el.style.top = y + 'px';
         el.classList.add('visible');
@@ -1006,13 +1085,16 @@ night_partlyCloudy: `
             if (!entries.find(([eid]) => eid === id)) {
                 remoteCursorEls[id].remove();
                 delete remoteCursorEls[id];
+                delete lastCursorPos[id];
             }
         });
-        // Đếm số người đang xem mỗi bàn để xếp chấm không đè nhau
+        // Đếm số người đang xem mỗi bàn để xếp chấm không đè nhau + gom màu cho AURA của từng bàn
         const countPerTable = {};
+        const tableViewerColor = {}; // bàn nào có người xem -> lấy màu người đầu tiên cho aura
         entries.forEach(([id, c]) => {
             const idx = countPerTable[c.table] || 0;
             countPerTable[c.table] = idx + 1;
+            if (!tableViewerColor[c.table]) tableViewerColor[c.table] = c.color || '#999';
             let el = remoteCursorEls[id];
             if (!el) {
                 el = document.createElement('div');
@@ -1021,8 +1103,20 @@ night_partlyCloudy: `
                 remoteCursorEls[id] = el;
             }
             el.style.background = c.color || '#999';
-            positionCursorOnTable(el, c.table, idx);
+            positionCursorOnTable(id, el, c.table, idx, c.color);
         });
+        // AURA PULSING: gắn/gỡ class + màu glow cho từng table-card
+        for (let t = 1; t <= 9; t++) {
+            const card = document.getElementById('tab-' + t);
+            if (!card) continue;
+            if (tableViewerColor[t]) {
+                card.classList.add('has-viewer');
+                card.style.setProperty('--viewer-color', tableViewerColor[t]);
+            } else {
+                card.classList.remove('has-viewer');
+                card.style.removeProperty('--viewer-color');
+            }
+        }
     }
 
     let lastCursorSnap = null;
@@ -1036,7 +1130,72 @@ night_partlyCloudy: `
     function broadcastCursor(tableNum) {
         if (tableNum) set(myCursorRef, { table: tableNum, color: myColor, ts: Date.now() });
         else remove(myCursorRef);
+        broadcastFocus(null); // đổi/đóng bàn thì không còn "đang táy máy" món nào nữa
     }
+
+    // ==========================================================================
+    // CLICK-TO-FOCUS ĐỒNG BỘ: BÁO "ĐANG TÁY MÁY MÓN NÀO" LÊN FIREBASE (THROTTLE NHẸ)
+    // ==========================================================================
+    let lastFocusBroadcast = 0;
+    let focusClearTimer = null;
+    function broadcastFocus(itemId) {
+        if (itemId === null) {
+            clearTimeout(focusClearTimer);
+            remove(myFocusRef);
+            return;
+        }
+        const now = Date.now();
+        if (now - lastFocusBroadcast > 120) {
+            lastFocusBroadcast = now;
+            set(myFocusRef, { table: currentTab, itemId, color: myColor, ts: now });
+        }
+        // Tự xóa focus nếu không có thao tác tiếp trong 1.5s (giống "đang gõ..." biến mất khi ngừng gõ)
+        clearTimeout(focusClearTimer);
+        focusClearTimer = setTimeout(() => remove(myFocusRef), 1500);
+    }
+
+    const remoteFocusRows = {}; // { presenceId: { rowEl, tagEl } } - dọn dẹp tag cũ khi focus đổi
+
+    function renderRemoteFocus(snapVal) {
+        const entries = Object.entries(snapVal || {}).filter(([id, f]) => id !== myPresenceId && f);
+        // Gỡ highlight của những presence không còn focus (hoặc đã đổi bàn/món)
+        Object.keys(remoteFocusRows).forEach(id => {
+            const stillActive = entries.find(([eid, f]) => eid === id && f.table === currentTab);
+            if (!stillActive) {
+                const prev = remoteFocusRows[id];
+                if (prev.rowEl) { prev.rowEl.classList.remove('remote-focus'); prev.rowEl.style.removeProperty('--focus-color'); }
+                if (prev.tagEl) prev.tagEl.remove();
+                delete remoteFocusRows[id];
+            }
+        });
+        // Chỉ hiển thị focus của những người đang xem ĐÚNG bàn mình cũng đang mở (currentTab)
+        if (!currentTab) return;
+        entries.forEach(([id, f]) => {
+            if (f.table !== currentTab) return;
+            const row = document.getElementById('row-' + f.itemId);
+            if (!row) return;
+            const prev = remoteFocusRows[id];
+            if (prev && prev.rowEl && prev.rowEl !== row) {
+                prev.rowEl.classList.remove('remote-focus'); prev.rowEl.style.removeProperty('--focus-color');
+                if (prev.tagEl) prev.tagEl.remove();
+            }
+            row.classList.add('remote-focus');
+            row.style.setProperty('--focus-color', f.color || '#999');
+            let tag = (prev && prev.rowEl === row) ? prev.tagEl : null;
+            if (!tag) {
+                tag = document.createElement('span');
+                tag.className = 'remote-focus-tag';
+                tag.innerText = '✏️';
+                row.appendChild(tag);
+                requestAnimationFrame(() => tag.classList.add('visible'));
+            }
+            tag.style.background = f.color || '#999';
+            remoteFocusRows[id] = { rowEl: row, tagEl: tag };
+        });
+    }
+
+    let lastFocusSnap = null;
+    onValue(focusRef, (snap) => { lastFocusSnap = snap.val(); renderRemoteFocus(lastFocusSnap); });
 
     // ==========================================================================
     // RIPPLE CHẠM CỦA ĐỒNG NGHIỆP: HIỆN THEO MÀU RIÊNG, VỊ TRÍ TƯƠNG ĐỐI (%) MÀN HÌNH
@@ -1116,6 +1275,7 @@ night_partlyCloudy: `
         currentTab = wasOpenForSameTable ? null : n; currentBillLang = 'vi';
         billWasShown = false; // mỗi lần mở/đổi bàn, hiệu ứng in hóa đơn sẽ chạy lại nếu bill đang ở trạng thái chốt
         broadcastCursor(currentTab); // báo cho đồng nghiệp biết mình đang xem bàn nào (hoặc đã đóng)
+        renderRemoteFocus(lastFocusSnap); // cập nhật lại highlight focus theo bàn vừa chọn (xóa highlight bàn cũ)
         const section = document.getElementById('order-section');
         if(currentTab) {
             let title = "BÀN " + n;
@@ -1144,6 +1304,7 @@ night_partlyCloudy: `
     function change(id, delta) {
         if(!currentTab || (data.locked && data.locked[currentTab])) return;
         triggerHaptic(delta > 0 ? 'add' : 'sub');
+        broadcastFocus(id); // báo cho đồng nghiệp biết mình đang táy máy món này ở bàn hiện tại
         let order = data.orders[currentTab] || {};
         if(Object.keys(order).length === 0 && delta > 0) set(child(dbRef, `times/${currentTab}`), Date.now());
         let q = (order[id] || 0) + delta; if(q <= 0) delete order[id]; else order[id] = q;
