@@ -333,10 +333,6 @@
         .qty-num.bump { animation: qtyBump 0.28s cubic-bezier(0.34, 1.56, 0.64, 1); }
         @keyframes qtyBump { 0% { transform: scale(1); } 45% { transform: scale(1.45); } 100% { transform: scale(1); } }
 
-        /* ==========================================================================
-           FALLBACK HAPTIC CHO IOS: RUNG NHẸ TOÀN MÀN HÌNH (KHÔNG CÓ VIBRATION API)
-           ========================================================================== */
-       
         .bill-box { border: 2.5px solid var(--text-main); padding: 12px; background: var(--bg-card); border-radius: 8px; margin-top: 4px; overflow: hidden; transition: background 0.4s ease, border-color 0.4s ease; }
         .bill-row { display: grid; grid-template-columns: 1fr auto 10px auto; align-items: center; padding: 12px 0; border-bottom: 1px dashed var(--bg-bill-divider); opacity: 0; transform: translateX(-10px); animation: slideInBill 0.4s ease forwards; transition: border-color 0.4s ease; }
         .bill-row .item-name { text-align: left; font-size: 1.15em; font-weight: 500; padding-right: 10px; line-height: 1.3; color: var(--text-main); transition: color 0.4s ease; }
@@ -473,11 +469,6 @@
         body.dark-mode .remote-cursor { border-color: #1c232b; }
 
         /* ==========================================================================
-           RIPPLE CHẠM CỦA NGƯỜI KHÁC: HIỆN THEO MÀU RIÊNG CỦA TỪNG NGƯỜI
-           ========================================================================== */
-       
-
-        /* ==========================================================================
            TRAIL "ĐUÔI SAO CHỔI" KHI CURSOR ĐỒNG NGHIỆP BAY TỪ BÀN NÀY SANG BÀN KHÁC
            ========================================================================== */
         .cursor-trail {
@@ -529,25 +520,6 @@
             z-index: 5;
         }
         .remote-focus-tag.visible { opacity: 1; transform: translateY(0); }
-
-        /* ==========================================================================
-           MICRO-INTERACTION: CONFETTI KHI CHỐT ĐƠN
-           ========================================================================== */
-        .confetti-piece {
-            position: fixed;
-            top: -10px;
-            width: 8px;
-            height: 8px;
-            opacity: 0.95;
-            pointer-events: none;
-            z-index: 9999;
-            border-radius: 1px;
-            animation: confettiFall linear forwards;
-        }
-        @keyframes confettiFall {
-            0% { transform: translateY(0) rotate(0deg); opacity: 1; }
-            100% { transform: translateY(100vh) rotate(540deg); opacity: 0; }
-        }
 
         /* ==========================================================================
            NÚT NỔI MŨI TÊN XUỐNG - CUỘN NHANH TỚI NÚT "CHỐT ĐƠN & XEM BILL"
@@ -923,18 +895,8 @@ night_partlyCloudy: `
         // RUNG MẠNH - DÙNG CHUNG CHO MỌI THAO TÁC (không phân biệt loại nữa)
         if (window.navigator && window.navigator.vibrate) {
             window.navigator.vibrate([18, 25, 18]);
-        } else {
-            // IOS KHÔNG HỖ TRỢ VIBRATION API -> GIẢ LẬP HAPTIC BẰNG HIỆU ỨNG RUNG HÌNH ẢNH
-           
         }
     }
-
-    // ==========================================================================
-    // FALLBACK HAPTIC CHO IOS: RUNG NHẸ TOÀN MÀN HÌNH BẰNG CSS ANIMATION
-    // (iOS Safari/PWA không hỗ trợ navigator.vibrate, nên dùng phản hồi hình ảnh)
-    // ==========================================================================
-    function visualHapticFallback() {
-}
 
     function animateNumber(elementId, newValue) {
         const el = document.getElementById(elementId);
@@ -989,10 +951,6 @@ night_partlyCloudy: `
     const cursorsRef = ref(database, 'combetram_v6_data/cursors');
     const myCursorRef = child(cursorsRef, myPresenceId);
 
-    // Node lưu sự kiện "vừa chạm ở đâu" của từng thiết bị
-    const tapsRef = ref(database, 'combetram_v6_data/taps');
-    const myTapRef = child(tapsRef, myPresenceId);
-
     // Node lưu "đang táy máy món nào ở bàn nào" - click-to-focus đồng bộ kiểu Google Docs
     const focusRef = ref(database, 'combetram_v6_data/focus');
     const myFocusRef = child(focusRef, myPresenceId);
@@ -1002,7 +960,6 @@ night_partlyCloudy: `
             // KHI MẤT KẾT NỐI: TỰ DỌN DẸP TOÀN BỘ DỮ LIỆU CỦA THIẾT BỊ NÀY
             onDisconnect(myPresenceRef).remove();
             onDisconnect(myCursorRef).remove();
-            onDisconnect(myTapRef).remove();
             onDisconnect(myFocusRef).remove();
             set(myPresenceRef, { color: myColor, ts: Date.now() })
                 .then(() => console.log('[presence] ghi presence thành công'))
@@ -1170,23 +1127,6 @@ night_partlyCloudy: `
 
     let lastFocusSnap = null;
     onValue(focusRef, (snap) => { lastFocusSnap = snap.val(); renderRemoteFocus(lastFocusSnap); });
-
-    // ==========================================================================
-    // RIPPLE CHẠM CỦA ĐỒNG NGHIỆP: HIỆN THEO MÀU RIÊNG, VỊ TRÍ TƯƠNG ĐỐI (%) MÀN HÌNH
-    // ==========================================================================
-    let lastSeenTapTs = {};
-  
-
-    // Broadcast tọa độ chạm của CHÍNH THIẾT BỊ NÀY lên Firebase (throttle ~150ms)
-    let lastTapBroadcast = 0;
-    document.addEventListener('pointerdown', (e) => {
-        const now = Date.now();
-        if (now - lastTapBroadcast < 150) return;
-        lastTapBroadcast = now;
-        const xPercent = e.clientX / window.innerWidth;
-        const yPercent = e.clientY / window.innerHeight;
-        set(myTapRef, { x: xPercent, y: yPercent, color: myColor, ts: now });
-    });
 
     function renderMenu() {
         let h = "";
@@ -1391,8 +1331,6 @@ night_partlyCloudy: `
         triggerHaptic(v ? 'lock' : 'nav');
         set(child(dbRef, `locked/${currentTab}`), v);
         if(!v) currentBillLang='vi';
-        // MICRO-INTERACTION: CONFETTI KHI CHỐT ĐƠN & XEM BILL
-        
         // TỰ CUỘN VỀ PHẦN BILL SAU KHI CHỐT ĐƠN (chờ DOM cập nhật xong qua refresh)
         if(v) {
             setTimeout(() => {
@@ -1409,13 +1347,6 @@ night_partlyCloudy: `
         if(prompt("Mật khẩu xóa dữ liệu:") === "123") {
             remove(child(dbRef, 'orders')); remove(child(dbRef, 'locked')); remove(child(dbRef, 'times')); location.reload();
         }
-    }
-
-    // ==========================================================================
-    // MICRO-INTERACTION: HIỆU ỨNG CONFETTI KHI CHỐT ĐƠN
-    // ==========================================================================
-    function launchConfetti() {
-}
     }
 
     // ==========================================================================
