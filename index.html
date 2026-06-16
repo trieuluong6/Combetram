@@ -520,15 +520,13 @@
 
         /* ==========================================================================
            AURA PULSING QUANH TABLE-CARD KHI CÓ ĐỒNG NGHIỆP ĐANG XEM
-           (dùng outline + outline-offset thay box-shadow vì .table-card có overflow:hidden
-            sẽ cắt mất box-shadow lan ra ngoài; outline không bị overflow của chính nó cắt)
            ========================================================================== */
         .table-card.has-viewer {
             animation: viewerAuraPulse 1.8s ease-in-out infinite;
         }
         @keyframes viewerAuraPulse {
-            0%, 100% { outline: 2px solid var(--viewer-color, transparent); outline-offset: 0px; }
-            50%      { outline: 3px solid var(--viewer-color, transparent); outline-offset: 3px; }
+            0%, 100% { box-shadow: 0 3px 0 var(--border-card), 0 0 0px 0px var(--viewer-color, transparent); }
+            50%      { box-shadow: 0 3px 0 var(--border-card), 0 0 14px 3px var(--viewer-color, transparent); }
         }
 
         /* ==========================================================================
@@ -1147,7 +1145,7 @@ night_partlyCloudy: `
             return;
         }
         const now = Date.now();
-        if (now - lastFocusBroadcast > 250) {
+        if (now - lastFocusBroadcast > 120) {
             lastFocusBroadcast = now;
             set(myFocusRef, { table: currentTab, itemId, color: myColor, ts: now });
         }
@@ -1223,27 +1221,15 @@ night_partlyCloudy: `
         setTimeout(() => el.remove(), 650);
     }
 
-    // Broadcast tọa độ chạm của CHÍNH THIẾT BỊ NÀY lên Firebase
-    // - Throttle tăng lên 300ms: đủ chặn spam double-tap, vẫn responsive cho mỗi lần bấm thật
-    //   (ripple chỉ cần phản hồi tức thời lúc bấm, không cần theo dõi từng pixel di chuyển)
-    // - Gói việc ghi Firebase qua requestAnimationFrame: tách khỏi pointerdown handler để
-    //   không block input thread, và nếu nhiều pointerdown rơi vào cùng 1 frame thì chỉ
-    //   gửi đúng 1 lần (gom theo frame thay vì gửi riêng lẻ ngay lập tức)
+    // Broadcast tọa độ chạm của CHÍNH THIẾT BỊ NÀY lên Firebase (throttle ~150ms)
     let lastTapBroadcast = 0;
-    let pendingTap = null;
-    let tapFrameScheduled = false;
     document.addEventListener('pointerdown', (e) => {
-        pendingTap = { x: e.clientX / window.innerWidth, y: e.clientY / window.innerHeight };
-        if (tapFrameScheduled) return;
-        tapFrameScheduled = true;
-        requestAnimationFrame(() => {
-            tapFrameScheduled = false;
-            const now = Date.now();
-            if (!pendingTap || now - lastTapBroadcast < 300) return;
-            lastTapBroadcast = now;
-            set(myTapRef, { x: pendingTap.x, y: pendingTap.y, color: myColor, ts: now });
-            pendingTap = null;
-        });
+        const now = Date.now();
+        if (now - lastTapBroadcast < 150) return;
+        lastTapBroadcast = now;
+        const xPercent = e.clientX / window.innerWidth;
+        const yPercent = e.clientY / window.innerHeight;
+        set(myTapRef, { x: xPercent, y: yPercent, color: myColor, ts: now });
     });
 
     function renderMenu() {
