@@ -972,20 +972,15 @@ night_partlyCloudy: `
             onDisconnect(myPresenceRef).remove();
             onDisconnect(myCursorRef).remove();
             onDisconnect(myTapRef).remove();
-            set(myPresenceRef, { color: myColor, ts: Date.now() });
+            set(myPresenceRef, { color: myColor, ts: Date.now() })
+                .then(() => console.log('[presence] ghi presence thành công'))
+                .catch(e => console.error('[presence] LỖI GHI PRESENCE - kiểm tra Firebase Rules:', e.message));
             console.log('[presence] đã kết nối, id =', myPresenceId, 'color =', myColor);
         } else {
             console.log('[presence] mất kết nối tới Firebase (.info/connected = false)');
         }
     });
 
-    onValue(presenceListRef, (snap) => {
-        const count = snap.numChildren();
-        document.getElementById('online-val').innerText = count;
-        console.log('[presence] số người online:', count, Object.keys(snap.val() || {}));
-    }, (err) => {
-        console.error('[presence] LỖI ĐỌC presence - kiểm tra Firebase Rules (read):', err);
-    });
 
     // ==========================================================================
     // CURSOR ĐỒNG NGHIỆP: HIỂN THỊ CHẤM MÀU "ĐANG XEM BÀN NÀO" - BAY MƯỢT KHI ĐỔI BÀN
@@ -1108,6 +1103,9 @@ night_partlyCloudy: `
         if(val) {
             if(!firstLoad && JSON.stringify(val.orders) !== JSON.stringify(data.orders)) document.getElementById('tingSound').play().catch(()=>{});
             data = val; if(!data.orders) data.orders = {}; if(!data.times) data.times = {};
+            // ĐẾM NGƯỜI ONLINE TỪ DATA CHÍNH (tránh conflict với listener riêng)
+            const presenceCount = Object.keys(val.presence || {}).length;
+            document.getElementById('online-val').innerText = presenceCount || 1;
             refresh(); firstLoad = false;
         }
     });
