@@ -685,7 +685,7 @@
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-app.js";
-    import { getDatabase, ref, child, set, remove, onValue, push, onDisconnect } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-database.js";
+    import { getDatabase, ref, child, set, update, increment, remove, onValue, push, onDisconnect } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-database.js";
 
     import { menu } from "./menu.js";
     import { dict } from "./dict.js";
@@ -1054,8 +1054,19 @@ night_partlyCloudy: `
     onValue(cursorsRef, (snap) => { lastCursorSnap = snap.val(); renderRemoteCursors(lastCursorSnap); });
 
     // Cập nhật lại vị trí cursor khi xoay màn hình / cuộn (table-card có thể đổi vị trí trên viewport)
-    window.addEventListener('resize', () => renderRemoteCursors(lastCursorSnap));
-    window.addEventListener('scroll', () => renderRemoteCursors(lastCursorSnap), { passive: true });
+    // Gom (throttle) bằng requestAnimationFrame: scroll/resize có thể bắn hàng trăm lần/giây,
+    // nếu gọi renderRemoteCursors trực tiếp mỗi lần sẽ ép trình duyệt tính lại layout liên tục (jank).
+    let cursorRenderTicking = false;
+    function scheduleRenderRemoteCursors() {
+        if (cursorRenderTicking) return;
+        cursorRenderTicking = true;
+        requestAnimationFrame(() => {
+            renderRemoteCursors(lastCursorSnap);
+            cursorRenderTicking = false;
+        });
+    }
+    window.addEventListener('resize', scheduleRenderRemoteCursors);
+    window.addEventListener('scroll', scheduleRenderRemoteCursors, { passive: true });
 
     // Hàm để gọi mỗi khi NGƯỜI DÙNG NÀY chuyển/đóng bàn -> ghi lên Firebase
     function broadcastCursor(tableNum) {
@@ -1201,10 +1212,13 @@ night_partlyCloudy: `
         if(!currentTab || (data.locked && data.locked[currentTab])) return;
         triggerHaptic(delta > 0 ? 'add' : 'sub');
         broadcastFocus(id); // báo cho đồng nghiệp biết mình đang táy máy món này ở bàn hiện tại
-        let order = data.orders[currentTab] || {};
+        const order = data.orders[currentTab] || {};
+        const currentQty = order[id] || 0;
+        if(delta < 0 && currentQty <= 0) return; // món đã hết, không gửi lệnh trừ để tránh số âm
         if(Object.keys(order).length === 0 && delta > 0) set(child(dbRef, `times/${currentTab}`), Date.now());
-        let q = (order[id] || 0) + delta; if(q <= 0) delete order[id]; else order[id] = q;
-        set(child(dbRef, `orders/${currentTab}`), order);
+        // CẬP NHẬT NGUYÊN TỬ TRÊN SERVER (tránh xung đột khi 2 thiết bị cùng bấm 1 món cùng lúc):
+        // dùng update()+increment() trên đúng 1 món, thay vì set() đè cả object orders/{bàn}
+        update(child(dbRef, `orders/${currentTab}`), { [id]: increment(delta) });
         const row = document.getElementById(`row-${id}`), tabBtn = document.getElementById(`tab-${currentTab}`), qSpan = document.getElementById(`q-${id}`), cls = delta > 0 ? 'flash-add' : 'flash-sub';
         if(row) row.classList.add(cls); if(tabBtn) tabBtn.classList.add(cls);
         // MICRO-INTERACTION: SỐ LƯỢNG NHẢY NHẸ (SCALE BOUNCE)
@@ -1236,7 +1250,7 @@ night_partlyCloudy: `
             const scrollBtn = document.getElementById('scroll-to-checkout');
             if(scrollBtn) scrollBtn.classList.toggle('hidden', isLock);
             all.forEach(i => {
-                const q = (data.orders[currentTab] && data.orders[currentTab][i.id]) || 0;
+                const q = Math.max(0, (data.orders[currentTab] && data.orders[currentTab][i.id]) || 0);
                 const row = document.getElementById(`row-${i.id}`), qSpan = document.getElementById(`q-${i.id}`);
                 if (row && qSpan && qSpan.innerText !== String(q)) {
                     qSpan.innerText = q; row.className = 'menu-item';
@@ -1252,7 +1266,7 @@ night_partlyCloudy: `
                 let idx = 0;
                 for(let id in my) {
                     let itm = all.find(x => x.id == id);
-                    if(itm) {
+                    if(itm && my[id] > 0) {
                         let p = itm.price * my[id]; t += p;
                         let nameShow = (currentBillLang !== 'vi' && langData.items && langData.items[itm.name]) ? langData.items[itm.name] : itm.name;
                         h += `<div class="bill-row" style="animation-delay: ${idx * 0.08}s">
@@ -1276,7 +1290,7 @@ night_partlyCloudy: `
             let s = 0, o = data.orders[i] || {}; 
             for(let id in o) { 
                 let itm = all.find(x => x.id == id); 
-                if(itm) s += itm.price * o[id]; 
+                if(itm && o[id] > 0) s += itm.price * o[id]; 
             }
             const sTabLocked = (data.locked && data.locked[i]) || false; 
             if(s > 0 || sTabLocked) {
