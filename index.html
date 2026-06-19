@@ -724,7 +724,6 @@
 <div id="reset-area"><button onclick="doReset()">Xóa dữ liệu ngày mới</button></div>
 <audio id="tingSound" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" preload="auto"></audio>
 
-<!-- NÚT NỔI MŨI TÊN XUỐNG: đặt trực tiếp trong body để position:fixed hoạt động đúng (không bị ảnh hưởng bởi transform của #order-section) -->
 <button id="scroll-to-checkout" class="hidden" onclick="scrollToCheckout()" aria-label="Cuộn xuống nút chốt đơn">⌄</button>
 
 <script type="module">
@@ -895,15 +894,10 @@ night_partlyCloudy: `
     setInterval(simulateWeatherFluctuation, 5000);
 
     // ==========================================================================
-    // CHỈ BÁO GIÁ VÀNG & DẦU THẾ GIỚI - 2 BÊN ĐỒNG HỒ
-    // VÀNG: gọi thẳng gold-api.com (miễn phí, không cần key, CORS mở, không giới hạn request)
-    // DẦU: KHÔNG có nguồn miễn phí + không cần key nào đáng tin cậy chính thức,
-    //      nên tạm dùng endpoint nội bộ (không chính thức) của Yahoo Finance qua proxy CORS công khai,
-    //      có 2 lớp dự phòng. Nguồn này có thể ngừng hoạt động bất kỳ lúc nào nếu Yahoo đổi cơ chế
-    //      hoặc các proxy công khai sập - khi đó ô sẽ tự giữ nguyên "--", không ảnh hưởng layout.
-    // Mọi lỗi đều được bắt (try/catch) để không bao giờ làm vỡ giao diện hay đứng app.
+    // CHỈ BÁO GIÁ VÀNG & DẦU THẾ GIỚI - JITTER EFFECT (NHẢY SỐ MƯỢT NHƯ THẬT)
     // ==========================================================================
-    let prevGoldPrice = null, prevOilPrice = null;
+    let realGoldPrice = null, realOilPrice = null;
+    let displayedGoldPrice = null, displayedOilPrice = null;
 
     function renderTicker(elementId, value, prevValue, digits) {
         const widget = document.getElementById(elementId);
@@ -923,8 +917,8 @@ night_partlyCloudy: `
             const d = await res.json();
             const price = Number(d.price);
             if (!isFinite(price)) return;
-            renderTicker('gold-ticker', price, prevGoldPrice, 0);
-            prevGoldPrice = price;
+            realGoldPrice = price;
+            if (displayedGoldPrice === null) displayedGoldPrice = price;
         } catch (err) {
             console.error('[ticker] Lỗi lấy giá vàng:', err.message);
         }
@@ -940,17 +934,37 @@ night_partlyCloudy: `
                 const d = await res.json();
                 const price = Number(d?.chart?.result?.[0]?.meta?.regularMarketPrice);
                 if (!isFinite(price)) continue;
-                renderTicker('oil-ticker', price, prevOilPrice, 1);
-                prevOilPrice = price;
-                return; // lấy được giá rồi thì dừng, không cần thử proxy tiếp theo
+                realOilPrice = price;
+                if (displayedOilPrice === null) displayedOilPrice = price;
+                return; 
             } catch (err) { /* thử proxy kế tiếp */ }
         }
         console.error('[ticker] Không lấy được giá dầu từ mọi nguồn dự phòng');
     }
 
     fetchGoldPrice(); fetchOilPrice();
-    setInterval(fetchGoldPrice, 180000); // 3 phút/lần
+    setInterval(fetchGoldPrice, 180000); // Lấy giá trị gốc 3 phút/lần
     setInterval(fetchOilPrice, 180000);
+
+    // Kích hoạt bộ Jitter (Nhảy số) mỗi 800ms
+    setInterval(() => {
+        if (realGoldPrice !== null) {
+            // Dao động Vàng: ±1.5$, tạo biến động để các con số phía sau chạy liên tục
+            const noise = (Math.random() - 0.5) * 3;
+            const newVal = realGoldPrice + noise;
+            // Dùng 1 chữ số thập phân cho vàng để thấy rõ độ "nhảy"
+            renderTicker('gold-ticker', newVal, displayedGoldPrice, 1);
+            displayedGoldPrice = newVal;
+        }
+        if (realOilPrice !== null) {
+            // Dao động Dầu: ±0.15$
+            const noise = (Math.random() - 0.5) * 0.3;
+            const newVal = realOilPrice + noise;
+            // Dùng 2 chữ số thập phân cho dầu
+            renderTicker('oil-ticker', newVal, displayedOilPrice, 2); 
+            displayedOilPrice = newVal;
+        }
+    }, 800);
 
     function updateCardValue(cardId, targetVal) {
         const card = document.getElementById(cardId);
