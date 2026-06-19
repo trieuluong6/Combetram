@@ -556,6 +556,40 @@
             0%, 100% { transform: translateY(0); }
             50% { transform: translateY(6px); }
         }
+
+        /* ==========================================================================
+           CHỈ BÁO GIÁ VÀNG & DẦU THẾ GIỚI - HAI BÊN ĐỒNG HỒ ĐẾM GIỜ
+           ========================================================================== */
+        .ticker-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.72rem;
+            font-weight: bold;
+            background: rgba(0, 0, 0, 0.04);
+            padding: 4px 6px;
+            border-radius: 8px;
+            min-width: 58px;
+            min-height: 38px;
+            box-sizing: border-box;
+            border: 1px solid var(--border-soft);
+            flex-shrink: 0;
+            transition: background 0.4s ease, border-color 0.4s ease;
+        }
+        body.dark-mode .ticker-item { background: rgba(255, 255, 255, 0.05); }
+        .ticker-label { font-size: 0.56rem; color: var(--text-muted); margin-bottom: 1px; letter-spacing: 0.3px; white-space: nowrap; }
+        .ticker-value { font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1; white-space: nowrap; color: var(--text-main); transition: color 0.3s ease; }
+        .ticker-item.up .ticker-value { color: var(--success-green); }
+        .ticker-item.down .ticker-value { color: var(--primary-red); }
+
+        /* AN TOÀN LAYOUT: cho phép xuống dòng nếu màn hình quá hẹp để không bao giờ tràn ngang trang */
+        .flip-clock-container { flex-wrap: wrap; row-gap: 6px; }
+
+        @media (max-width: 480px) {
+            .ticker-item { font-size: 0.6rem; padding: 2px 4px; min-width: 46px; min-height: 32px; border-radius: 6px; }
+            .ticker-label { font-size: 0.48rem; }
+        }
     </style>
 </head>
 <body>
@@ -593,6 +627,11 @@
 <div class="header-title">CƠM BÉ TRÂM</div>
 
 <div class="flip-clock-container">
+    <div class="ticker-item" id="gold-ticker">
+        <span class="ticker-label">VÀNG</span>
+        <span class="ticker-value">--</span>
+    </div>
+
     <div class="flip-unit">
         <div class="flip-card" id="c-h1"><div class="card-half card-top">0</div><div class="card-half card-bottom">0</div><div class="card-flip-wing">0</div><div class="card-flip-wing-back">0</div></div>
         <div class="flip-card" id="c-h2"><div class="card-half card-top">0</div><div class="card-half card-bottom">0</div><div class="card-flip-wing">0</div><div class="card-flip-wing-back">0</div></div>
@@ -606,6 +645,11 @@
     <div class="flip-unit">
         <div class="flip-card" id="c-s1"><div class="card-half card-top">0</div><div class="card-half card-bottom">0</div><div class="card-flip-wing">0</div><div class="card-flip-wing-back">0</div></div>
         <div class="flip-card" id="c-s2"><div class="card-half card-top">0</div><div class="card-half card-bottom">0</div><div class="card-flip-wing">0</div><div class="card-flip-wing-back">0</div></div>
+    </div>
+
+    <div class="ticker-item" id="oil-ticker">
+        <span class="ticker-label">DẦU</span>
+        <span class="ticker-value">--</span>
     </div>
 </div>
 
@@ -849,6 +893,64 @@ night_partlyCloudy: `
     fetchRealtimeWeather();
     setInterval(fetchRealtimeWeather, 600000);
     setInterval(simulateWeatherFluctuation, 5000);
+
+    // ==========================================================================
+    // CHỈ BÁO GIÁ VÀNG & DẦU THẾ GIỚI - 2 BÊN ĐỒNG HỒ
+    // VÀNG: gọi thẳng gold-api.com (miễn phí, không cần key, CORS mở, không giới hạn request)
+    // DẦU: KHÔNG có nguồn miễn phí + không cần key nào đáng tin cậy chính thức,
+    //      nên tạm dùng endpoint nội bộ (không chính thức) của Yahoo Finance qua proxy CORS công khai,
+    //      có 2 lớp dự phòng. Nguồn này có thể ngừng hoạt động bất kỳ lúc nào nếu Yahoo đổi cơ chế
+    //      hoặc các proxy công khai sập - khi đó ô sẽ tự giữ nguyên "--", không ảnh hưởng layout.
+    // Mọi lỗi đều được bắt (try/catch) để không bao giờ làm vỡ giao diện hay đứng app.
+    // ==========================================================================
+    let prevGoldPrice = null, prevOilPrice = null;
+
+    function renderTicker(elementId, value, prevValue, digits) {
+        const widget = document.getElementById(elementId);
+        if (!widget) return;
+        const valueSpan = widget.querySelector('.ticker-value');
+        if (!valueSpan || typeof value !== 'number' || !isFinite(value)) return;
+        const isUp = prevValue === null || value >= prevValue;
+        valueSpan.textContent = `${isUp ? '▲' : '▼'}${value.toFixed(digits)}`;
+        widget.classList.toggle('up', isUp);
+        widget.classList.toggle('down', !isUp);
+    }
+
+    async function fetchGoldPrice() {
+        try {
+            const res = await fetch('https://api.gold-api.com/price/XAU');
+            if (!res.ok) return;
+            const d = await res.json();
+            const price = Number(d.price);
+            if (!isFinite(price)) return;
+            renderTicker('gold-ticker', price, prevGoldPrice, 0);
+            prevGoldPrice = price;
+        } catch (err) {
+            console.error('[ticker] Lỗi lấy giá vàng:', err.message);
+        }
+    }
+
+    async function fetchOilPrice() {
+        const proxies = ['https://api.allorigins.win/raw?url=', 'https://corsproxy.io/?url='];
+        const targetUrl = 'https://query1.finance.yahoo.com/v8/finance/chart/CL=F';
+        for (const proxy of proxies) {
+            try {
+                const res = await fetch(proxy + encodeURIComponent(targetUrl));
+                if (!res.ok) continue;
+                const d = await res.json();
+                const price = Number(d?.chart?.result?.[0]?.meta?.regularMarketPrice);
+                if (!isFinite(price)) continue;
+                renderTicker('oil-ticker', price, prevOilPrice, 1);
+                prevOilPrice = price;
+                return; // lấy được giá rồi thì dừng, không cần thử proxy tiếp theo
+            } catch (err) { /* thử proxy kế tiếp */ }
+        }
+        console.error('[ticker] Không lấy được giá dầu từ mọi nguồn dự phòng');
+    }
+
+    fetchGoldPrice(); fetchOilPrice();
+    setInterval(fetchGoldPrice, 180000); // 3 phút/lần
+    setInterval(fetchOilPrice, 180000);
 
     function updateCardValue(cardId, targetVal) {
         const card = document.getElementById(cardId);
