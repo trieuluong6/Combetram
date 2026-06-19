@@ -905,7 +905,10 @@ night_partlyCloudy: `
         const valueSpan = widget.querySelector('.ticker-value');
         if (!valueSpan || typeof value !== 'number' || !isFinite(value)) return;
         const isUp = prevValue === null || value >= prevValue;
-        valueSpan.textContent = `${isUp ? '▲' : '▼'}${value.toFixed(digits)}`;
+        
+        // Đã thêm dấu $ vào ngay trước giá trị số ở dòng bên dưới:
+        valueSpan.textContent = `${isUp ? '▲' : '▼'}$${value.toFixed(digits)}`;
+        
         widget.classList.toggle('up', isUp);
         widget.classList.toggle('down', !isUp);
     }
