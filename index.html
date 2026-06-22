@@ -724,6 +724,9 @@
     </div>
 </div>
 
+<!-- DEBUG PANEL - xóa sau khi fix xong -->
+<div id="wc-debug" style="margin:6px 8px;padding:6px 8px;background:rgba(0,0,0,0.08);border-radius:8px;font-size:0.6em;font-family:monospace;color:#333;word-break:break-all;display:none;max-height:80px;overflow-y:auto;"></div>
+
 <div class="header-title">CƠM BÉ TRÂM</div>
 
 <div class="flip-clock-container">
@@ -1706,6 +1709,9 @@ night_partlyCloudy: `
 
     renderWCAll(WC_DEFAULT);
 
+    // DEBUG: test live mode ngay khi load (xóa sau khi xác nhận UI ổn)
+    // renderWCAll([{h:'ARG',a:'FRA',hs:2,as:1,live:true},{h:'BRA',a:'GER',hs:0,as:0,live:false},{h:'NED',a:'SWE',hs:5,as:1,live:false},{h:'JPN',a:'TUN',hs:4,as:0,live:false}]);
+
     async function fetchWCScores() {
         try {
             const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -1717,8 +1723,16 @@ night_partlyCloudy: `
             const d = await res.json();
             const txt = (d.content||[]).map(x=>x.text||'').join('').replace(/```json|```/g,'').trim();
             const games = JSON.parse(txt);
+            const dbg = document.getElementById('wc-debug');
+            if(dbg) { dbg.style.display='block'; dbg.innerText = 'RAW: ' + txt.slice(0,300); }
+            console.log('[WC] API response:', txt);
+            console.log('[WC] Parsed games:', games);
             if(Array.isArray(games) && games.length >= 2) renderWCAll(games);
-        } catch(e) {}
+        } catch(e) {
+            console.error('[WC] Error:', e);
+            const dbg = document.getElementById('wc-debug');
+            if(dbg) { dbg.style.display='block'; dbg.innerText = 'ERR: ' + e.message; }
+        }
     }
     fetchWCScores();
     setInterval(fetchWCScores, 60 * 1000);
