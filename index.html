@@ -724,8 +724,6 @@
     </div>
 </div>
 
-<!-- DEBUG PANEL - xóa sau khi fix xong -->
-<div id="wc-debug" style="margin:6px 8px;padding:6px 8px;background:rgba(0,0,0,0.08);border-radius:8px;font-size:0.6em;font-family:monospace;color:#333;word-break:break-all;display:none;max-height:80px;overflow-y:auto;"></div>
 
 <div class="header-title">CƠM BÉ TRÂM</div>
 
@@ -1640,16 +1638,14 @@ night_partlyCloudy: `
         ECU:'🇪🇨',CUW:'🇨🇼',TUN:'🇹🇳',JPN:'🇯🇵',ESP:'🇪🇸',KSA:'🇸🇦',BEL:'🇧🇪',IRN:'🇮🇷',
         URU:'🇺🇾',CPV:'🇨🇻',NZL:'🇳🇿',EGY:'🇪🇬',ARG:'🇦🇷',AUT:'🇦🇹',FRA:'🇫🇷',IRQ:'🇮🇶',
         NOR:'🇳🇴',SEN:'🇸🇳',JOR:'🇯🇴',DZA:'🇩🇿',POR:'🇵🇹',UZB:'🇺🇿',ENG:'🏴󠁧󠁢󠁥󠁮󠁧󠁿',GHA:'🇬🇭',
-        PAN:'🇵🇦',CRO:'🇭🇷',COL:'🇨🇴',COD:'🇨🇩',SUI:'🇨🇭',CAN:'🇨🇦',BIH:'🇧🇦',QAT:'🇶🇦'
+        PAN:'🇵🇦',CRO:'🇭🇷',COL:'🇨🇴',COD:'🇨🇩',SUI:'🇨🇭',CAN:'🇨🇦',BIH:'🇧🇦',QAT:'🇶🇦',
+        MEX:'🇲🇽',USA:'🇺🇸',MAR:'🇲🇦',AUS:'🇦🇺',KOR:'🇰🇷',CMR:'🇨🇲',SRB:'🇷🇸',MOR:'🇲🇦'
     };
     const WC_DEFAULT = [
         {h:'BRA',a:'HTI',hs:3,as:0,live:false},{h:'NED',a:'SWE',hs:5,as:1,live:false},
         {h:'GER',a:'CIV',hs:2,as:1,live:false},{h:'JPN',a:'TUN',hs:4,as:0,live:false}
     ];
 
-    // Render 1 box (left hoặc right) với game1, game2
-    // Nếu game1.live == true => mode live: 1 trận to, nhấp nháy
-    // Nếu không => mode thường: 2 hàng kết quả
     function renderWCBox(side, game1, game2) {
         const box = document.getElementById('wc-' + side);
         const labelEl = document.getElementById('wc-' + side + '-label');
@@ -1658,7 +1654,6 @@ night_partlyCloudy: `
         const f1 = FLAG_MAP[game1.h] || game1.h;
         const f2 = FLAG_MAP[game1.a] || game1.a;
         if (game1.live) {
-            // MODE LIVE
             box.classList.add('is-live');
             labelEl.className = 'wc-live-label';
             labelEl.innerHTML = '<span class="wc-live-dot"></span> LIVE';
@@ -1669,7 +1664,6 @@ night_partlyCloudy: `
                   '<span class="wc-live-flag">' + f2 + '</span>' +
                 '</div>';
         } else {
-            // MODE THƯỜNG
             box.classList.remove('is-live');
             labelEl.className = 'wc-label';
             labelEl.innerHTML = '⚽ WC 2026';
@@ -1688,20 +1682,15 @@ night_partlyCloudy: `
     }
 
     function renderWCAll(games) {
-        // games: mảng có thể gồm cả live và finished
-        // Ưu tiên: live lên trước, rồi mới finished
         const live = games.filter(g => g.live);
         const done = games.filter(g => !g.live);
         if (live.length >= 2) {
-            // 2 trận live: mỗi bên 1 trận live
-            renderWCBox('left',  live[0], null);
+            renderWCBox('left', live[0], null);
             renderWCBox('right', live[1], null);
         } else if (live.length === 1) {
-            // 1 trận live: bên trái live, bên phải 2 kết quả
-            renderWCBox('left',  live[0], null);
-            renderWCBox('right', done[0] || live[0], done[1] || null);
+            renderWCBox('left', live[0], null);
+            renderWCBox('right', done[0] || games[0], done[1] || null);
         } else {
-            // Không có live: 2 bên hiện kết quả bình thường
             renderWCBox('left',  done[0] || games[0], done[1] || games[1]);
             renderWCBox('right', done[2] || games[2], done[3] || games[3]);
         }
@@ -1709,30 +1698,31 @@ night_partlyCloudy: `
 
     renderWCAll(WC_DEFAULT);
 
-    // DEBUG: test live mode ngay khi load (xóa sau khi xác nhận UI ổn)
-    // renderWCAll([{h:'ARG',a:'FRA',hs:2,as:1,live:true},{h:'BRA',a:'GER',hs:0,as:0,live:false},{h:'NED',a:'SWE',hs:5,as:1,live:false},{h:'JPN',a:'TUN',hs:4,as:0,live:false}]);
+    const LIVE_STATUSES = ['1H','HT','2H','ET','PT','LIVE','IN_PLAY'];
 
     async function fetchWCScores() {
         try {
-            const res = await fetch('https://api.anthropic.com/v1/messages', {
-                method:'POST', headers:{'Content-Type':'application/json'},
-                body: JSON.stringify({ model:'claude-sonnet-4-6', max_tokens:400,
-                    messages:[{role:'user',content:'Return ONLY a JSON array of FIFA World Cup 2026 matches: up to 2 currently LIVE matches (if any) plus the 4 most recent completed matches. Format: [{"h":"ABR","a":"ABR","hs":0,"as":0,"live":true/false}]. Use 3-letter country abbreviations. No text, no markdown, just the JSON array.'}]
-                })
-            });
-            const d = await res.json();
-            const txt = (d.content||[]).map(x=>x.text||'').join('').replace(/```json|```/g,'').trim();
-            const games = JSON.parse(txt);
-            const dbg = document.getElementById('wc-debug');
-            if(dbg) { dbg.style.display='block'; dbg.innerText = 'RAW: ' + txt.slice(0,300); }
-            console.log('[WC] API response:', txt);
-            console.log('[WC] Parsed games:', games);
-            if(Array.isArray(games) && games.length >= 2) renderWCAll(games);
-        } catch(e) {
-            console.error('[WC] Error:', e);
-            const dbg = document.getElementById('wc-debug');
-            if(dbg) { dbg.style.display='block'; dbg.innerText = 'ERR: ' + e.message; }
-        }
+            const res = await fetch('https://worldcup26.ir/get/games', { cache: 'no-store' });
+            if (!res.ok) return;
+            const data = await res.json();
+            const games = [];
+            for (const g of (Array.isArray(data) ? data : [])) {
+                const h = (g.homeTeam||{}).fifaCode || (g.homeTeam||{}).code || (g.homeTeam||{}).abbreviation || '';
+                const a = (g.awayTeam||{}).fifaCode || (g.awayTeam||{}).code || (g.awayTeam||{}).abbreviation || '';
+                const hs = parseInt(g.homeGoals) || 0;
+                const as_ = parseInt(g.awayGoals) || 0;
+                const status = (g.status || g.time || '').toString().toUpperCase().replace(/\s/g,'');
+                const isLive = LIVE_STATUSES.some(s => status.includes(s));
+                const isFinished = ['FT','AET','PEN','FINISHED','COMPLETED','FULLTIME'].some(s => status.includes(s));
+                if ((isLive || isFinished) && h && a) {
+                    games.push({ h, a, hs, as: as_, live: isLive });
+                }
+            }
+            const live = games.filter(g => g.live);
+            const done = games.filter(g => !g.live).reverse();
+            const merged = [...live, ...done].slice(0, 6);
+            if (merged.length >= 2) renderWCAll(merged);
+        } catch(e) { /* giữ default nếu lỗi */ }
     }
     fetchWCScores();
     setInterval(fetchWCScores, 60 * 1000);
