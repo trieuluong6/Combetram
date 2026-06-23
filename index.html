@@ -142,12 +142,9 @@
            ========================================================================== */
         .status-container {
             display: flex;
-            justify-content: space-between;
-            align-items: center;
+            justify-content: center;
             margin-bottom: 5px;
             margin-top: 10px;
-            padding: 0 4px;
-            gap: 6px;
         }
         .status-badge {
             background: var(--bg-card);
@@ -232,70 +229,6 @@
         /* TIÊU ĐỀ TÊN QUÁN */
         .header-title { text-align: center; color: var(--primary-red); text-transform: uppercase; font-size: 1.4em; font-weight: 900; margin: 10px 0 15px 0; letter-spacing: 0.5px; }
 
-        /* TỶ SỐ WORLD CUP 2 BÊN */
-        .wc-score-box {
-            background: var(--glass-bg);
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-            border: 1px solid var(--glass-border);
-            border-radius: 12px;
-            padding: 3px 7px;
-            font-size: 0.68em;
-            font-weight: 700;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 2px;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.06);
-            min-width: 72px;
-            max-width: 90px;
-            transition: background 0.4s ease, border-color 0.4s ease;
-        }
-        /* MODE THƯỜNG: 2 hàng kết quả */
-        .wc-score-row {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 3px;
-            white-space: nowrap;
-            width: 100%;
-        }
-        .wc-score-teams { display: flex; align-items: center; gap: 2px; font-size: 0.95em; }
-        .wc-score-result { font-variant-numeric: tabular-nums; color: var(--primary-red); font-size: 1em; letter-spacing: 0.5px; }
-        .wc-label { font-size: 0.55em; color: var(--text-muted); text-align: center; letter-spacing: 0.5px; margin-bottom: 1px; }
-
-        /* MODE LIVE: 1 hàng cờ-số-cờ to hơn, nhấp nháy */
-        .wc-live-row {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 3px;
-            white-space: nowrap;
-            width: 100%;
-        }
-        .wc-live-flag { font-size: 1.4em; line-height: 1; }
-        .wc-live-score {
-            font-variant-numeric: tabular-nums;
-            font-size: 1.05em;
-            font-weight: 900;
-            color: var(--primary-red);
-            letter-spacing: 1px;
-            animation: wcLivePulse 1.4s ease-in-out infinite;
-        }
-        .wc-live-dot {
-            width: 6px; height: 6px; border-radius: 50%;
-            background: #e53935;
-            animation: wcLivePulse 1.4s ease-in-out infinite;
-            flex-shrink: 0;
-        }
-        .wc-score-box.is-live {
-            border-color: rgba(229,57,53,0.5);
-            background: rgba(229,57,53,0.07);
-        }
-        body.dark-mode .wc-score-box.is-live { background: rgba(229,57,53,0.12); }
-        .wc-live-label { font-size: 0.55em; color: #e53935; text-align: center; letter-spacing: 0.5px; margin-bottom: 1px; font-weight: 800; }
-        @keyframes wcLivePulse {
-            0%, 100% { opacity: 1; }
             50% { opacity: 0.35; }
         }
 
@@ -688,42 +621,11 @@
 </div>
 
 <div class="status-container">
-    <!-- TỶ SỐ WC TRÁI -->
-    <div class="wc-score-box" id="wc-left">
-        <div class="wc-label" id="wc-left-label">⚽ WC 2026</div>
-        <div id="wc-left-content">
-            <div class="wc-score-row">
-                <span class="wc-score-teams"><span id="wc1-flag1">🇧🇷</span><span id="wc1-flag2">🇭🇹</span></span>
-                <span class="wc-score-result" id="wc1-score">3-0</span>
-            </div>
-            <div class="wc-score-row">
-                <span class="wc-score-teams"><span id="wc2-flag1">🇳🇱</span><span id="wc2-flag2">🇸🇪</span></span>
-                <span class="wc-score-result" id="wc2-score">5-1</span>
-            </div>
-        </div>
-    </div>
-
     <div id="crowd-status" class="status-badge status-empty">
         <span id="crowd-icon">🟢</span>
         <span id="crowd-text">Vắng khách</span>
     </div>
-
-    <!-- TỶ SỐ WC PHẢI -->
-    <div class="wc-score-box" id="wc-right">
-        <div class="wc-label" id="wc-right-label">⚽ WC 2026</div>
-        <div id="wc-right-content">
-            <div class="wc-score-row">
-                <span class="wc-score-teams"><span id="wc3-flag1">🇩🇪</span><span id="wc3-flag2">🇨🇮</span></span>
-                <span class="wc-score-result" id="wc3-score">2-1</span>
-            </div>
-            <div class="wc-score-row">
-                <span class="wc-score-teams"><span id="wc4-flag1">🇯🇵</span><span id="wc4-flag2">🇹🇳</span></span>
-                <span class="wc-score-result" id="wc4-score">4-0</span>
-            </div>
-        </div>
-    </div>
 </div>
-
 
 <div class="header-title">CƠM BÉ TRÂM</div>
 
@@ -1631,101 +1533,6 @@ night_partlyCloudy: `
 
     window.selectTable = selectTable; window.setLock = setLock; window.doPay = doPay; window.doReset = doReset; window.changeBillLang = changeBillLang; window.toggleDarkMode = toggleDarkMode; window.scrollToCheckout = scrollToCheckout;
     setInterval(refresh, 30000);
-
-    // TY SO WORLD CUP 2026
-    const FLAG_MAP = {
-        BRA:'🇧🇷',HTI:'🇭🇹',TUR:'🇹🇷',PAR:'🇵🇾',NED:'🇳🇱',SWE:'🇸🇪',GER:'🇩🇪',CIV:'🇨🇮',
-        ECU:'🇪🇨',CUW:'🇨🇼',TUN:'🇹🇳',JPN:'🇯🇵',ESP:'🇪🇸',KSA:'🇸🇦',BEL:'🇧🇪',IRN:'🇮🇷',
-        URU:'🇺🇾',CPV:'🇨🇻',NZL:'🇳🇿',EGY:'🇪🇬',ARG:'🇦🇷',AUT:'🇦🇹',FRA:'🇫🇷',IRQ:'🇮🇶',
-        NOR:'🇳🇴',SEN:'🇸🇳',JOR:'🇯🇴',DZA:'🇩🇿',POR:'🇵🇹',UZB:'🇺🇿',ENG:'🏴󠁧󠁢󠁥󠁮󠁧󠁿',GHA:'🇬🇭',
-        PAN:'🇵🇦',CRO:'🇭🇷',COL:'🇨🇴',COD:'🇨🇩',SUI:'🇨🇭',CAN:'🇨🇦',BIH:'🇧🇦',QAT:'🇶🇦',
-        MEX:'🇲🇽',USA:'🇺🇸',MAR:'🇲🇦',AUS:'🇦🇺',KOR:'🇰🇷',CMR:'🇨🇲',SRB:'🇷🇸',MOR:'🇲🇦'
-    };
-    const WC_DEFAULT = [
-        {h:'BRA',a:'HTI',hs:3,as:0,live:false},{h:'NED',a:'SWE',hs:5,as:1,live:false},
-        {h:'GER',a:'CIV',hs:2,as:1,live:false},{h:'JPN',a:'TUN',hs:4,as:0,live:false}
-    ];
-
-    function renderWCBox(side, game1, game2) {
-        const box = document.getElementById('wc-' + side);
-        const labelEl = document.getElementById('wc-' + side + '-label');
-        const contentEl = document.getElementById('wc-' + side + '-content');
-        if (!box || !labelEl || !contentEl) return;
-        const f1 = FLAG_MAP[game1.h] || game1.h;
-        const f2 = FLAG_MAP[game1.a] || game1.a;
-        if (game1.live) {
-            box.classList.add('is-live');
-            labelEl.className = 'wc-live-label';
-            labelEl.innerHTML = '<span class="wc-live-dot"></span> LIVE';
-            contentEl.innerHTML =
-                '<div class="wc-live-row">' +
-                  '<span class="wc-live-flag">' + f1 + '</span>' +
-                  '<span class="wc-live-score">' + game1.hs + ' - ' + game1.as + '</span>' +
-                  '<span class="wc-live-flag">' + f2 + '</span>' +
-                '</div>';
-        } else {
-            box.classList.remove('is-live');
-            labelEl.className = 'wc-label';
-            labelEl.innerHTML = '⚽ WC 2026';
-            const f3 = game2 ? (FLAG_MAP[game2.h] || game2.h) : '';
-            const f4 = game2 ? (FLAG_MAP[game2.a] || game2.a) : '';
-            contentEl.innerHTML =
-                '<div class="wc-score-row">' +
-                  '<span class="wc-score-teams">' + f1 + f2 + '</span>' +
-                  '<span class="wc-score-result">' + game1.hs + '-' + game1.as + '</span>' +
-                '</div>' +
-                (game2 ? '<div class="wc-score-row">' +
-                  '<span class="wc-score-teams">' + f3 + f4 + '</span>' +
-                  '<span class="wc-score-result">' + game2.hs + '-' + game2.as + '</span>' +
-                '</div>' : '');
-        }
-    }
-
-    function renderWCAll(games) {
-        const live = games.filter(g => g.live);
-        const done = games.filter(g => !g.live);
-        if (live.length >= 2) {
-            renderWCBox('left', live[0], null);
-            renderWCBox('right', live[1], null);
-        } else if (live.length === 1) {
-            renderWCBox('left', live[0], null);
-            renderWCBox('right', done[0] || games[0], done[1] || null);
-        } else {
-            renderWCBox('left',  done[0] || games[0], done[1] || games[1]);
-            renderWCBox('right', done[2] || games[2], done[3] || games[3]);
-        }
-    }
-
-    renderWCAll(WC_DEFAULT);
-
-    const LIVE_STATUSES = ['1H','HT','2H','ET','PT','LIVE','IN_PLAY'];
-
-    async function fetchWCScores() {
-        try {
-            const res = await fetch('https://worldcup26.ir/get/games', { cache: 'no-store' });
-            if (!res.ok) return;
-            const data = await res.json();
-            const games = [];
-            for (const g of (Array.isArray(data) ? data : [])) {
-                const h = (g.homeTeam||{}).fifaCode || (g.homeTeam||{}).code || (g.homeTeam||{}).abbreviation || '';
-                const a = (g.awayTeam||{}).fifaCode || (g.awayTeam||{}).code || (g.awayTeam||{}).abbreviation || '';
-                const hs = parseInt(g.homeGoals) || 0;
-                const as_ = parseInt(g.awayGoals) || 0;
-                const status = (g.status || g.time || '').toString().toUpperCase().replace(/\s/g,'');
-                const isLive = LIVE_STATUSES.some(s => status.includes(s));
-                const isFinished = ['FT','AET','PEN','FINISHED','COMPLETED','FULLTIME'].some(s => status.includes(s));
-                if ((isLive || isFinished) && h && a) {
-                    games.push({ h, a, hs, as: as_, live: isLive });
-                }
-            }
-            const live = games.filter(g => g.live);
-            const done = games.filter(g => !g.live).reverse();
-            const merged = [...live, ...done].slice(0, 6);
-            if (merged.length >= 2) renderWCAll(merged);
-        } catch(e) { /* giữ default nếu lỗi */ }
-    }
-    fetchWCScores();
-    setInterval(fetchWCScores, 60 * 1000);
 </script>
 </body>
 </html>
