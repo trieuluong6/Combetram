@@ -2,7 +2,6 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.14.0/fireba
 import { getDatabase, ref, child, set, update, increment, remove, onValue, push, onDisconnect } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-database.js";
 
 import { menu } from "./menu.js";
-import { dict } from "./dict.js";
 
 const firebaseConfig = {
     apiKey: "AIzaSyDVgtCsFzrPOqRWBqoncZrsZsRdCn7wTWo",
@@ -23,6 +22,25 @@ let currentTab = null;
 let data = { orders: {}, locked: {}, times: {} };
 let firstLoad = true;
 let billWasShown = false;
+
+// ─── FIX #2: Menu lookup Map O(1) thay vì find() O(n) trong mỗi vòng lặp ───
+const ALL_ITEMS = menu.flatMap(g => g.items);
+const ITEM_MAP = new Map(ALL_ITEMS.map(i => [i.id, i]));
+
+// ─── FIX #9: Lazy-load dict theo ngôn ngữ ───
+let dictCache = { vi: { flag: "🇻🇳", total: "TỔNG", items: {} } };
+let dictLoadPromise = null;
+
+async function getLangData(lang) {
+    if (dictCache[lang]) return dictCache[lang];
+    if (!dictLoadPromise) {
+        dictLoadPromise = import('./dict.js').then(m => {
+            dictCache = m.dict;
+        }).catch(() => {});
+    }
+    await dictLoadPromise;
+    return dictCache[lang] || dictCache['vi'];
+}
 
 // CACHE THỜI TIẾT
 let weatherCache = { status: 'cloudy', temp: 31, windSpeed: 14.0, windDir: 135 };
@@ -150,20 +168,34 @@ async function fetchOilPrice() {
 fetchGoldPrice(); fetchOilPrice();
 setInterval(fetchGoldPrice, 180000);
 setInterval(fetchOilPrice, 180000);
-setInterval(() => {
-    if (realGoldPrice !== null) {
-        const noise = (Math.random() - 0.5) * 3;
-        const newVal = realGoldPrice + noise;
-        renderTicker('gold-ticker', newVal, displayedGoldPrice, 1);
-        displayedGoldPrice = newVal;
-    }
-    if (realOilPrice !== null) {
-        const noise = (Math.random() - 0.5) * 0.3;
-        const newVal = realOilPrice + noise;
-        renderTicker('oil-ticker', newVal, displayedOilPrice, 2);
-        displayedOilPrice = newVal;
-    }
-}, 800);
+
+// ─── FIX #4: Ticker noise — dừng khi tab bị ẩn ───
+let tickerIntervalId = null;
+function startTickerInterval() {
+    if (tickerIntervalId) return;
+    tickerIntervalId = setInterval(() => {
+        if (realGoldPrice !== null) {
+            const noise = (Math.random() - 0.5) * 3;
+            const newVal = realGoldPrice + noise;
+            renderTicker('gold-ticker', newVal, displayedGoldPrice, 1);
+            displayedGoldPrice = newVal;
+        }
+        if (realOilPrice !== null) {
+            const noise = (Math.random() - 0.5) * 0.3;
+            const newVal = realOilPrice + noise;
+            renderTicker('oil-ticker', newVal, displayedOilPrice, 2);
+            displayedOilPrice = newVal;
+        }
+    }, 800);
+}
+function stopTickerInterval() {
+    clearInterval(tickerIntervalId);
+    tickerIntervalId = null;
+}
+document.addEventListener('visibilitychange', () => {
+    document.hidden ? stopTickerInterval() : startTickerInterval();
+});
+startTickerInterval();
 
 // ĐỒNG HỒ LẬT
 function updateCardValue(cardId, targetVal) {
@@ -200,11 +232,13 @@ const ih = String(currentInit.getHours()).padStart(2, '0'), im = String(currentI
 });
 setInterval(runClock, 1000);
 
-// HAPTIC & ANIMATE NUMBER
+// HAPTIC
 function triggerHaptic(type) {
     if (window.navigator && window.navigator.vibrate) window.navigator.vibrate([18, 25, 18]);
 }
 
+// ─── FIX #5: animateNumber với cancel flag để tránh race condition ───
+const animatingFlags = {};
 function animateNumber(elementId, newValue) {
     const el = document.getElementById(elementId);
     if (!el) return;
@@ -212,12 +246,16 @@ function animateNumber(elementId, newValue) {
     if (startValue === newValue) return;
     const diff = newValue - startValue;
     const duration = 750, startTime = performance.now();
+    const token = Symbol();
+    animatingFlags[elementId] = token;
+
     function easeCountMoney(t) {
         if (t < 0.7) { const p = t / 0.7; return (1 - Math.pow(1 - p, 3)) * 0.92; }
         const p = (t - 0.7) / 0.3;
         return 0.92 + (1 - Math.pow(1 - p, 2)) * 0.08;
     }
     function update(currentTime) {
+        if (animatingFlags[elementId] !== token) return; // bị cancel
         const elapsed = currentTime - startTime;
         const progress = Math.min(elapsed / duration, 1);
         const eased = easeCountMoney(progress);
@@ -227,7 +265,7 @@ function animateNumber(elementId, newValue) {
         val = diff >= 0 ? Math.min(val, newValue) : Math.max(val, newValue);
         el.innerText = val.toLocaleString();
         if (progress < 1) requestAnimationFrame(update);
-        else el.innerText = newValue.toLocaleString();
+        else { el.innerText = newValue.toLocaleString(); delete animatingFlags[elementId]; }
     }
     requestAnimationFrame(update);
 }
@@ -258,18 +296,34 @@ onValue(onlineRef, (snap) => {
     }
 });
 
+// ─── FIX #10: Object pool cho cursor trail ───
+const TRAIL_POOL_SIZE = 20;
+const trailPool = [];
+for (let i = 0; i < TRAIL_POOL_SIZE; i++) {
+    const el = document.createElement('div');
+    el.className = 'cursor-trail';
+    el.style.display = 'none';
+    document.body.appendChild(el);
+    trailPool.push(el);
+}
+let trailPoolIdx = 0;
+
+function spawnTrail(x, y, color) {
+    const trail = trailPool[trailPoolIdx % TRAIL_POOL_SIZE];
+    trailPoolIdx++;
+    trail.style.left = x + 'px';
+    trail.style.top = y + 'px';
+    trail.style.background = color || '#999';
+    trail.style.display = '';
+    trail.style.animation = 'none';
+    void trail.offsetWidth; // reflow để restart animation
+    trail.style.animation = '';
+    setTimeout(() => { trail.style.display = 'none'; }, 500);
+}
+
 // CURSOR ĐỒNG NGHIỆP
 const remoteCursorEls = {};
 const lastCursorPos = {};
-
-function spawnTrail(x, y, color) {
-    const trail = document.createElement('div');
-    trail.className = 'cursor-trail';
-    trail.style.left = x + 'px'; trail.style.top = y + 'px';
-    trail.style.background = color || '#999';
-    document.body.appendChild(trail);
-    setTimeout(() => trail.remove(), 500);
-}
 
 function positionCursorOnTable(id, el, tableNum, offsetIndex, color) {
     const card = document.getElementById('tab-' + tableNum);
@@ -325,8 +379,13 @@ function scheduleRenderRemoteCursors() {
 window.addEventListener('resize', scheduleRenderRemoteCursors);
 window.addEventListener('scroll', scheduleRenderRemoteCursors, { passive: true });
 
+// ─── FIX #7: Throttle cursor broadcast 200ms ───
+let lastCursorBroadcastTs = 0;
 function broadcastCursor(tableNum) {
-    if (tableNum) set(myCursorRef, { table: tableNum, color: myColor, ts: Date.now() });
+    const now = Date.now();
+    if (tableNum && now - lastCursorBroadcastTs < 200) return;
+    lastCursorBroadcastTs = now;
+    if (tableNum) set(myCursorRef, { table: tableNum, color: myColor, ts: now });
     else remove(myCursorRef);
     broadcastFocus(null);
 }
@@ -372,23 +431,23 @@ function renderRemoteFocus(snapVal) {
 let lastFocusSnap = null;
 onValue(focusRef, (snap) => { lastFocusSnap = snap.val(); renderRemoteFocus(lastFocusSnap); });
 
-// MENU
+// MENU — FIX #6: dùng array join thay concatenation
 function renderMenu() {
-    let h = "";
+    const parts = [];
     menu.forEach(g => {
-        h += `<div class="category-title">${g.cat}</div>`;
+        parts.push(`<div class="category-title">${g.cat}</div>`);
         g.items.forEach(i => {
-            h += `<div class="menu-item" id="row-${i.id}">
+            parts.push(`<div class="menu-item" id="row-${i.id}">
                 <div class="item-info"><b>${i.name}</b><small>${i.price.toLocaleString()}đ</small></div>
                 <div class="controls">
                     <button class="btn-qty btn-sub" data-item-id="${i.id}">-</button>
                     <span class="qty-num" id="q-${i.id}">0</span>
                     <button class="btn-qty btn-add" data-item-id="${i.id}">+</button>
                 </div>
-            </div>`;
+            </div>`);
         });
     });
-    document.getElementById('menu-list').innerHTML = h;
+    document.getElementById('menu-list').innerHTML = parts.join('');
 }
 renderMenu();
 
@@ -434,25 +493,62 @@ function selectTable(n) {
     }
 }
 
+// ─── FIX #1: Debounce Firebase write 250ms ───
+const pendingUpdates = {};
+const debounceTimers = {};
+
 function change(id, delta) {
     if (!currentTab || (data.locked && data.locked[currentTab])) return;
     triggerHaptic(delta > 0 ? 'add' : 'sub');
     broadcastFocus(id);
+
     const order = data.orders[currentTab] || {};
-    const currentQty = order[id] || 0;
+    const currentQty = (pendingUpdates[currentTab]?.[id] ?? order[id]) || 0;
     if (delta < 0 && currentQty <= 0) return;
-    if (Object.keys(order).length === 0 && delta > 0) set(child(dbRef, `times/${currentTab}`), Date.now());
-    update(child(dbRef, `orders/${currentTab}`), { [id]: increment(delta) });
+
+    // Cập nhật UI ngay lập tức (optimistic update)
+    const newQty = Math.max(0, currentQty + delta);
+    if (!pendingUpdates[currentTab]) pendingUpdates[currentTab] = {};
+    pendingUpdates[currentTab][id] = newQty;
+
+    const qSpan = document.getElementById(`q-${id}`);
+    const row = document.getElementById(`row-${id}`);
+    if (qSpan) {
+        qSpan.innerText = newQty;
+        row.className = 'menu-item';
+        if (newQty >= 5) row.classList.add('qty-5'); else if (newQty > 0) row.classList.add('qty-' + newQty);
+        qSpan.classList.remove('bump');
+        requestAnimationFrame(() => qSpan.classList.add('bump'));
+    }
+    flashRow(id, delta);
+
+    // Debounce ghi Firebase
+    const key = `${currentTab}_${id}`;
+    clearTimeout(debounceTimers[key]);
+    debounceTimers[key] = setTimeout(() => {
+        const tab = currentTab;
+        const finalQty = pendingUpdates[tab]?.[id];
+        if (finalQty === undefined) return;
+        if (Object.keys(data.orders[tab] || {}).length === 0 && delta > 0) {
+            set(child(dbRef, `times/${tab}`), Date.now());
+        }
+        update(child(dbRef, `orders/${tab}`), { [id]: finalQty });
+        delete pendingUpdates[tab][id];
+    }, 250);
+}
+
+function flashRow(id, delta) {
     const row = document.getElementById(`row-${id}`), tabBtn = document.getElementById(`tab-${currentTab}`), qSpan = document.getElementById(`q-${id}`), cls = delta > 0 ? 'flash-add' : 'flash-sub';
     if (row) row.classList.add(cls); if (tabBtn) tabBtn.classList.add(cls);
-    if (qSpan) { qSpan.classList.remove('bump'); requestAnimationFrame(() => qSpan.classList.add('bump')); }
     setTimeout(() => { if (row) row.classList.remove(cls); if (tabBtn) tabBtn.classList.remove(cls); }, 400);
 }
 
 function changeBillLang(l) { triggerHaptic('nav'); currentBillLang = l; refresh(); document.querySelector('.bill-box')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
 
+// ─── FIX #3: Bỏ setInterval(refresh, 30000) — Firebase onValue() đã đủ ───
+// ─── FIX #2: Dùng ITEM_MAP O(1) thay vì all.find() O(n) ───
 function refresh() {
-    const all = menu.flatMap(g => g.items); let anyGuest = false; const now = Date.now();
+    let anyGuest = false; const now = Date.now();
     let activeTablesCount = 0;
 
     if (currentTab) {
@@ -468,7 +564,7 @@ function refresh() {
         const scrollBtn = document.getElementById('scroll-to-checkout');
         if (scrollBtn) scrollBtn.classList.toggle('hidden', isLock);
 
-        all.forEach(i => {
+        ALL_ITEMS.forEach(i => {
             const q = Math.max(0, (data.orders[currentTab] && data.orders[currentTab][i.id]) || 0);
             const row = document.getElementById(`row-${i.id}`), qSpan = document.getElementById(`q-${i.id}`);
             if (row && qSpan && qSpan.innerText !== String(q)) {
@@ -479,32 +575,17 @@ function refresh() {
         });
 
         if (isLock) {
-            let h = "", t = 0, my = data.orders[currentTab] || {}, langData = dict[currentBillLang] || dict['vi'];
-            document.getElementById('txt-total-label').innerText = langData.total;
-            document.getElementById('txt-lang-flag').innerText = langData.flag;
-            let idx = 0;
-            for (let id in my) {
-                let itm = all.find(x => x.id == id);
-                if (itm && my[id] > 0) {
-                    let p = itm.price * my[id]; t += p;
-                    let nameShow = (currentBillLang !== 'vi' && langData.items && langData.items[itm.name]) ? langData.items[itm.name] : itm.name;
-                    h += `<div class="bill-row" style="animation-delay: ${idx * 0.08}s">
-                            <span class="item-name">${nameShow}</span>
-                            <span class="item-qty">x${my[id]}</span>
-                            <div class="divider"></div>
-                            <span class="item-price">${p.toLocaleString()}đ</span>
-                          </div>`; idx++;
-                }
-            }
-            document.getElementById('bill-list').innerHTML = h || "Trống";
-            const bTotal = document.getElementById('bill-total'), tBox = document.getElementById('total-container');
-            if (parseInt(bTotal.innerText.replace(/\D/g, '')) !== t) { animateNumber('bill-total', t); tBox.classList.add('total-pop'); setTimeout(() => tBox.classList.remove('total-pop'), 400); }
+            renderBillAsync(currentTab);
         }
     }
 
     for (let i = 1; i <= 9; i++) {
         let s = 0, o = data.orders[i] || {};
-        for (let id in o) { let itm = all.find(x => x.id == id); if (itm && o[id] > 0) s += itm.price * o[id]; }
+        // ─── FIX #2: dùng ITEM_MAP thay vì find() ───
+        for (let id in o) {
+            const itm = ITEM_MAP.get(Number(id)); // FIX #11: === thay == qua Number()
+            if (itm && o[id] > 0) s += itm.price * o[id];
+        }
         const sTabLocked = (data.locked && data.locked[i]) || false;
         if (s > 0 || sTabLocked) { anyGuest = true; activeTablesCount++; }
         const sumEl = document.getElementById(`sum-${i}`);
@@ -534,6 +615,34 @@ function refresh() {
     }
 
     document.getElementById('reset-area').style.display = anyGuest ? 'none' : 'block';
+}
+
+// ─── FIX #9: Async bill render với lazy-load dict ───
+async function renderBillAsync(tab) {
+    const langData = await getLangData(currentBillLang);
+    // Kiểm tra tab vẫn còn active sau khi await
+    if (currentTab !== tab) return;
+
+    let h = "", t = 0, my = data.orders[tab] || {};
+    document.getElementById('txt-total-label').innerText = langData.total;
+    document.getElementById('txt-lang-flag').innerText = langData.flag;
+    let idx = 0;
+    for (let id in my) {
+        const itm = ITEM_MAP.get(Number(id)); // FIX #11
+        if (itm && my[id] > 0) {
+            let p = itm.price * my[id]; t += p;
+            let nameShow = (currentBillLang !== 'vi' && langData.items && langData.items[itm.name]) ? langData.items[itm.name] : itm.name;
+            h += `<div class="bill-row" style="animation-delay: ${idx * 0.08}s">
+                    <span class="item-name">${nameShow}</span>
+                    <span class="item-qty">x${my[id]}</span>
+                    <div class="divider"></div>
+                    <span class="item-price">${p.toLocaleString()}đ</span>
+                  </div>`; idx++;
+        }
+    }
+    document.getElementById('bill-list').innerHTML = h || "Trống";
+    const bTotal = document.getElementById('bill-total'), tBox = document.getElementById('total-container');
+    if (parseInt(bTotal.innerText.replace(/\D/g, '')) !== t) { animateNumber('bill-total', t); tBox.classList.add('total-pop'); setTimeout(() => tBox.classList.remove('total-pop'), 400); }
 }
 
 function setLock(v) {
@@ -596,4 +705,4 @@ function scrollToCheckout() {
 }
 
 window.selectTable = selectTable; window.setLock = setLock; window.doPay = doPay; window.doReset = doReset; window.changeBillLang = changeBillLang; window.toggleDarkMode = toggleDarkMode; window.scrollToCheckout = scrollToCheckout;
-setInterval(refresh, 30000);
+// ─── FIX #3: setInterval(refresh, 30000) đã bị xóa — Firebase onValue() lo ───
