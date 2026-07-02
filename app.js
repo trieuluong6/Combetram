@@ -271,16 +271,31 @@ function animateNumber(elementId, newValue) {
 }
 
 // PRESENCE
+// ─── FIX #12: Tách presence/cursors/focus ra khỏi cây combetram_v6_data ───
+// Trước đây 3 node này nằm chung cây với orders/locked/times, nên onValue(dbRef)
+// (listener đơn hàng) bị refire MỖI LẦN có người di chuột (broadcast cursor 200ms/lần),
+// kéo theo JSON.stringify(orders) deep-compare + refresh() toàn bộ dù đơn hàng không đổi.
+// Giải pháp: đặt presence/cursors/focus ở path riêng (combetram_v6_rt), tách biệt hoàn toàn
+// khỏi path dữ liệu đơn hàng (combetram_v6_data) — listener đơn hàng giờ chỉ fire khi
+// orders/locked/times thật sự thay đổi.
+const RT_ROOT = 'combetram_v6_rt';
 const USER_COLORS = ['#e53935', '#1e88e5', '#43a047', '#fb8c00', '#8e24aa', '#00acc1', '#d81b60', '#6d4c41', '#3949ab', '#c0ca33'];
 const myColor = USER_COLORS[Math.floor(Math.random() * USER_COLORS.length)];
 const onlineRef = ref(database, '.info/connected');
-const presenceListRef = ref(database, 'combetram_v6_data/presence');
+const presenceListRef = ref(database, `${RT_ROOT}/presence`);
 const myPresenceRef = push(presenceListRef);
 const myPresenceId = myPresenceRef.key;
-const cursorsRef = ref(database, 'combetram_v6_data/cursors');
+const cursorsRef = ref(database, `${RT_ROOT}/cursors`);
 const myCursorRef = child(cursorsRef, myPresenceId);
-const focusRef = ref(database, 'combetram_v6_data/focus');
+const focusRef = ref(database, `${RT_ROOT}/focus`);
 const myFocusRef = child(focusRef, myPresenceId);
+
+// ─── FIX #12: Listener riêng cho số người online, không còn ăn ké listener đơn hàng ───
+onValue(presenceListRef, (snap) => {
+    const presenceCount = Object.keys(snap.val() || {}).length;
+    const el = document.getElementById('online-val');
+    if (el) el.innerText = presenceCount || 1;
+});
 
 onValue(onlineRef, (snap) => {
     if (snap.val() === true) {
@@ -457,13 +472,12 @@ document.getElementById('menu-list').addEventListener('click', (e) => {
     change(itemId, btn.classList.contains('btn-add') ? 1 : -1);
 });
 
+// ─── FIX #12: dbRef giờ chỉ chứa orders/locked/times — không còn bị presence/cursor "ăn ké" ───
 onValue(dbRef, snap => {
     const val = snap.val();
     if (val) {
         if (!firstLoad && JSON.stringify(val.orders) !== JSON.stringify(data.orders)) document.getElementById('tingSound').play().catch(() => {});
         data = val; if (!data.orders) data.orders = {}; if (!data.times) data.times = {};
-        const presenceCount = Object.keys(val.presence || {}).length;
-        document.getElementById('online-val').innerText = presenceCount || 1;
         refresh(); firstLoad = false;
     }
 });
