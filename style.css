@@ -117,6 +117,30 @@ body.dark-mode #weather-hub.wind-danger { background: rgba(183,28,28,0.3); color
 #dark-toggle:active { transform: scale(0.85); }
 .top-bar-right { display: flex; align-items: center; gap: 6px; }
 
+/* HÀNG TIÊU ĐỀ + WIDGET TỐC ĐỘ 2 BÊN */
+.header-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: 10px; }
+.header-center { flex: 1; min-width: 0; }
+.header-row .status-container { margin-top: 0; }
+.header-row .header-title { margin: 6px 0 15px 0; }
+.side-widget {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--bg-card);
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 0.68em;
+    font-weight: 800;
+    color: var(--text-muted);
+    box-shadow: 0 2px 6px var(--shadow-card);
+    border: 2px solid var(--border-soft);
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition: background 0.4s ease, border-color 0.4s ease, color 0.4s ease;
+}
+.side-icon { font-size: 1.05em; line-height: 1; }
+@media (max-width: 380px) { .side-widget { font-size: 0.6em; padding: 3px 7px; } }
+
 /* TRẠNG THÁI KHÁCH */
 .status-container { display: flex; justify-content: center; margin-bottom: 5px; margin-top: 10px; }
 .status-badge {

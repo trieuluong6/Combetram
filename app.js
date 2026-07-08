@@ -718,5 +718,42 @@ function scrollToCheckout() {
     document.getElementById('btn-checkout')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
+// TỐC ĐỘ TẢI TRANG (bên trái)
+function reportLoadSpeed() {
+    const el = document.getElementById('load-speed-val');
+    if (!el) return;
+    try {
+        const nav = performance.getEntriesByType('navigation')[0];
+        const ms = nav ? Math.round(nav.duration) : Math.round(performance.now());
+        el.innerText = `${ms} ms`;
+    } catch (e) {
+        el.innerText = `${Math.round(performance.now())} ms`;
+    }
+}
+if (document.readyState === 'complete') {
+    reportLoadSpeed();
+} else {
+    window.addEventListener('load', () => setTimeout(reportLoadSpeed, 0));
+}
+
+// TỐC ĐỘ MẠNG (bên phải)
+function reportNetSpeed() {
+    const el = document.getElementById('net-speed-val');
+    if (!el) return;
+    const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+    if (conn && typeof conn.downlink === 'number' && conn.downlink > 0) {
+        el.innerText = `${conn.downlink} Mbps`;
+    } else {
+        el.innerText = '-- Mbps';
+    }
+}
+const netConn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+if (netConn) {
+    reportNetSpeed();
+    netConn.addEventListener('change', reportNetSpeed);
+} else {
+    document.getElementById('net-speed-widget')?.remove();
+}
+
 window.selectTable = selectTable; window.setLock = setLock; window.doPay = doPay; window.doReset = doReset; window.changeBillLang = changeBillLang; window.toggleDarkMode = toggleDarkMode; window.scrollToCheckout = scrollToCheckout;
 // ─── FIX #3: setInterval(refresh, 30000) đã bị xóa — Firebase onValue() lo ───
