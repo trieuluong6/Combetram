@@ -118,11 +118,14 @@ body.dark-mode #weather-hub.wind-danger { background: rgba(183,28,28,0.3); color
 .top-bar-right { display: flex; align-items: center; gap: 6px; }
 
 /* HÀNG TIÊU ĐỀ + WIDGET TỐC ĐỘ 2 BÊN */
-.header-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: 10px; }
-.header-center { flex: 1; min-width: 0; }
+.header-row { position: relative; display: flex; justify-content: center; margin-top: 10px; min-height: 34px; }
+.header-center { width: 100%; }
 .header-row .status-container { margin-top: 0; }
 .header-row .header-title { margin: 6px 0 15px 0; }
 .side-widget {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
     display: flex;
     align-items: center;
     gap: 4px;
@@ -139,6 +142,8 @@ body.dark-mode #weather-hub.wind-danger { background: rgba(183,28,28,0.3); color
     transition: background 0.4s ease, border-color 0.4s ease, color 0.4s ease;
 }
 .side-icon { font-size: 1.05em; line-height: 1; }
+.side-left { left: 0; }
+.side-right { right: 0; }
 .net-val { transition: color 0.15s ease, text-shadow 0.15s ease; }
 .net-divider { width: 1px; height: 11px; background: var(--border-soft); flex-shrink: 0; }
 .net-flash-down { animation: netFlashGreen 0.7s ease; }
