@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-app.js";
-import { getDatabase, ref, child, set, update, increment, remove, onValue, push, onDisconnect } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-database.js";
+import { getDatabase, ref, child, set as _fbSet, update as _fbUpdate, increment, remove as _fbRemove, onValue as _fbOnValue, push as _fbPush, onDisconnect } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-database.js";
 
 import { menu } from "./menu.js";
 
@@ -16,6 +16,32 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const database = getDatabase(app);
 const dbRef = ref(database, 'combetram_v6_data');
+
+// ─── ĐO DUNG LƯỢNG THỰC TẾ ĐẨY LÊN/XUỐNG FIREBASE (REAL-TIME) ───
+let fbDownBytes = 0, fbUpBytes = 0;
+function formatBytes(n) {
+    if (n < 1024) return `${n}B`;
+    if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)}KB`;
+    return `${(n / 1024 / 1024).toFixed(2)}MB`;
+}
+function byteSizeOf(data) {
+    try { return new Blob([JSON.stringify(data)]).size; } catch (e) { return 0; }
+}
+function updateNetWidget() {
+    const el = document.getElementById('net-speed-val');
+    if (el) el.innerText = `↓${formatBytes(fbDownBytes)} ↑${formatBytes(fbUpBytes)}`;
+}
+function set(refArg, value) { fbUpBytes += byteSizeOf(value); updateNetWidget(); return _fbSet(refArg, value); }
+function update(refArg, value) { fbUpBytes += byteSizeOf(value); updateNetWidget(); return _fbUpdate(refArg, value); }
+function remove(refArg) { updateNetWidget(); return _fbRemove(refArg); }
+function push(refArg, value) { if (value !== undefined) { fbUpBytes += byteSizeOf(value); updateNetWidget(); } return _fbPush(refArg, value); }
+function onValue(refArg, callback, ...rest) {
+    return _fbOnValue(refArg, (snap) => {
+        fbDownBytes += byteSizeOf(snap.val());
+        updateNetWidget();
+        callback(snap);
+    }, ...rest);
+}
 
 let currentBillLang = 'vi';
 let currentTab = null;
@@ -736,24 +762,8 @@ if (document.readyState === 'complete') {
     window.addEventListener('load', () => setTimeout(reportLoadSpeed, 0));
 }
 
-// TỐC ĐỘ MẠNG (bên phải)
-function reportNetSpeed() {
-    const el = document.getElementById('net-speed-val');
-    if (!el) return;
-    const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
-    if (conn && typeof conn.downlink === 'number' && conn.downlink > 0) {
-        el.innerText = `${conn.downlink} Mbps`;
-    } else {
-        el.innerText = '-- Mbps';
-    }
-}
-const netConn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
-if (netConn) {
-    reportNetSpeed();
-    netConn.addEventListener('change', reportNetSpeed);
-} else {
-    document.getElementById('net-speed-widget')?.remove();
-}
+// TỐC ĐỘ MẠNG (bên phải) — dung lượng thực tế đẩy lên/xuống Firebase, cập nhật real-time
+updateNetWidget();
 
 window.selectTable = selectTable; window.setLock = setLock; window.doPay = doPay; window.doReset = doReset; window.changeBillLang = changeBillLang; window.toggleDarkMode = toggleDarkMode; window.scrollToCheckout = scrollToCheckout;
 // ─── FIX #3: setInterval(refresh, 30000) đã bị xóa — Firebase onValue() lo ───
