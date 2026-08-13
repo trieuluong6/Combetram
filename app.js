@@ -651,6 +651,32 @@ const debounceTimers = {};
 const debounceVersions = {};
 const pendingStartTimes = new Set();
 
+// Mỗi ô số chỉ có tối đa 1 animation đang chạy. Bấm mới sẽ hủy animation cũ,
+// tránh nhiều requestAnimationFrame/class bump chồng lên nhau khi multi-touch.
+const qtyBumpAnimations = new WeakMap();
+function playQtyBump(el) {
+    if (!el) return;
+    const previous = qtyBumpAnimations.get(el);
+    if (previous) previous.cancel();
+
+    // Web Animations API tách animation của từng số và không cần ép reflow.
+    const animation = el.animate(
+        [
+            { transform: 'scale(1)' },
+            { transform: 'scale(1.45)', offset: 0.45 },
+            { transform: 'scale(1)' }
+        ],
+        {
+            duration: 280,
+            easing: 'cubic-bezier(0.34, 1.56, 0.64, 1)'
+        }
+    );
+    qtyBumpAnimations.set(el, animation);
+    animation.onfinish = animation.oncancel = () => {
+        if (qtyBumpAnimations.get(el) === animation) qtyBumpAnimations.delete(el);
+    };
+}
+
 function change(id, delta) {
     if (!currentTab || (data.locked && data.locked[currentTab])) return;
     triggerHaptic(delta > 0 ? 'add' : 'sub');
@@ -673,8 +699,7 @@ function change(id, delta) {
         qSpan.innerText = newQty;
         row.className = 'menu-item';
         if (newQty >= 5) row.classList.add('qty-5'); else if (newQty > 0) row.classList.add('qty-' + newQty);
-        qSpan.classList.remove('bump');
-        requestAnimationFrame(() => qSpan.classList.add('bump'));
+        playQtyBump(qSpan);
     }
     flashRow(id, delta);
 
@@ -764,8 +789,6 @@ function renderCurrentOrder() {
             row.className = 'menu-item';
             if (q >= 5) row.classList.add('qty-5');
             else if (q > 0) row.classList.add('qty-' + q);
-            qSpan.classList.remove('bump');
-            requestAnimationFrame(() => qSpan.classList.add('bump'));
         }
     });
 
