@@ -105,20 +105,32 @@
     </div>
     <div id="bill-area" style="display:none;">
         <div class="printer-slot"></div>
-        <div class="bill-box">
-            <div id="bill-list"></div>
-            <div class="total-container" id="total-container">
-                <div class="total-label-wrapper">
-                    <span id="txt-lang-flag"></span>
-                    <span id="txt-total-label">TỔNG</span>
+        <div class="bill-flip-shell" id="bill-flip-shell">
+            <div class="bill-flipper" id="bill-flipper">
+                <div class="bill-face bill-front" id="bill-face-front">
+                    <div class="bill-box">
+                        <div id="bill-list"></div>
+                        <div class="total-container" id="total-container">
+                            <div class="total-label-wrapper">
+                                <span id="txt-lang-flag"></span>
+                                <span id="txt-total-label">TỔNG</span>
+                            </div>
+                            <div class="arrow-container">
+                                <div class="arrow-shaft"></div>
+                                <div class="arrow-head"></div>
+                            </div>
+                            <span style="white-space: nowrap; flex-shrink: 0;"><span id="bill-total">0</span>đ</span>
+                        </div>
+                    </div>
                 </div>
-                <div class="arrow-container">
-                    <div class="arrow-shaft"></div>
-                    <div class="arrow-head"></div>
+                <div class="bill-face bill-back" id="bill-face-qr" aria-hidden="true">
+                    <div class="bill-box qr-bill-box">
+                        <img id="payment-qr" src="payment-qr.png" alt="Mã QR thanh toán">
+                    </div>
                 </div>
-                <span style="white-space: nowrap; flex-shrink: 0;"><span id="bill-total">0</span>đ</span>
             </div>
         </div>
+        <button class="btn-action qr-toggle-btn" id="btn-qr-toggle" style="background: var(--blue)" onclick="toggleBillQr()">MÃ QR</button>
         <button class="btn-action" style="background: var(--blue)" onclick="setLock(false)">GỌI THÊM MÓN</button>
         <button class="btn-action" style="background: var(--success-green)" onclick="doPay()">XÁC NHẬN THANH TOÁN</button>
         <div class="lang-grid">

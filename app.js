@@ -58,6 +58,139 @@ let currentTab = null;
 let data = { orders: {}, locked: {}, times: {} };
 let billWasShown = false;
 
+// ─── BILL ↔ QR: lật card + co/giãn chiều cao + cuộn đồng bộ ───
+const BILL_FLIP_MS = 560;
+let billViewMode = 'bill';
+let billScrollAnimation = 0;
+
+function getBillFlipDom() {
+    return {
+        shell: document.getElementById('bill-flip-shell'),
+        front: document.getElementById('bill-face-front'),
+        back: document.getElementById('bill-face-qr'),
+        button: document.getElementById('btn-qr-toggle')
+    };
+}
+
+function activeBillFaceHeight(mode = billViewMode) {
+    const { front, back } = getBillFlipDom();
+    const face = mode === 'qr' ? back : front;
+    return face ? Math.ceil(face.offsetHeight) : 0;
+}
+
+function syncBillFlipHeight(animate = false) {
+    const { shell } = getBillFlipDom();
+    if (!shell) return;
+    const targetHeight = activeBillFaceHeight();
+    if (!targetHeight) return;
+
+    if (!animate) {
+        shell.style.height = `${targetHeight}px`;
+        return;
+    }
+
+    const currentHeight = Math.ceil(shell.getBoundingClientRect().height) || targetHeight;
+    shell.style.height = `${currentHeight}px`;
+    requestAnimationFrame(() => { shell.style.height = `${targetHeight}px`; });
+}
+
+function stopBillScrollAnimation() {
+    if (billScrollAnimation) {
+        cancelAnimationFrame(billScrollAnimation);
+        billScrollAnimation = 0;
+    }
+}
+
+function animateScrollToQrCenter(targetHeight) {
+    const { shell } = getBillFlipDom();
+    if (!shell) return;
+    stopBillScrollAnimation();
+
+    const shellTop = shell.getBoundingClientRect().top + window.scrollY;
+    const predictedDocumentHeight = document.documentElement.scrollHeight
+        - shell.getBoundingClientRect().height + targetHeight;
+    const maxScroll = Math.max(0, predictedDocumentHeight - window.innerHeight);
+    const targetY = Math.max(0, Math.min(maxScroll, shellTop + targetHeight / 2 - window.innerHeight / 2));
+    const startY = window.scrollY;
+    const distance = targetY - startY;
+    if (Math.abs(distance) < 1) return;
+
+    const startedAt = performance.now();
+    const ease = t => 1 - Math.pow(1 - t, 3);
+    const step = now => {
+        const progress = Math.min(1, (now - startedAt) / BILL_FLIP_MS);
+        window.scrollTo(0, startY + distance * ease(progress));
+        if (progress < 1 && billViewMode === 'qr') billScrollAnimation = requestAnimationFrame(step);
+        else billScrollAnimation = 0;
+    };
+    billScrollAnimation = requestAnimationFrame(step);
+}
+
+function resetBillQrView(instant = true) {
+    stopBillScrollAnimation();
+    billViewMode = 'bill';
+    const { shell, back, button } = getBillFlipDom();
+    if (!shell) return;
+
+    if (instant) {
+        shell.style.transition = 'none';
+        const flipper = document.getElementById('bill-flipper');
+        if (flipper) flipper.style.transition = 'none';
+        shell.classList.remove('is-qr');
+        if (back) back.setAttribute('aria-hidden', 'true');
+        if (button) button.textContent = 'MÃ QR';
+        shell.style.height = '';
+        void shell.offsetHeight;
+        shell.style.transition = '';
+        if (flipper) flipper.style.transition = '';
+        requestAnimationFrame(() => syncBillFlipHeight(false));
+    } else {
+        shell.classList.remove('is-qr');
+        if (back) back.setAttribute('aria-hidden', 'true');
+        if (button) button.textContent = 'MÃ QR';
+        syncBillFlipHeight(true);
+    }
+}
+
+function scrollBillIntoView() {
+    // Khi mặt QR đang mở, không cho các auto-scroll cũ của bill giành quyền cuộn.
+    if (billViewMode !== 'bill') return;
+    document.querySelector('.bill-front .bill-box')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function toggleBillQr() {
+    triggerHaptic('nav');
+    const { shell, back, button } = getBillFlipDom();
+    if (!shell) return;
+
+    const showQr = billViewMode !== 'qr';
+    stopBillScrollAnimation();
+
+    if (showQr) {
+        const currentHeight = Math.ceil(shell.getBoundingClientRect().height) || activeBillFaceHeight('bill');
+        const targetHeight = activeBillFaceHeight('qr');
+        if (!targetHeight) return;
+
+        shell.style.height = `${currentHeight}px`;
+        billViewMode = 'qr';
+        if (back) back.setAttribute('aria-hidden', 'false');
+        if (button) button.textContent = 'XEM BILL';
+
+        // Cùng một frame: card bắt đầu lật, wrapper co về QR và trang kéo QR vào giữa.
+        requestAnimationFrame(() => {
+            shell.classList.add('is-qr');
+            shell.style.height = `${targetHeight}px`;
+            animateScrollToQrCenter(targetHeight);
+        });
+    } else {
+        billViewMode = 'bill';
+        shell.classList.remove('is-qr');
+        if (back) back.setAttribute('aria-hidden', 'true');
+        if (button) button.textContent = 'MÃ QR';
+        syncBillFlipHeight(true);
+    }
+}
+
 // ─── FIX #2: Menu lookup Map O(1) thay vì find() O(n) trong mỗi vòng lặp ───
 const ALL_ITEMS = menu.flatMap(g => g.items);
 const ITEM_MAP = new Map(ALL_ITEMS.map(i => [i.id, i]));
@@ -621,6 +754,7 @@ onValue(timesRef, snap => {
 
 function selectTable(n) {
     triggerHaptic('nav');
+    resetBillQrView(true);
     const previousTab = currentTab;
     const wasOpenForSameTable = (currentTab === n);
     currentTab = wasOpenForSameTable ? null : n; currentBillLang = 'vi';
@@ -636,7 +770,7 @@ function selectTable(n) {
         requestAnimationFrame(() => requestAnimationFrame(() => section.classList.add('section-visible')));
         refresh(new Set([previousTab, currentTab].filter(Boolean)));
         const isLockedTable = (data.locked && data.locked[n]) || false;
-        if (isLockedTable) setTimeout(() => { document.querySelector('.bill-box')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 350);
+        if (isLockedTable) setTimeout(scrollBillIntoView, 350);
     } else {
         section.classList.remove('section-visible');
         document.getElementById('scroll-to-checkout')?.classList.add('hidden');
@@ -749,7 +883,7 @@ function flashRow(id, delta) {
     setTimeout(() => { if (row) row.classList.remove(cls); if (tabBtn) tabBtn.classList.remove(cls); }, 400);
 }
 
-function changeBillLang(l) { triggerHaptic('nav'); currentBillLang = l; renderCurrentOrder(); document.querySelector('.bill-box')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+function changeBillLang(l) { triggerHaptic('nav'); currentBillLang = l; renderCurrentOrder(); scrollBillIntoView(); }
 
 // ─── FIX #3: Bỏ setInterval(refresh, 30000) — Firebase onValue() đã đủ ───
 // ─── FIX #2: Dùng ITEM_MAP O(1) thay vì all.find() O(n) ───
@@ -776,6 +910,7 @@ function renderCurrentOrder() {
     } else if (!isLock) {
         billWasShown = false;
         billArea.classList.remove('printing-out');
+        if (billViewMode !== 'bill') resetBillQrView(true);
     }
     document.getElementById('scroll-to-checkout')?.classList.toggle('hidden', isLock);
 
@@ -881,13 +1016,15 @@ async function renderBillAsync(tab) {
     document.getElementById('bill-list').innerHTML = h || "Trống";
     const bTotal = document.getElementById('bill-total'), tBox = document.getElementById('total-container');
     if (parseInt(bTotal.innerText.replace(/\D/g, '')) !== t) { animateNumber('bill-total', t); tBox.classList.add('total-pop'); setTimeout(() => tBox.classList.remove('total-pop'), 400); }
+    requestAnimationFrame(() => syncBillFlipHeight(false));
 }
 
 function setLock(v) {
     triggerHaptic(v ? 'lock' : 'nav');
+    if (v) resetBillQrView(true);
     set(child(lockedRef, String(currentTab)), v);
-    if (!v) currentBillLang = 'vi';
-    if (v) setTimeout(() => { document.querySelector('.bill-box')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 100);
+    if (!v) { currentBillLang = 'vi'; resetBillQrView(true); }
+    if (v) setTimeout(scrollBillIntoView, 100);
 }
 
 function doPay() {
@@ -963,5 +1100,5 @@ if (document.readyState === 'complete') {
 // TỐC ĐỘ MẠNG (bên phải) — dung lượng thực tế đẩy lên/xuống Firebase, cập nhật real-time
 updateNetWidget();
 
-window.selectTable = selectTable; window.setLock = setLock; window.doPay = doPay; window.doReset = doReset; window.changeBillLang = changeBillLang; window.toggleDarkMode = toggleDarkMode; window.scrollToCheckout = scrollToCheckout;
+window.selectTable = selectTable; window.setLock = setLock; window.doPay = doPay; window.doReset = doReset; window.changeBillLang = changeBillLang; window.toggleDarkMode = toggleDarkMode; window.scrollToCheckout = scrollToCheckout; window.toggleBillQr = toggleBillQr;
 // ─── FIX #3: setInterval(refresh, 30000) đã bị xóa — Firebase onValue() lo ───
