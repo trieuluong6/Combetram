@@ -322,7 +322,10 @@ body.dark-mode .btn-add { background: #1f3a23; color: #81c784; }
 .bill-flip-shell.is-qr .bill-flipper { transform: rotateY(180deg); height: 100%; }
 .bill-face { width: 100%; backface-visibility: hidden; -webkit-backface-visibility: hidden; }
 .bill-front { position: relative; transform: rotateY(0deg); }
-.bill-back { position: absolute; inset: 0 0 auto 0; transform: rotateY(180deg); pointer-events: none; }
+.bill-back { position: absolute; inset: 0 0 auto 0; transform: rotateY(180deg); pointer-events: none; visibility: hidden; opacity: 0; }
+/* Chặn cứng mặt QR khi chưa bấm: không phụ thuộc riêng vào backface-visibility của trình duyệt. */
+.bill-back[aria-hidden="true"] { visibility: hidden !important; opacity: 0 !important; }
+.bill-flip-shell.is-qr .bill-back[aria-hidden="false"] { visibility: visible; opacity: 1; }
 .bill-flip-shell.is-qr .bill-front { pointer-events: none; }
 .bill-flip-shell.is-qr .bill-back { pointer-events: none; }
 .bill-box { border: 2.5px solid var(--text-main); padding: 12px; background: var(--bg-card); border-radius: 8px; margin-top: 4px; overflow: hidden; transition: background 0.4s ease, border-color 0.4s ease; }
