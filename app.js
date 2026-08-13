@@ -43,7 +43,7 @@ function updateNetWidget(direction) {
 }
 function set(refArg, value) { fbUpBytes += byteSizeOf(value); updateNetWidget('up'); return _fbSet(refArg, value); }
 function update(refArg, value) { fbUpBytes += byteSizeOf(value); updateNetWidget('up'); return _fbUpdate(refArg, value); }
-function remove(refArg) { updateNetWidget(); return _fbRemove(refArg); }
+function remove(refArg) { fbUpBytes += byteSizeOf(null); updateNetWidget('up'); return _fbRemove(refArg); }
 function push(refArg, value) { if (value !== undefined) { fbUpBytes += byteSizeOf(value); updateNetWidget('up'); } return _fbPush(refArg, value); }
 function onValue(refArg, callback, ...rest) {
     return _fbOnValue(refArg, (snap) => {
@@ -56,12 +56,75 @@ function onValue(refArg, callback, ...rest) {
 let currentBillLang = 'vi';
 let currentTab = null;
 let data = { orders: {}, locked: {}, times: {} };
-let firstLoad = true;
 let billWasShown = false;
 
 // ─── FIX #2: Menu lookup Map O(1) thay vì find() O(n) trong mỗi vòng lặp ───
 const ALL_ITEMS = menu.flatMap(g => g.items);
 const ITEM_MAP = new Map(ALL_ITEMS.map(i => [i.id, i]));
+
+// Listener dữ liệu chính được tách theo nhánh để tránh tải lại locked/times khi chỉ orders đổi.
+const ordersRef = child(dbRef, 'orders');
+const lockedRef = child(dbRef, 'locked');
+const timesRef = child(dbRef, 'times');
+
+// Cache DOM cố định cho các đường render nóng.
+const TABLE_DOM = Array.from({ length: 9 }, (_, idx) => {
+    const table = idx + 1;
+    return {
+        card: document.getElementById(`tab-${table}`),
+        sum: document.getElementById(`sum-${table}`),
+        time: document.getElementById(`time-${table}`)
+    };
+});
+const ITEM_DOM = new Map();
+
+// Tổng tiền cache theo bàn để chỉ tính lại bàn vừa thay đổi.
+const tableTotals = Array(10).fill(0);
+
+function shallowRecordEqual(a, b) {
+    if (a === b) return true;
+    const aIsObject = a !== null && typeof a === 'object';
+    const bIsObject = b !== null && typeof b === 'object';
+    if (!aIsObject || !bIsObject) return false;
+    const aKeys = Object.keys(a), bKeys = Object.keys(b);
+    if (aKeys.length !== bKeys.length) return false;
+    for (const key of aKeys) if (a[key] !== b[key]) return false;
+    return true;
+}
+
+function changedTableIds(prev, next) {
+    const changed = new Set();
+    for (let i = 1; i <= 9; i++) {
+        if (!shallowRecordEqual(prev?.[i], next?.[i])) changed.add(i);
+    }
+    return changed;
+}
+
+let scheduledRefresh = false;
+let scheduledFullRefresh = false;
+let scheduledCurrentOrderRefresh = false;
+const dirtyTables = new Set();
+
+function scheduleRefresh(tableIds = null, updateCurrentOrder = false) {
+    if (tableIds === null) {
+        scheduledFullRefresh = true;
+        scheduledCurrentOrderRefresh = true;
+    } else {
+        for (const id of tableIds) dirtyTables.add(Number(id));
+    }
+    if (updateCurrentOrder) scheduledCurrentOrderRefresh = true;
+    if (scheduledRefresh) return;
+    scheduledRefresh = true;
+    requestAnimationFrame(() => {
+        scheduledRefresh = false;
+        const ids = scheduledFullRefresh ? null : new Set(dirtyTables);
+        const updateCurrentOrder = scheduledCurrentOrderRefresh;
+        scheduledFullRefresh = false;
+        scheduledCurrentOrderRefresh = false;
+        dirtyTables.clear();
+        refresh(ids, updateCurrentOrder);
+    });
+}
 
 // ─── FIX #9: Lazy-load dict theo ngôn ngữ ───
 let dictCache = { vi: { flag: "🇻🇳", total: "TỔNG", items: {} } };
@@ -377,7 +440,7 @@ const remoteCursorEls = {};
 const lastCursorPos = {};
 
 function positionCursorOnTable(id, el, tableNum, offsetIndex, color) {
-    const card = document.getElementById('tab-' + tableNum);
+    const card = TABLE_DOM[Number(tableNum) - 1]?.card;
     if (!card) { el.classList.remove('visible'); return; }
     const rect = card.getBoundingClientRect();
     const x = rect.left + 12 + (offsetIndex * 16);
@@ -411,7 +474,7 @@ function renderRemoteCursors(snapVal) {
         positionCursorOnTable(id, el, c.table, idx, c.color);
     });
     for (let t = 1; t <= 9; t++) {
-        const card = document.getElementById('tab-' + t);
+        const card = TABLE_DOM[t - 1]?.card;
         if (!card) continue;
         if (tableViewerColor[t]) { card.classList.add('has-viewer'); card.style.setProperty('--viewer-color', tableViewerColor[t]); }
         else { card.classList.remove('has-viewer'); card.style.removeProperty('--viewer-color'); }
@@ -466,7 +529,7 @@ function renderRemoteFocus(snapVal) {
     if (!currentTab) return;
     entries.forEach(([id, f]) => {
         if (f.table !== currentTab) return;
-        const row = document.getElementById('row-' + f.itemId);
+        const row = ITEM_DOM.get(Number(f.itemId))?.row;
         if (!row) return;
         const prev = remoteFocusRows[id];
         if (prev && prev.rowEl && prev.rowEl !== row) { prev.rowEl.classList.remove('remote-focus'); prev.rowEl.style.removeProperty('--focus-color'); if (prev.tagEl) prev.tagEl.remove(); }
@@ -501,6 +564,18 @@ function renderMenu() {
     document.getElementById('menu-list').innerHTML = parts.join('');
 }
 renderMenu();
+ALL_ITEMS.forEach(item => {
+    ITEM_DOM.set(item.id, {
+        row: document.getElementById(`row-${item.id}`),
+        qty: document.getElementById(`q-${item.id}`)
+    });
+});
+
+// Không tải audio ở initial load; bắt đầu preload sau tương tác đầu tiên để tiếng báo vẫn phản hồi nhanh.
+document.addEventListener('pointerdown', () => {
+    const ting = document.getElementById('tingSound');
+    if (ting) { ting.preload = 'auto'; ting.load(); }
+}, { once: true, passive: true });
 
 document.getElementById('menu-list').addEventListener('click', (e) => {
     const btn = e.target.closest('.btn-qty'); if (!btn) return;
@@ -508,18 +583,45 @@ document.getElementById('menu-list').addEventListener('click', (e) => {
     change(itemId, btn.classList.contains('btn-add') ? 1 : -1);
 });
 
-// ─── FIX #12: dbRef giờ chỉ chứa orders/locked/times — không còn bị presence/cursor "ăn ké" ───
-onValue(dbRef, snap => {
-    const val = snap.val();
-    if (val) {
-        if (!firstLoad && JSON.stringify(val.orders) !== JSON.stringify(data.orders)) document.getElementById('tingSound').play().catch(() => {});
-        data = val; if (!data.orders) data.orders = {}; if (!data.times) data.times = {};
-        refresh(); firstLoad = false;
+// Dữ liệu chính: tách listener theo nhánh + chỉ đánh dấu các bàn thực sự thay đổi.
+let firstOrdersLoad = true;
+const initialBranchesLoaded = new Set();
+function markInitialBranchLoaded(branch) {
+    initialBranchesLoaded.add(branch);
+    if (initialBranchesLoaded.size === 3) scheduleRefresh(null);
+}
+
+onValue(ordersRef, snap => {
+    const nextOrders = snap.val() || {};
+    const changed = changedTableIds(data.orders, nextOrders);
+    if (!firstOrdersLoad && changed.size) {
+        document.getElementById('tingSound').play().catch(() => {});
     }
+    data.orders = nextOrders;
+    firstOrdersLoad = false;
+    if (changed.size) scheduleRefresh(changed, true);
+    markInitialBranchLoaded('orders');
+});
+
+onValue(lockedRef, snap => {
+    const nextLocked = snap.val() || {};
+    const changed = changedTableIds(data.locked, nextLocked);
+    data.locked = nextLocked;
+    if (changed.size) scheduleRefresh(changed, true);
+    markInitialBranchLoaded('locked');
+});
+
+onValue(timesRef, snap => {
+    const nextTimes = snap.val() || {};
+    const changed = changedTableIds(data.times, nextTimes);
+    data.times = nextTimes;
+    if (changed.size) scheduleRefresh(changed);
+    markInitialBranchLoaded('times');
 });
 
 function selectTable(n) {
     triggerHaptic('nav');
+    const previousTab = currentTab;
     const wasOpenForSameTable = (currentTab === n);
     currentTab = wasOpenForSameTable ? null : n; currentBillLang = 'vi';
     billWasShown = false;
@@ -532,37 +634,41 @@ function selectTable(n) {
         document.getElementById('table-title').innerText = title;
         section.style.display = 'block';
         requestAnimationFrame(() => requestAnimationFrame(() => section.classList.add('section-visible')));
-        refresh();
+        refresh(new Set([previousTab, currentTab].filter(Boolean)));
         const isLockedTable = (data.locked && data.locked[n]) || false;
         if (isLockedTable) setTimeout(() => { document.querySelector('.bill-box')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 350);
     } else {
         section.classList.remove('section-visible');
         document.getElementById('scroll-to-checkout')?.classList.add('hidden');
         setTimeout(() => { if (!currentTab) section.style.display = 'none'; }, 320);
-        refresh();
+        refresh(new Set([previousTab].filter(Boolean)));
     }
 }
 
 // ─── FIX #1: Debounce Firebase write 250ms ───
 const pendingUpdates = {};
 const debounceTimers = {};
+const debounceVersions = {};
+const pendingStartTimes = new Set();
 
 function change(id, delta) {
     if (!currentTab || (data.locked && data.locked[currentTab])) return;
     triggerHaptic(delta > 0 ? 'add' : 'sub');
     broadcastFocus(id);
 
-    const order = data.orders[currentTab] || {};
-    const currentQty = (pendingUpdates[currentTab]?.[id] ?? order[id]) || 0;
+    const tab = currentTab; // capture bàn ngay lúc bấm, không đọc currentTab sau 250ms
+    const order = data.orders[tab] || {};
+    const currentQty = (pendingUpdates[tab]?.[id] ?? order[id]) || 0;
     if (delta < 0 && currentQty <= 0) return;
 
     // Cập nhật UI ngay lập tức (optimistic update)
     const newQty = Math.max(0, currentQty + delta);
-    if (!pendingUpdates[currentTab]) pendingUpdates[currentTab] = {};
-    pendingUpdates[currentTab][id] = newQty;
+    if (!pendingUpdates[tab]) pendingUpdates[tab] = {};
+    pendingUpdates[tab][id] = newQty;
 
-    const qSpan = document.getElementById(`q-${id}`);
-    const row = document.getElementById(`row-${id}`);
+    const itemDom = ITEM_DOM.get(id);
+    const qSpan = itemDom?.qty;
+    const row = itemDom?.row;
     if (qSpan) {
         qSpan.innerText = newQty;
         row.className = 'menu-item';
@@ -573,98 +679,157 @@ function change(id, delta) {
     flashRow(id, delta);
 
     // Debounce ghi Firebase
-    const key = `${currentTab}_${id}`;
+    const key = `${tab}_${id}`;
+    const version = (debounceVersions[key] || 0) + 1;
+    debounceVersions[key] = version;
     clearTimeout(debounceTimers[key]);
     debounceTimers[key] = setTimeout(() => {
-        const tab = currentTab;
+        // Nếu timer này đã bị một lần bấm mới hơn thay thế thì bỏ qua hoàn toàn.
+        if (debounceVersions[key] !== version) return;
         const finalQty = pendingUpdates[tab]?.[id];
-        if (finalQty === undefined) return;
-        if (Object.keys(data.orders[tab] || {}).length === 0 && delta > 0) {
-            set(child(dbRef, `times/${tab}`), Date.now());
+        if (finalQty === undefined) {
+            if (debounceVersions[key] === version) {
+                delete debounceTimers[key];
+                delete debounceVersions[key];
+            }
+            return;
         }
-        update(child(dbRef, `orders/${tab}`), { [id]: finalQty });
-        delete pendingUpdates[tab][id];
+        if (!data.times?.[tab] && !pendingStartTimes.has(tab) && finalQty > 0) {
+            pendingStartTimes.add(tab);
+            set(child(timesRef, String(tab)), Date.now()).finally(() => pendingStartTimes.delete(tab));
+        }
+        const sentQty = finalQty;
+        update(child(ordersRef, String(tab)), { [id]: sentQty })
+            .then(() => {
+                // Chỉ xóa pending khi request này vẫn là lần bấm mới nhất của món/bàn đó.
+                if (debounceVersions[key] === version && pendingUpdates[tab]?.[id] === sentQty) {
+                    delete pendingUpdates[tab][id];
+                    if (Object.keys(pendingUpdates[tab]).length === 0) delete pendingUpdates[tab];
+                }
+            })
+            .catch(err => console.error('[orders] Lỗi ghi Firebase:', err))
+            .finally(() => {
+                // Request cũ không được xóa timer/version của lần bấm mới hơn.
+                if (debounceVersions[key] === version) {
+                    delete debounceTimers[key];
+                    delete debounceVersions[key];
+                }
+            });
     }, 250);
 }
 
 function flashRow(id, delta) {
-    const row = document.getElementById(`row-${id}`), tabBtn = document.getElementById(`tab-${currentTab}`), qSpan = document.getElementById(`q-${id}`), cls = delta > 0 ? 'flash-add' : 'flash-sub';
+    const itemDom = ITEM_DOM.get(id), row = itemDom?.row, tabBtn = currentTab ? TABLE_DOM[currentTab - 1]?.card : null, qSpan = itemDom?.qty, cls = delta > 0 ? 'flash-add' : 'flash-sub';
     if (row) row.classList.add(cls); if (tabBtn) tabBtn.classList.add(cls);
     setTimeout(() => { if (row) row.classList.remove(cls); if (tabBtn) tabBtn.classList.remove(cls); }, 400);
 }
 
-function changeBillLang(l) { triggerHaptic('nav'); currentBillLang = l; refresh(); document.querySelector('.bill-box')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+function changeBillLang(l) { triggerHaptic('nav'); currentBillLang = l; renderCurrentOrder(); document.querySelector('.bill-box')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
 
 // ─── FIX #3: Bỏ setInterval(refresh, 30000) — Firebase onValue() đã đủ ───
 // ─── FIX #2: Dùng ITEM_MAP O(1) thay vì all.find() O(n) ───
-function refresh() {
-    let anyGuest = false; const now = Date.now();
+function calculateTableTotal(tableId) {
+    let total = 0;
+    const order = data.orders[tableId] || {};
+    for (const id in order) {
+        const item = ITEM_MAP.get(Number(id));
+        if (item && order[id] > 0) total += item.price * order[id];
+    }
+    return total;
+}
+
+function renderCurrentOrder() {
+    if (!currentTab) return;
+    const isLock = !!data.locked?.[currentTab];
+    document.getElementById('menu-area').style.display = isLock ? 'none' : 'block';
+    const billArea = document.getElementById('bill-area');
+    billArea.style.display = isLock ? 'block' : 'none';
+    if (isLock && !billWasShown) {
+        billArea.classList.remove('printing-out');
+        requestAnimationFrame(() => requestAnimationFrame(() => billArea.classList.add('printing-out')));
+        billWasShown = true;
+    } else if (!isLock) {
+        billWasShown = false;
+        billArea.classList.remove('printing-out');
+    }
+    document.getElementById('scroll-to-checkout')?.classList.toggle('hidden', isLock);
+
+    ALL_ITEMS.forEach(item => {
+        // Nếu món đang chờ debounce của bàn hiện tại, giữ optimistic UI thay vì ghi đè bằng snapshot cũ.
+        const q = Math.max(0, pendingUpdates[currentTab]?.[item.id] ?? data.orders[currentTab]?.[item.id] ?? 0);
+        const itemDom = ITEM_DOM.get(item.id);
+        const row = itemDom?.row, qSpan = itemDom?.qty;
+        if (row && qSpan && qSpan.innerText !== String(q)) {
+            qSpan.innerText = q;
+            row.className = 'menu-item';
+            if (q >= 5) row.classList.add('qty-5');
+            else if (q > 0) row.classList.add('qty-' + q);
+            qSpan.classList.remove('bump');
+            requestAnimationFrame(() => qSpan.classList.add('bump'));
+        }
+    });
+
+    if (isLock) renderBillAsync(currentTab);
+}
+
+function renderTable(tableId, now = Date.now()) {
+    const dom = TABLE_DOM[tableId - 1];
+    if (!dom) return;
+    const total = calculateTableTotal(tableId);
+    tableTotals[tableId] = total;
+    const locked = !!data.locked?.[tableId];
+
+    if (dom.sum) {
+        dom.sum.classList.remove('skeleton');
+        if (parseInt(dom.sum.innerText.replace(/\D/g, '')) !== total) animateNumber(`sum-${tableId}`, total);
+    }
+    if (dom.time) {
+        dom.time.classList.remove('skeleton');
+        let txt = '';
+        if (total > 0 && data.times?.[tableId]) {
+            const diff = Math.floor((now - data.times[tableId]) / 60000);
+            txt = diff > 0 ? `⏱ ${diff} phút` : '⏱ Mới vào';
+        }
+        if (dom.time.innerText !== txt) dom.time.innerText = txt;
+    }
+    if (dom.card) {
+        let className = tableId === 7 ? 'table-card full-width' : (tableId >= 8 ? 'table-card half-width' : 'table-card');
+        if (tableId === currentTab) className += ' active';
+        if (locked) className += tableId >= 7 ? ' is-locked-special' : ' is-locked';
+        else if (total > 0) className += ' has-guest';
+        if (dom.card.className !== className) dom.card.className = className;
+    }
+}
+
+function renderCrowdAndReset() {
     let activeTablesCount = 0;
-
-    if (currentTab) {
-        const isLock = (data.locked && data.locked[currentTab]) || false;
-        document.getElementById('menu-area').style.display = isLock ? 'none' : 'block';
-        const billArea = document.getElementById('bill-area');
-        billArea.style.display = isLock ? 'block' : 'none';
-        if (isLock && !billWasShown) {
-            billArea.classList.remove('printing-out');
-            requestAnimationFrame(() => requestAnimationFrame(() => billArea.classList.add('printing-out')));
-            billWasShown = true;
-        } else if (!isLock) { billWasShown = false; billArea.classList.remove('printing-out'); }
-        const scrollBtn = document.getElementById('scroll-to-checkout');
-        if (scrollBtn) scrollBtn.classList.toggle('hidden', isLock);
-
-        ALL_ITEMS.forEach(i => {
-            const q = Math.max(0, (data.orders[currentTab] && data.orders[currentTab][i.id]) || 0);
-            const row = document.getElementById(`row-${i.id}`), qSpan = document.getElementById(`q-${i.id}`);
-            if (row && qSpan && qSpan.innerText !== String(q)) {
-                qSpan.innerText = q; row.className = 'menu-item';
-                if (q >= 5) row.classList.add('qty-5'); else if (q > 0) row.classList.add('qty-' + q);
-                qSpan.classList.remove('bump'); requestAnimationFrame(() => qSpan.classList.add('bump'));
-            }
-        });
-
-        if (isLock) {
-            renderBillAsync(currentTab);
-        }
-    }
-
     for (let i = 1; i <= 9; i++) {
-        let s = 0, o = data.orders[i] || {};
-        // ─── FIX #2: dùng ITEM_MAP thay vì find() ───
-        for (let id in o) {
-            const itm = ITEM_MAP.get(Number(id)); // FIX #11: === thay == qua Number()
-            if (itm && o[id] > 0) s += itm.price * o[id];
-        }
-        const sTabLocked = (data.locked && data.locked[i]) || false;
-        if (s > 0 || sTabLocked) { anyGuest = true; activeTablesCount++; }
-        const sumEl = document.getElementById(`sum-${i}`);
-        if (sumEl) { sumEl.classList.remove('skeleton'); if (parseInt(sumEl.innerText.replace(/\D/g, '')) !== s) animateNumber(`sum-${i}`, s); }
-        const timeSpan = document.getElementById(`time-${i}`);
-        if (timeSpan) {
-            timeSpan.classList.remove('skeleton');
-            let txt = ""; if (s > 0 && data.times && data.times[i]) { const diff = Math.floor((now - data.times[i]) / 60000); txt = diff > 0 ? "⏱ " + diff + " phút" : "⏱ Mới vào"; }
-            if (timeSpan.innerText !== txt) timeSpan.innerText = txt;
-        }
-        const btn = document.getElementById(`tab-${i}`);
-        if (btn) {
-            let targetClassName = i === 7 ? "table-card full-width" : (i >= 8 ? "table-card half-width" : "table-card");
-            if (i === currentTab) targetClassName += ' active';
-            if (sTabLocked) targetClassName += (i >= 7) ? ' is-locked-special' : ' is-locked'; else if (s > 0) targetClassName += ' has-guest';
-            if (btn.className !== targetClassName) btn.className = targetClassName;
-        }
+        if (tableTotals[i] > 0 || data.locked?.[i]) activeTablesCount++;
     }
-
+    const anyGuest = activeTablesCount > 0;
     const crowdEl = document.getElementById('crowd-status');
     const crowdTxt = document.getElementById('crowd-text');
     const crowdIcon = document.getElementById('crowd-icon');
     if (crowdEl && crowdTxt && crowdIcon) {
-        if (activeTablesCount <= 3) { crowdEl.className = 'status-badge status-empty'; crowdTxt.innerText = 'Vắng khách'; crowdIcon.innerText = '🟢'; }
-        else if (activeTablesCount <= 6) { crowdEl.className = 'status-badge status-normal'; crowdTxt.innerText = 'Bình thường'; crowdIcon.innerText = '🟡'; }
-        else { crowdEl.className = 'status-badge status-crowded'; crowdTxt.innerText = 'ĐÔNG KHÁCH'; crowdIcon.innerText = '🚨'; }
+        if (activeTablesCount <= 3) {
+            crowdEl.className = 'status-badge status-empty'; crowdTxt.innerText = 'Vắng khách'; crowdIcon.innerText = '🟢';
+        } else if (activeTablesCount <= 6) {
+            crowdEl.className = 'status-badge status-normal'; crowdTxt.innerText = 'Bình thường'; crowdIcon.innerText = '🟡';
+        } else {
+            crowdEl.className = 'status-badge status-crowded'; crowdTxt.innerText = 'ĐÔNG KHÁCH'; crowdIcon.innerText = '🚨';
+        }
     }
-
     document.getElementById('reset-area').style.display = anyGuest ? 'none' : 'block';
+}
+
+// tableIds = null => render đầy đủ; Set => chỉ render các bàn đã thay đổi.
+function refresh(tableIds = null, updateCurrentOrder = true) {
+    const ids = tableIds === null ? new Set(Array.from({ length: 9 }, (_, i) => i + 1)) : tableIds;
+    const currentAffected = currentTab && (tableIds === null || ids.has(currentTab));
+    if (updateCurrentOrder && currentAffected) renderCurrentOrder();
+    const now = Date.now();
+    for (const id of ids) renderTable(Number(id), now);
+    renderCrowdAndReset();
 }
 
 // ─── FIX #9: Async bill render với lazy-load dict ───
@@ -697,14 +862,14 @@ async function renderBillAsync(tab) {
 
 function setLock(v) {
     triggerHaptic(v ? 'lock' : 'nav');
-    set(child(dbRef, `locked/${currentTab}`), v);
+    set(child(lockedRef, String(currentTab)), v);
     if (!v) currentBillLang = 'vi';
     if (v) setTimeout(() => { document.querySelector('.bill-box')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 100);
 }
 
 function doPay() {
     if (confirm("Xác nhận thanh toán?")) {
-        triggerHaptic('success'); remove(child(dbRef, `orders/${currentTab}`)); remove(child(dbRef, `locked/${currentTab}`)); remove(child(dbRef, `times/${currentTab}`)); selectTable(null);
+        triggerHaptic('success'); remove(child(ordersRef, String(currentTab))); remove(child(lockedRef, String(currentTab))); remove(child(timesRef, String(currentTab))); selectTable(null);
     }
 }
 
