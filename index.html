@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="vi">
+<html lang="vi" class="assembly-pending">
 <head>
 <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
 <link rel="preconnect" href="https://combetram-default-rtdb.asia-southeast1.firebasedatabase.app" crossorigin>
@@ -7,8 +7,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title data-id="th-modified">Cơm Bé Trâm - Quản lý</title>
     <link rel="stylesheet" href="style.css">
+    <script>window.__assemblyFailsafe = setTimeout(() => document.documentElement.classList.remove('assembly-pending'), 3200);</script>
 </head>
 <body>
+
+<div id="assembly-overlay" aria-hidden="true"></div>
 
 <div class="top-bar">
     <div id="weather-hub">
@@ -34,7 +37,7 @@
 </div>
 
 <div class="header-row">
-    <div class="side-widget side-left" id="load-speed-widget" title="Tốc độ tải trang">
+    <div class="side-widget side-left" id="load-speed-widget" title="Thời gian mở trang">
         <span class="side-icon">⏱️</span>
         <span id="load-speed-val">-- ms</span>
     </div>
@@ -50,8 +53,8 @@
         <div class="header-title">CƠM BÉ TRÂM</div>
     </div>
 
-    <div class="side-widget side-right" id="net-speed-widget" title="Dữ liệu Firebase (Tải xuống ↓ / Tải lên ↑)">
-        <span class="side-icon">⏱️</span>
+    <div class="side-widget side-right" id="net-speed-widget" title="Ước tính payload Firebase (nhận ↓ / gửi ↑)">
+        <span class="side-icon">⇅</span>
         <span id="net-down-val" class="net-val">↓0B</span>
         <span class="net-divider"></span>
         <span id="net-up-val" class="net-val">↑0B</span>

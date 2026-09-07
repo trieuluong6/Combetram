@@ -17,7 +17,7 @@ const app = initializeApp(firebaseConfig);
 const database = getDatabase(app);
 const dbRef = ref(database, 'combetram_v6_data');
 
-// ─── ĐO DUNG LƯỢNG THỰC TẾ ĐẨY LÊN/XUỐNG FIREBASE (REAL-TIME) ───
+// ─── ƯỚC TÍNH PAYLOAD JSON ĐẨY LÊN/XUỐNG FIREBASE (không gồm overhead WebSocket) ───
 let fbDownBytes = 0, fbUpBytes = 0;
 function formatBytes(n) {
     if (n < 1024) return `${n}B`;
@@ -27,19 +27,31 @@ function formatBytes(n) {
 function byteSizeOf(data) {
     try { return new Blob([JSON.stringify(data)]).size; } catch (e) { return 0; }
 }
+const netFlashAnimations = new WeakMap();
+function flashNetValue(el, direction) {
+    if (!el?.animate) return;
+    const prev = netFlashAnimations.get(el);
+    if (prev) prev.cancel();
+    const isDark = document.body.classList.contains('dark-mode');
+    const isDown = direction === 'down';
+    const color = isDown ? (isDark ? '#81c784' : '#2e7d32') : (isDark ? '#ef9a9a' : '#c62828');
+    const glow = isDown ? (isDark ? 'rgba(129,199,132,0.8)' : 'rgba(76,175,80,0.7)') : (isDark ? 'rgba(239,154,154,0.8)' : 'rgba(244,67,54,0.7)');
+    const anim = el.animate([
+        { color, textShadow: `0 0 6px ${glow}`, transform: 'scale(1.12)' },
+        { color: 'var(--text-muted)', textShadow: 'none', transform: 'scale(1)' }
+    ], { duration: 700, easing: 'ease' });
+    netFlashAnimations.set(el, anim);
+    anim.onfinish = anim.oncancel = () => {
+        if (netFlashAnimations.get(el) === anim) netFlashAnimations.delete(el);
+    };
+}
 function updateNetWidget(direction) {
     const downEl = document.getElementById('net-down-val');
     const upEl = document.getElementById('net-up-val');
     if (downEl) downEl.innerText = `↓${formatBytes(fbDownBytes)}`;
     if (upEl) upEl.innerText = `↑${formatBytes(fbUpBytes)}`;
-    if (direction === 'down' && downEl) {
-        downEl.classList.remove('net-flash-down'); void downEl.offsetWidth;
-        downEl.classList.add('net-flash-down');
-    }
-    if (direction === 'up' && upEl) {
-        upEl.classList.remove('net-flash-up'); void upEl.offsetWidth;
-        upEl.classList.add('net-flash-up');
-    }
+    if (direction === 'down' && downEl) flashNetValue(downEl, 'down');
+    if (direction === 'up' && upEl) flashNetValue(upEl, 'up');
 }
 function set(refArg, value) { fbUpBytes += byteSizeOf(value); updateNetWidget('up'); return _fbSet(refArg, value); }
 function update(refArg, value) { fbUpBytes += byteSizeOf(value); updateNetWidget('up'); return _fbUpdate(refArg, value); }
@@ -638,9 +650,9 @@ onValue(presenceListRef, (snap) => {
 
 onValue(onlineRef, (snap) => {
     if (snap.val() === true) {
-        onDisconnect(myPresenceRef).remove();
-        onDisconnect(myCursorRef).remove();
-        onDisconnect(myFocusRef).remove();
+        onDisconnect(myPresenceRef).remove().catch(() => {});
+        onDisconnect(myCursorRef).remove().catch(() => {});
+        onDisconnect(myFocusRef).remove().catch(() => {});
         set(myPresenceRef, { color: myColor, ts: Date.now() })
             .then(() => console.log('[presence] ghi presence thành công'))
             .catch(e => console.error('[presence] LỖI GHI PRESENCE:', e.message));
@@ -739,19 +751,22 @@ function broadcastCursor(tableNum) {
     const now = Date.now();
     if (tableNum && now - lastCursorBroadcastTs < 200) return;
     lastCursorBroadcastTs = now;
-    if (tableNum) set(myCursorRef, { table: tableNum, color: myColor, ts: now });
-    else remove(myCursorRef);
+    if (tableNum) set(myCursorRef, { table: tableNum, color: myColor, ts: now }).catch(() => {});
+    else remove(myCursorRef).catch(() => {});
     broadcastFocus(null);
 }
 
 // CLICK-TO-FOCUS
 let lastFocusBroadcast = 0, focusClearTimer = null;
 function broadcastFocus(itemId) {
-    if (itemId === null) { clearTimeout(focusClearTimer); remove(myFocusRef); return; }
+    if (itemId === null) { clearTimeout(focusClearTimer); remove(myFocusRef).catch(() => {}); return; }
     const now = Date.now();
-    if (now - lastFocusBroadcast > 120) { lastFocusBroadcast = now; set(myFocusRef, { table: currentTab, itemId, color: myColor, ts: now }); }
+    if (now - lastFocusBroadcast > 120) {
+        lastFocusBroadcast = now;
+        set(myFocusRef, { table: currentTab, itemId, color: myColor, ts: now }).catch(() => {});
+    }
     clearTimeout(focusClearTimer);
-    focusClearTimer = setTimeout(() => remove(myFocusRef), 1500);
+    focusClearTimer = setTimeout(() => remove(myFocusRef).catch(() => {}), 1500);
 }
 
 const remoteFocusRows = {};
@@ -889,6 +904,7 @@ function markInitialBranchLoaded(branch) {
     initialBranchesLoaded.add(branch);
     if (initialBranchesLoaded.size === 3) {
         initialDataReady = true;
+        cleanupStaleTimes();
         scheduleRefresh(null);
     }
 }
@@ -911,6 +927,7 @@ onValue(ordersRef, snap => {
     }
     data.orders = nextOrders;
     firstOrdersLoad = false;
+    if (initialDataReady && changed.size) cleanupStaleTimes(changed);
     if (changed.size) scheduleRefresh(changed, true);
     markInitialBranchLoaded('orders');
 });
@@ -995,6 +1012,23 @@ function playQtyBump(el) {
     };
 }
 
+function effectiveTableHasItems(tab) {
+    for (const item of ALL_ITEMS) {
+        const qty = pendingUpdates[tab]?.[item.id] ?? data.orders?.[tab]?.[item.id] ?? 0;
+        if (Number(qty) > 0) return true;
+    }
+    return false;
+}
+
+function cleanupStaleTimes(tableIds = null) {
+    if (!initialDataReady) return;
+    const ids = tableIds ? Array.from(tableIds) : Array.from({ length: 9 }, (_, i) => i + 1);
+    for (const tab of ids) {
+        if (!data.times?.[tab] || data.locked?.[tab] || effectiveTableHasItems(tab)) continue;
+        remove(child(timesRef, String(tab))).catch(() => {});
+    }
+}
+
 function applyMenuRowQtyClasses(row, qty) {
     if (!row) return;
     const preserveRemoteFocus = row.classList.contains('remote-focus');
@@ -1051,16 +1085,24 @@ function change(id, delta) {
         }
         if (!data.times?.[tab] && !pendingStartTimes.has(tab) && finalQty > 0) {
             pendingStartTimes.add(tab);
-            set(child(timesRef, String(tab)), Date.now()).finally(() => pendingStartTimes.delete(tab));
+            set(child(timesRef, String(tab)), Date.now())
+                .catch(err => console.error('[times] Lỗi ghi mốc giờ Firebase:', err))
+                .finally(() => pendingStartTimes.delete(tab));
         }
         const sentQty = finalQty;
-        update(child(ordersRef, String(tab)), { [id]: sentQty })
+        // Qty = 0 thì xóa key khỏi RTDB, tránh tích tụ các node 0 theo thời gian.
+        update(child(ordersRef, String(tab)), { [id]: sentQty > 0 ? sentQty : null })
             .then(() => {
                 // Chỉ xóa pending khi request này vẫn là lần bấm mới nhất của món/bàn đó.
                 if (debounceVersions[key] === version && pendingUpdates[tab]?.[id] === sentQty) {
                     delete pendingUpdates[tab][id];
                     if (Object.keys(pendingUpdates[tab]).length === 0) delete pendingUpdates[tab];
                 }
+                // Nếu bàn đã thật sự không còn món, xóa mốc giờ. Nếu nhân viên vừa thêm
+                // món khác trong lúc request đang chạy, effectiveTableHasItems() sẽ giữ lại giờ.
+                queueMicrotask(() => {
+                    if (!effectiveTableHasItems(tab)) remove(child(timesRef, String(tab))).catch(() => {});
+                });
             })
             .catch(err => console.error('[orders] Lỗi ghi Firebase:', err))
             .finally(() => {
@@ -1249,7 +1291,8 @@ function setLock(v) {
     if (!currentTab || paymentInProgress) return;
     triggerHaptic(v ? 'lock' : 'nav');
     if (v) resetBillQrView(true);
-    set(child(lockedRef, String(currentTab)), v);
+    set(child(lockedRef, String(currentTab)), v)
+        .catch(err => console.error('[lock] Lỗi ghi trạng thái khóa Firebase:', err));
     if (!v) { currentBillLang = 'vi'; resetBillQrView(true); }
     if (v) setTimeout(scrollBillIntoView, 100);
 }
@@ -1316,6 +1359,151 @@ document.addEventListener('click', (e) => {
     setTimeout(() => ripple.remove(), 600);
 });
 
+// ─── ROBOT ASSEMBLY INTRO ────────────────────────────────────────────────
+// Overlay pointer-events:none, còn các bàn và logic Firebase hoạt động ngay từ đầu.
+const ASSEMBLY_DURATION = 520;
+const assemblyAnimations = [];
+
+function assemblyPointForEdge(rect, edge) {
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const tx = rect.left + rect.width / 2;
+    const ty = rect.top + rect.height / 2;
+    if (edge === 'left') return { ax: -18, ay: ty, ex: Math.max(42, tx * 0.48), ey: ty - 28, tx, ty };
+    if (edge === 'right') return { ax: vw + 18, ay: ty, ex: vw - Math.max(42, (vw - tx) * 0.48), ey: ty + 28, tx, ty };
+    if (edge === 'bottom') return { ax: tx, ay: vh + 18, ex: tx + 30, ey: Math.min(vh - 45, ty + (vh - ty) * 0.48), tx, ty };
+    return { ax: tx, ay: -18, ex: tx - 30, ey: Math.max(42, ty * 0.48), tx, ty };
+}
+
+function createRobotArm(target, edge = 'left', delay = 0) {
+    const overlay = document.getElementById('assembly-overlay');
+    if (!overlay || !target) return;
+    const rect = target.getBoundingClientRect();
+    const p = assemblyPointForEdge(rect, edge);
+    const ns = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('class', 'robot-arm-svg');
+    svg.setAttribute('viewBox', `0 0 ${window.innerWidth} ${window.innerHeight}`);
+    svg.setAttribute('preserveAspectRatio', 'none');
+
+    const baseW = edge === 'left' || edge === 'right' ? 30 : 48;
+    const baseH = edge === 'left' || edge === 'right' ? 48 : 28;
+    const base = document.createElementNS(ns, 'rect');
+    base.setAttribute('class', 'robot-base');
+    base.setAttribute('x', p.ax - baseW / 2); base.setAttribute('y', p.ay - baseH / 2);
+    base.setAttribute('width', baseW); base.setAttribute('height', baseH); base.setAttribute('rx', 7);
+
+    const mkLine = (klass, x1, y1, x2, y2) => {
+        const line = document.createElementNS(ns, 'line');
+        line.setAttribute('class', klass); line.setAttribute('x1', x1); line.setAttribute('y1', y1);
+        line.setAttribute('x2', x2); line.setAttribute('y2', y2); line.setAttribute('pathLength', '1');
+        return line;
+    };
+    svg.append(base,
+        mkLine('robot-segment-back', p.ax, p.ay, p.ex, p.ey),
+        mkLine('robot-segment-back', p.ex, p.ey, p.tx, p.ty),
+        mkLine('robot-segment', p.ax, p.ay, p.ex, p.ey),
+        mkLine('robot-segment', p.ex, p.ey, p.tx, p.ty)
+    );
+
+    const joint = document.createElementNS(ns, 'circle');
+    joint.setAttribute('class', 'robot-joint'); joint.setAttribute('cx', p.ex); joint.setAttribute('cy', p.ey); joint.setAttribute('r', 11);
+    const core = document.createElementNS(ns, 'circle');
+    core.setAttribute('class', 'robot-joint-core'); core.setAttribute('cx', p.ex); core.setAttribute('cy', p.ey); core.setAttribute('r', 4);
+    svg.append(joint, core);
+
+    const grip = document.createElementNS(ns, 'path');
+    let d;
+    if (edge === 'left') d = `M ${p.tx} ${p.ty} l 11 -8 M ${p.tx} ${p.ty} l 11 8`;
+    else if (edge === 'right') d = `M ${p.tx} ${p.ty} l -11 -8 M ${p.tx} ${p.ty} l -11 8`;
+    else if (edge === 'bottom') d = `M ${p.tx} ${p.ty} l -8 -11 M ${p.tx} ${p.ty} l 8 -11`;
+    else d = `M ${p.tx} ${p.ty} l -8 11 M ${p.tx} ${p.ty} l 8 11`;
+    grip.setAttribute('class', 'robot-gripper'); grip.setAttribute('d', d);
+    svg.append(grip);
+    overlay.appendChild(svg);
+
+    setTimeout(() => svg.classList.add('is-running'), delay);
+    setTimeout(() => svg.remove(), delay + 700);
+}
+
+function createAssemblySpark(target, delay = 0) {
+    const overlay = document.getElementById('assembly-overlay');
+    if (!overlay || !target) return;
+    setTimeout(() => {
+        const rect = target.getBoundingClientRect();
+        const spark = document.createElement('span');
+        spark.className = 'assembly-spark';
+        spark.style.left = `${rect.left + rect.width / 2}px`;
+        spark.style.top = `${rect.top + rect.height / 2}px`;
+        overlay.appendChild(spark);
+        setTimeout(() => spark.remove(), 340);
+    }, delay);
+}
+
+function animateAssemblyPart(target, edge, delay, distance = 70, showArm = true) {
+    if (!target) return;
+    const horizontal = edge === 'left' || edge === 'right';
+    const sign = edge === 'left' || edge === 'top' ? -1 : 1;
+    const dx = horizontal ? sign * distance : 0;
+    const dy = horizontal ? 0 : sign * Math.min(distance, 54);
+    if (showArm) createRobotArm(target, edge, delay);
+    createAssemblySpark(target, delay + 305);
+    const anim = target.animate([
+        { opacity: 0, transform: `translate3d(${dx}px, ${dy}px, 0) scale(.93)` },
+        { opacity: 1, transform: 'translate3d(0,0,0) scale(1.035)', offset: .78 },
+        { opacity: 1, transform: 'translate3d(0,0,0) scale(1)' }
+    ], {
+        duration: ASSEMBLY_DURATION,
+        delay,
+        easing: 'cubic-bezier(.2,.8,.2,1)',
+        fill: 'forwards'
+    });
+    assemblyAnimations.push(anim);
+}
+
+function finishAssemblyIntro() {
+    document.documentElement.classList.remove('assembly-pending');
+    clearTimeout(window.__assemblyFailsafe);
+    for (const anim of assemblyAnimations) {
+        try { anim.cancel(); } catch (e) {}
+    }
+    assemblyAnimations.length = 0;
+    setTimeout(() => document.getElementById('assembly-overlay')?.replaceChildren(), 50);
+}
+
+function runAssemblyIntro() {
+    if (!document.documentElement.classList.contains('assembly-pending')) return;
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+        finishAssemblyIntro();
+        return;
+    }
+    // Module đã chạy được thì thay failsafe ban đầu bằng failsafe ngắn cho chính intro.
+    clearTimeout(window.__assemblyFailsafe);
+    window.__assemblyFailsafe = setTimeout(finishAssemblyIntro, 2400);
+
+    const $ = sel => document.querySelector(sel);
+    // Pha 1: thanh trên.
+    animateAssemblyPart($('#weather-hub'), 'left', 0, 90);
+    animateAssemblyPart($('#presence-count'), 'right', 35, 90);
+    animateAssemblyPart($('#dark-toggle'), 'right', 125, 55, false);
+
+    // Pha 2: trạng thái / tiêu đề / hiệu suất.
+    animateAssemblyPart($('#load-speed-widget'), 'left', 300, 80);
+    animateAssemblyPart($('#crowd-status'), 'top', 285, 60);
+    animateAssemblyPart($('.header-title'), 'top', 360, 55, false);
+    animateAssemblyPart($('#net-speed-widget'), 'right', 330, 80);
+
+    // Pha 3: BTC + đồng hồ + WTI.
+    animateAssemblyPart($('#btc-ticker'), 'left', 610, 92);
+    animateAssemblyPart($('#oil-ticker'), 'right', 610, 92);
+    document.querySelectorAll('.flip-clock-container > .flip-unit, .flip-clock-container > .flip-colon')
+        .forEach((el, i) => animateAssemblyPart(el, 'bottom', 650 + i * 42, 50, i === 2));
+
+    setTimeout(finishAssemblyIntro, 1420);
+}
+
+// Chạy ngay khi module đã sẵn sàng; fetch thời tiết/ticker/Firebase vẫn chạy song song.
+requestAnimationFrame(runAssemblyIntro);
+
 // DARK MODE
 function applyDarkMode(isDark) {
     document.body.classList.toggle('dark-mode', isDark);
@@ -1342,7 +1530,7 @@ function scrollToCheckout() {
     document.getElementById('btn-checkout')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
-// TỐC ĐỘ TẢI TRANG (bên trái)
+// THỜI GIAN MỞ TRANG (bên trái)
 function reportLoadSpeed() {
     const el = document.getElementById('load-speed-val');
     if (!el) return;
@@ -1360,7 +1548,7 @@ if (document.readyState === 'complete') {
     window.addEventListener('load', () => setTimeout(reportLoadSpeed, 0));
 }
 
-// TỐC ĐỘ MẠNG (bên phải) — dung lượng thực tế đẩy lên/xuống Firebase, cập nhật real-time
+// PAYLOAD FIREBASE (bên phải) — ước tính JSON nhận/gửi, không phải số byte vật lý trên dây
 updateNetWidget();
 
 window.selectTable = selectTable; window.setLock = setLock; window.doPay = doPay; window.doReset = doReset; window.changeBillLang = changeBillLang; window.toggleDarkMode = toggleDarkMode; window.scrollToCheckout = scrollToCheckout; window.toggleBillQr = toggleBillQr;
