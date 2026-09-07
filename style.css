@@ -793,3 +793,295 @@ body.dark-mode .table-card.has-viewer { animation-name: viewerAuraPulseSoftDark;
     0%,100% { box-shadow: 0 7px 18px rgba(0,0,0,0.24), 0 0 0 0 var(--viewer-color, transparent); }
     50% { box-shadow: 0 8px 21px rgba(0,0,0,0.26), 0 0 10px 2px var(--viewer-color, transparent); }
 }
+
+/* =========================================================
+   MODERN SOFT-TECH V2 — stronger visual pass
+   Giữ nguyên DOM/layout/function, chỉ làm skin rõ ràng hơn.
+   ========================================================= */
+
+/* App canvas */
+body {
+    background:
+        radial-gradient(circle at 8% 0%, rgba(59,130,246,.10), transparent 24%),
+        radial-gradient(circle at 92% 2%, rgba(16,185,129,.07), transparent 22%),
+        linear-gradient(180deg, #f8fbff 0%, #f2f6fb 46%, #eef3f8 100%);
+}
+body.dark-mode {
+    background:
+        radial-gradient(circle at 8% 0%, rgba(56,189,248,.10), transparent 26%),
+        radial-gradient(circle at 92% 2%, rgba(34,197,94,.06), transparent 22%),
+        linear-gradient(180deg, #0d1520 0%, #111a26 100%);
+}
+
+/* Top information chips: rõ thành dashboard hơn */
+#weather-hub,
+#presence-count,
+.side-widget,
+.status-badge,
+#dark-toggle {
+    border: 1px solid rgba(203,213,225,.88);
+    background: rgba(255,255,255,.90);
+    box-shadow:
+        0 6px 18px rgba(31,41,55,.075),
+        inset 0 1px 0 rgba(255,255,255,.95);
+}
+body.dark-mode #weather-hub,
+body.dark-mode #presence-count,
+body.dark-mode .side-widget,
+body.dark-mode .status-badge,
+body.dark-mode #dark-toggle {
+    background: rgba(25,36,50,.92);
+    border-color: rgba(71,90,113,.58);
+    box-shadow: 0 7px 18px rgba(0,0,0,.22), inset 0 1px 0 rgba(255,255,255,.035);
+}
+
+.header-title {
+    color: #dc2626;
+    letter-spacing: .095em;
+    text-shadow: 0 1px 0 #fff, 0 5px 14px rgba(220,38,38,.08);
+}
+
+/* Status badge giống status chip trong mockup */
+.status-badge {
+    padding-left: 17px;
+    padding-right: 17px;
+    box-shadow: 0 5px 16px rgba(31,41,55,.07), 0 0 0 3px rgba(255,255,255,.45);
+}
+.status-empty {
+    background: linear-gradient(180deg,#f1fff6,#e9fbf0);
+    border-color: rgba(34,197,94,.35);
+}
+.status-normal {
+    background: linear-gradient(180deg,#fffaf0,#fff4dc);
+    border-color: rgba(245,158,11,.36);
+}
+
+/* Clock — mỗi số thành tile rõ hơn */
+.flip-clock-container { margin-top: 3px; }
+.card-half,
+.card-flip-wing,
+.card-flip-wing-back {
+    background: linear-gradient(180deg,#ffffff 0%,#f4f7fb 100%);
+    border-color: #d7e0eb;
+    box-shadow: 0 4px 12px rgba(31,41,55,.10);
+}
+body.dark-mode .card-half,
+body.dark-mode .card-flip-wing,
+body.dark-mode .card-flip-wing-back {
+    background: linear-gradient(180deg,#223043 0%,#182332 100%);
+    border-color: #3a4c61;
+}
+.flip-colon { color: #475569; }
+
+/* Financial widgets — tách khỏi clock rõ hơn */
+.ticker-item {
+    background: linear-gradient(180deg,#ffffff 0%,#f5f9fd 100%);
+    border: 1px solid #d9e3ef;
+    box-shadow: 0 9px 22px rgba(31,41,55,.10);
+}
+.ticker-item.up {
+    background: linear-gradient(180deg,#ffffff 0%,#effcf4 100%);
+    border-color: rgba(34,197,94,.32);
+}
+.ticker-item.down {
+    background: linear-gradient(180deg,#ffffff 0%,#fff3f3 100%);
+    border-color: rgba(239,68,68,.29);
+}
+.ticker-label { color: #64748b; }
+.ticker-value { color: #172033; }
+
+/* Table cards — visual thay đổi lớn nhất */
+.table-card {
+    border: 1px solid #dce5ef;
+    border-radius: 17px;
+    background: linear-gradient(155deg,#ffffff 0%,#fbfdff 58%,#f3f7fb 100%);
+    box-shadow:
+        0 10px 24px rgba(31,41,55,.085),
+        0 2px 0 rgba(148,163,184,.16),
+        inset 0 1px 0 rgba(255,255,255,.98);
+    padding-top: 16px;
+    padding-bottom: 12px;
+}
+.table-card::before {
+    content: "" !important;
+    position: absolute;
+    top: 13px;
+    left: 13px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    z-index: 12;
+    background: #a8b3c2;
+    border: 2px solid #f8fafc;
+    box-shadow: 0 0 0 1px rgba(100,116,139,.15), 0 2px 6px rgba(31,41,55,.16);
+}
+.table-card::after { content: none !important; }
+.table-card strong {
+    font-weight: 800;
+    color: #263548;
+    letter-spacing: .005em;
+}
+.table-price {
+    min-width: 34px;
+    color: #dc2626;
+    background: rgba(239,68,68,.065);
+    border: 1px solid rgba(239,68,68,.09);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.8);
+}
+.table-meta {
+    background: rgba(239,246,255,.95);
+    border: 1px solid #dbeafe;
+    color: #42617d;
+    padding: 4px 8px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.9);
+}
+.table-time {
+    color: #718096;
+    font-weight: 650;
+}
+
+/* Có khách = xanh nhẹ */
+.table-card.has-guest {
+    border-color: rgba(34,197,94,.42);
+    background: linear-gradient(155deg,#fbfffc 0%,#eefcf3 64%,#e7f9ee 100%);
+    box-shadow: 0 11px 25px rgba(34,197,94,.10), 0 2px 0 rgba(34,197,94,.10), inset 0 1px 0 rgba(255,255,255,.95);
+}
+.table-card.has-guest::before {
+    background: #22c55e;
+    box-shadow: 0 0 0 1px rgba(34,197,94,.15), 0 0 9px rgba(34,197,94,.55);
+}
+
+/* Đang chọn = xanh dương sạch */
+.table-card.active {
+    border-color: #3b82f6 !important;
+    background: linear-gradient(155deg,#f8fcff 0%,#eaf5ff 58%,#dfedff 100%) !important;
+    color: #1d4ed8;
+    transform: scale(1.035);
+    box-shadow: 0 12px 28px rgba(59,130,246,.18), 0 0 0 2px rgba(59,130,246,.08) !important;
+}
+.table-card.active::before {
+    background: #3b82f6;
+    box-shadow: 0 0 0 1px rgba(59,130,246,.14), 0 0 10px rgba(59,130,246,.52);
+}
+
+/* Locked = đỏ nhạt, bỏ rainbow */
+.table-card.is-locked,
+.table-card.is-locked-special {
+    border-color: rgba(239,68,68,.46) !important;
+    background: linear-gradient(155deg,#fffdfd 0%,#fff0f1 58%,#fee8ea 100%) !important;
+    box-shadow: 0 11px 25px rgba(239,68,68,.11), 0 2px 0 rgba(239,68,68,.09) !important;
+}
+.table-card.is-locked::before,
+.table-card.is-locked-special::before {
+    content: "" !important;
+    position: absolute;
+    inset: auto !important;
+    top: 13px !important;
+    left: 13px !important;
+    width: 10px !important;
+    height: 10px !important;
+    padding: 0 !important;
+    border-radius: 50% !important;
+    background: #ef4444 !important;
+    -webkit-mask: none !important;
+    mask: none !important;
+    animation: none !important;
+    border: 2px solid #fff !important;
+    box-shadow: 0 0 0 1px rgba(239,68,68,.15), 0 0 10px rgba(239,68,68,.52) !important;
+    z-index: 12 !important;
+}
+.table-card.is-locked::after,
+.table-card.is-locked-special::after { content: none !important; }
+
+/* Preserve remote viewer aura but keep surface modern */
+.table-card.has-viewer {
+    outline: 2px solid color-mix(in srgb, var(--viewer-color, #60a5fa) 45%, transparent);
+    outline-offset: 2px;
+}
+
+/* Dark table states */
+body.dark-mode .table-card {
+    background: linear-gradient(155deg,#1d2938 0%,#182331 100%);
+    border-color: #34465a;
+    box-shadow: 0 11px 24px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.035);
+}
+body.dark-mode .table-card::before { border-color: #1d2938; }
+body.dark-mode .table-card.has-guest {
+    background: linear-gradient(155deg,#183126 0%,#14291f 100%);
+    border-color: rgba(74,222,128,.36);
+}
+body.dark-mode .table-card.active {
+    background: linear-gradient(155deg,#173653 0%,#152d46 100%) !important;
+}
+body.dark-mode .table-card.is-locked,
+body.dark-mode .table-card.is-locked-special {
+    background: linear-gradient(155deg,#392127 0%,#302026 100%) !important;
+}
+body.dark-mode .table-meta {
+    background: rgba(59,130,246,.10);
+    border-color: rgba(96,165,250,.13);
+    color: #a9c9e8;
+}
+
+/* Order/menu surface */
+.container {
+    border: 1px solid #dce6f1;
+    background: rgba(255,255,255,.96);
+    box-shadow: 0 16px 38px rgba(31,41,55,.105);
+}
+body.dark-mode .container {
+    background: rgba(24,34,48,.96);
+    border-color: #304154;
+}
+.category-title {
+    background: linear-gradient(180deg,#f6f9fc,#edf3f8);
+    border-color: #e1e8f0;
+    color: #526276;
+}
+.menu-item {
+    border-radius: 12px;
+}
+.btn-qty {
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.65), 0 3px 8px rgba(31,41,55,.06);
+}
+.btn-add {
+    background: linear-gradient(180deg,#effdf4,#dcf8e7);
+    border: 1px solid rgba(34,197,94,.13);
+}
+.btn-sub {
+    background: linear-gradient(180deg,#f8fafc,#eef2f7);
+    border: 1px solid #e5eaf0;
+}
+
+/* Bill / QR / buttons */
+.bill-box {
+    border: 1px solid #d7e0ea;
+    border-radius: 15px;
+    box-shadow: 0 14px 34px rgba(31,41,55,.11);
+}
+.qr-bill-box {
+    border: 1px solid rgba(59,130,246,.26);
+    box-shadow: 0 14px 34px rgba(59,130,246,.09);
+}
+.btn-action {
+    border-radius: 13px;
+    box-shadow: 0 8px 18px rgba(31,41,55,.13), inset 0 1px 0 rgba(255,255,255,.22);
+}
+.lang-btn {
+    background: linear-gradient(180deg,#ffffff,#f7f9fc);
+    border-color: #dfe6ef;
+}
+body.dark-mode .lang-btn { background: linear-gradient(180deg,#223043,#1a2635); }
+
+/* Small-screen: giữ nguyên grid, chỉ giảm decoration */
+@media (max-width: 380px) {
+    .table-card { border-radius: 15px; }
+    .table-card::before,
+    .table-card.is-locked::before,
+    .table-card.is-locked-special::before {
+        top: 10px !important;
+        left: 10px !important;
+        width: 8px !important;
+        height: 8px !important;
+    }
+}
