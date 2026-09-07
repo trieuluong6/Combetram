@@ -411,20 +411,36 @@ async function fetchBitcoinPrice() {
 }
 
 async function fetchOilPrice() {
-    const proxies = ['https://api.allorigins.win/raw?url=', 'https://corsproxy.io/?url='];
-    const targetUrl = 'https://query1.finance.yahoo.com/v8/finance/chart/CL=F';
-    for (const proxy of proxies) {
-        try {
-            const res = await fetch(proxy + encodeURIComponent(targetUrl));
-            if (!res.ok) continue;
+    // Nguồn chính: AmericasOilWatch — CORS mở, không cần API key.
+    // Yahoo qua proxy chỉ giữ làm fallback để tránh DẦU bị "--" khi một nguồn tạm lỗi.
+    const sources = [
+        async () => {
+            const res = await fetch('https://americasoilwatch.com/api/v1/wti', { cache: 'no-store' });
+            if (!res.ok) throw new Error(`AmericasOilWatch HTTP ${res.status}`);
             const d = await res.json();
-            const price = Number(d?.chart?.result?.[0]?.meta?.regularMarketPrice);
-            if (!isFinite(price)) continue;
+            return Number(d?.priceUsd);
+        },
+        ...['https://api.allorigins.win/raw?url=', 'https://corsproxy.io/?url='].map(proxy => async () => {
+            const targetUrl = 'https://query1.finance.yahoo.com/v8/finance/chart/CL=F';
+            const res = await fetch(proxy + encodeURIComponent(targetUrl), { cache: 'no-store' });
+            if (!res.ok) throw new Error(`Oil fallback HTTP ${res.status}`);
+            const d = await res.json();
+            return Number(d?.chart?.result?.[0]?.meta?.regularMarketPrice);
+        })
+    ];
+
+    for (const getPrice of sources) {
+        try {
+            const price = await getPrice();
+            if (!isFinite(price) || price <= 0) continue;
             realOilPrice = price;
             if (displayedOilPrice === null) displayedOilPrice = price;
             return;
-        } catch (err) { /* thử proxy kế tiếp */ }
+        } catch (err) {
+            // thử nguồn kế tiếp
+        }
     }
+
     console.error('[ticker] Không lấy được giá dầu từ mọi nguồn dự phòng');
 }
 
