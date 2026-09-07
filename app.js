@@ -352,9 +352,19 @@ fetchRealtimeWeather();
 setInterval(fetchRealtimeWeather, 600000);
 setInterval(simulateWeatherFluctuation, 5000);
 
-// TICKER VÀNG & DẦU
-let realGoldPrice = null, realOilPrice = null;
-let displayedGoldPrice = null, displayedOilPrice = null;
+// TICKER BTC & DẦU
+// Giữ id HTML "gold-ticker" để chỉ cần cập nhật app.js trên GitHub.
+const BTC_TICKER_ID = 'gold-ticker';
+let realBitcoinPrice = null, realOilPrice = null;
+let displayedBitcoinPrice = null, displayedOilPrice = null;
+
+// Đổi nhãn ô VÀNG cũ thành BTC mà không cần sửa index.html.
+const btcTickerWidget = document.getElementById(BTC_TICKER_ID);
+if (btcTickerWidget) {
+    const label = btcTickerWidget.querySelector('.ticker-label');
+    if (label) label.textContent = 'BTC';
+    btcTickerWidget.title = 'Bitcoin / USD';
+}
 
 function renderTicker(elementId, value, prevValue, digits) {
     const widget = document.getElementById(elementId);
@@ -367,16 +377,37 @@ function renderTicker(elementId, value, prevValue, digits) {
     widget.classList.toggle('down', !isUp);
 }
 
-async function fetchGoldPrice() {
-    try {
-        const res = await fetch('https://api.gold-api.com/price/XAU');
-        if (!res.ok) return;
-        const d = await res.json();
-        const price = Number(d.price);
-        if (!isFinite(price)) return;
-        realGoldPrice = price;
-        if (displayedGoldPrice === null) displayedGoldPrice = price;
-    } catch (err) { console.error('[ticker] Lỗi lấy giá vàng:', err.message); }
+async function fetchBitcoinPrice() {
+    // Coinbase Exchange là endpoint public, không cần API key.
+    // CoinGecko keyless được dùng làm nguồn dự phòng nếu Coinbase lỗi/CORS.
+    const sources = [
+        async () => {
+            const res = await fetch('https://api.exchange.coinbase.com/products/BTC-USD/ticker', { cache: 'no-store' });
+            if (!res.ok) throw new Error(`Coinbase HTTP ${res.status}`);
+            const d = await res.json();
+            return Number(d?.price);
+        },
+        async () => {
+            const res = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd', { cache: 'no-store' });
+            if (!res.ok) throw new Error(`CoinGecko HTTP ${res.status}`);
+            const d = await res.json();
+            return Number(d?.bitcoin?.usd);
+        }
+    ];
+
+    for (const getPrice of sources) {
+        try {
+            const price = await getPrice();
+            if (!isFinite(price) || price <= 0) continue;
+            realBitcoinPrice = price;
+            if (displayedBitcoinPrice === null) displayedBitcoinPrice = price;
+            return;
+        } catch (err) {
+            // thử nguồn kế tiếp
+        }
+    }
+
+    console.error('[ticker] Không lấy được giá BTC từ mọi nguồn dự phòng');
 }
 
 async function fetchOilPrice() {
@@ -397,8 +428,8 @@ async function fetchOilPrice() {
     console.error('[ticker] Không lấy được giá dầu từ mọi nguồn dự phòng');
 }
 
-fetchGoldPrice(); fetchOilPrice();
-setInterval(fetchGoldPrice, 180000);
+fetchBitcoinPrice(); fetchOilPrice();
+setInterval(fetchBitcoinPrice, 180000);
 setInterval(fetchOilPrice, 180000);
 
 // ─── FIX #4: Ticker noise — dừng khi tab bị ẩn ───
@@ -406,11 +437,13 @@ let tickerIntervalId = null;
 function startTickerInterval() {
     if (tickerIntervalId) return;
     tickerIntervalId = setInterval(() => {
-        if (realGoldPrice !== null) {
-            const noise = (Math.random() - 0.5) * 3;
-            const newVal = realGoldPrice + noise;
-            renderTicker('gold-ticker', newVal, displayedGoldPrice, 1);
-            displayedGoldPrice = newVal;
+        if (realBitcoinPrice !== null) {
+            // Dao động local nhỏ quanh giá thật để ticker vẫn "sống" giữa 2 lần fetch.
+            // ±$50 là rất nhỏ so với BTC nhưng đủ để số thay đổi trực quan.
+            const noise = (Math.random() - 0.5) * 100;
+            const newVal = realBitcoinPrice + noise;
+            renderTicker(BTC_TICKER_ID, newVal, displayedBitcoinPrice, 0);
+            displayedBitcoinPrice = newVal;
         }
         if (realOilPrice !== null) {
             const noise = (Math.random() - 0.5) * 0.3;
@@ -717,8 +750,61 @@ document.getElementById('menu-list').addEventListener('click', (e) => {
 });
 
 // Dữ liệu chính: tách listener theo nhánh + chỉ đánh dấu các bàn thực sự thay đổi.
+// pendingUpdates đặt trước listener để phân biệt echo local với thay đổi remote.
+const pendingUpdates = {};
 let firstOrdersLoad = true;
 const initialBranchesLoaded = new Set();
+
+// Flash thay đổi từ thiết bị khác. Queue tới sau refresh để renderCurrentOrder/renderTable
+// không ghi đè class flash vừa thêm. Echo của chính thiết bị này được bỏ qua nếu
+// snapshot Firebase đúng bằng optimistic quantity đang chờ ghi.
+const pendingRemoteOrderFlashes = [];
+
+function queueRemoteOrderFlashes(prevOrders, nextOrders) {
+    for (let tableId = 1; tableId <= 9; tableId++) {
+        const prevTable = prevOrders?.[tableId] || {};
+        const nextTable = nextOrders?.[tableId] || {};
+        const itemIds = new Set([...Object.keys(prevTable), ...Object.keys(nextTable)]);
+
+        for (const rawId of itemIds) {
+            const itemId = Number(rawId);
+            const oldQty = Number(prevTable?.[rawId] || 0);
+            const newQty = Number(nextTable?.[rawId] || 0);
+            if (oldQty === newQty) continue;
+
+            // update() của chính máy này cũng phát onValue local. Nếu snapshot đã đúng
+            // với quantity optimistic đang pending thì local UI đã flash rồi, không flash lần 2.
+            const localPendingQty = pendingUpdates[tableId]?.[itemId];
+            if (localPendingQty !== undefined && Number(localPendingQty) === newQty) continue;
+
+            pendingRemoteOrderFlashes.push({
+                tableId,
+                itemId,
+                delta: newQty - oldQty
+            });
+        }
+    }
+}
+
+function flushRemoteOrderFlashes() {
+    if (!pendingRemoteOrderFlashes.length) return;
+    const flashes = pendingRemoteOrderFlashes.splice(0);
+
+    for (const { tableId, itemId, delta } of flashes) {
+        const cls = delta > 0 ? 'flash-add' : 'flash-sub';
+        const tableBtn = TABLE_DOM[tableId - 1]?.card;
+        const row = currentTab === tableId ? ITEM_DOM.get(itemId)?.row : null;
+
+        if (tableBtn) tableBtn.classList.add(cls);
+        if (row) row.classList.add(cls);
+
+        setTimeout(() => {
+            if (tableBtn) tableBtn.classList.remove(cls);
+            if (row) row.classList.remove(cls);
+        }, 400);
+    }
+}
+
 function markInitialBranchLoaded(branch) {
     initialBranchesLoaded.add(branch);
     if (initialBranchesLoaded.size === 3) scheduleRefresh(null);
@@ -728,6 +814,7 @@ onValue(ordersRef, snap => {
     const nextOrders = snap.val() || {};
     const changed = changedTableIds(data.orders, nextOrders);
     if (!firstOrdersLoad && changed.size) {
+        queueRemoteOrderFlashes(data.orders, nextOrders);
         document.getElementById('tingSound').play().catch(() => {});
     }
     data.orders = nextOrders;
@@ -780,7 +867,6 @@ function selectTable(n) {
 }
 
 // ─── FIX #1: Debounce Firebase write 250ms ───
-const pendingUpdates = {};
 const debounceTimers = {};
 const debounceVersions = {};
 const pendingStartTimes = new Set();
@@ -988,6 +1074,7 @@ function refresh(tableIds = null, updateCurrentOrder = true) {
     const now = Date.now();
     for (const id of ids) renderTable(Number(id), now);
     renderCrowdAndReset();
+    flushRemoteOrderFlashes();
 }
 
 // ─── FIX #9: Async bill render với lazy-load dict ───
