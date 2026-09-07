@@ -58,12 +58,10 @@ let currentTab = null;
 let data = { orders: {}, locked: {}, times: {} };
 let billWasShown = false;
 
-// Trạng thái thanh toán: giữ bill tại chỗ trong lúc animation success chạy,
-// đồng thời chặn thao tác lặp để tránh double-pay/double-click.
-const PAYMENT_SUCCESS_MS = 430;
-const PAYMENT_EXIT_MS = 220;
+// Chặn double-click trong đúng khoảnh khắc xác nhận thanh toán.
+// localPaymentEchoTables giúp snapshot xóa bill của chính máy này không bị hiểu là thay đổi remote.
 let paymentInProgress = false;
-let paymentTableId = null;
+const localPaymentEchoTables = new Set();
 
 // ─── BILL ↔ QR: lật card + co/giãn chiều cao + cuộn đồng bộ ───
 const BILL_FLIP_MS = 560;
@@ -202,6 +200,10 @@ function toggleBillQr() {
 // ─── FIX #2: Menu lookup Map O(1) thay vì find() O(n) trong mỗi vòng lặp ───
 const ALL_ITEMS = menu.flatMap(g => g.items);
 const ITEM_MAP = new Map(ALL_ITEMS.map(i => [i.id, i]));
+// Nước uống + bia được gom thành một nhóm để hiển thị nhanh trên card bàn.
+const DRINK_ITEM_IDS = new Set(
+    menu.filter(group => /NƯỚC|BEER/i.test(group.cat)).flatMap(group => group.items.map(item => item.id))
+);
 
 // Listener dữ liệu chính được tách theo nhánh để tránh tải lại locked/times khi chỉ orders đổi.
 const ordersRef = child(dbRef, 'orders');
@@ -214,6 +216,7 @@ const TABLE_DOM = Array.from({ length: 9 }, (_, idx) => {
     return {
         card: document.getElementById(`tab-${table}`),
         sum: document.getElementById(`sum-${table}`),
+        meta: document.getElementById(`meta-${table}`),
         time: document.getElementById(`time-${table}`)
     };
 });
@@ -360,95 +363,141 @@ fetchRealtimeWeather();
 setInterval(fetchRealtimeWeather, 600000);
 setInterval(simulateWeatherFluctuation, 5000);
 
-// TICKER BTC & DẦU
-// Giữ id HTML "gold-ticker" để chỉ cần cập nhật app.js trên GitHub.
-const BTC_TICKER_ID = 'gold-ticker';
+// TICKER BTC & DẦU — card tài chính mềm: giá + % thay đổi + sparkline session.
+const BTC_TICKER_ID = 'btc-ticker';
+const OIL_TICKER_ID = 'oil-ticker';
 let realBitcoinPrice = null, realOilPrice = null;
 let displayedBitcoinPrice = null, displayedOilPrice = null;
+let realBitcoinChangePct = null, realOilChangePct = null;
+const tickerHistory = { btc: [], oil: [] };
+let lastSparkSampleAt = 0;
 
-// Đổi nhãn ô VÀNG cũ thành BTC mà không cần sửa index.html.
-const btcTickerWidget = document.getElementById(BTC_TICKER_ID);
-if (btcTickerWidget) {
-    const label = btcTickerWidget.querySelector('.ticker-label');
-    if (label) label.textContent = 'BTC';
-    btcTickerWidget.title = 'Bitcoin / USD';
+function formatTickerPrice(kind, value) {
+    if (!Number.isFinite(value)) return '--';
+    return kind === 'btc'
+        ? `$${Math.round(value).toLocaleString('en-US')}`
+        : `$${value.toFixed(2)}`;
 }
 
-function renderTicker(elementId, value, prevValue, digits) {
+function seedTickerHistory(kind, value, amplitude) {
+    if (tickerHistory[kind].length || !Number.isFinite(value)) return;
+    let cursor = value - amplitude * 0.3;
+    for (let i = 0; i < 18; i++) {
+        cursor += (Math.random() - 0.48) * amplitude;
+        tickerHistory[kind].push(cursor);
+    }
+    tickerHistory[kind][tickerHistory[kind].length - 1] = value;
+}
+
+function pushTickerHistory(kind, value) {
+    if (!Number.isFinite(value)) return;
+    const arr = tickerHistory[kind];
+    arr.push(value);
+    if (arr.length > 22) arr.shift();
+}
+
+function renderSparkline(elementId, history) {
     const widget = document.getElementById(elementId);
-    if (!widget) return;
+    const line = widget?.querySelector('.ticker-sparkline-line');
+    if (!line || history.length < 2) return;
+    const width = 64, height = 16, pad = 1.5;
+    const min = Math.min(...history), max = Math.max(...history);
+    const range = Math.max(max - min, Math.abs(max || 1) * 0.000001);
+    const points = history.map((v, i) => {
+        const x = pad + i * ((width - pad * 2) / (history.length - 1));
+        const y = height - pad - ((v - min) / range) * (height - pad * 2);
+        return `${x.toFixed(1)},${y.toFixed(1)}`;
+    }).join(' ');
+    line.setAttribute('points', points);
+}
+
+function renderTicker(elementId, kind, value, prevValue, changePct) {
+    const widget = document.getElementById(elementId);
+    if (!widget || !Number.isFinite(value)) return;
     const valueSpan = widget.querySelector('.ticker-value');
-    if (!valueSpan || typeof value !== 'number' || !isFinite(value)) return;
-    const isUp = prevValue === null || value >= prevValue;
-    valueSpan.textContent = `${isUp ? '▲' : '▼'}${value.toFixed(digits)}`;
+    const deltaSpan = widget.querySelector('.ticker-delta');
+    if (!valueSpan) return;
+
+    valueSpan.textContent = formatTickerPrice(kind, value);
+    const fallbackDelta = prevValue === null ? 0 : ((value - prevValue) / Math.max(Math.abs(prevValue), 1)) * 100;
+    const delta = Number.isFinite(changePct) ? changePct : fallbackDelta;
+    const isUp = delta > 0.0001;
+    const isDown = delta < -0.0001;
     widget.classList.toggle('up', isUp);
-    widget.classList.toggle('down', !isUp);
+    widget.classList.toggle('down', isDown);
+    widget.classList.toggle('flat', !isUp && !isDown);
+    if (deltaSpan) {
+        const arrow = isUp ? '▲' : isDown ? '▼' : '•';
+        deltaSpan.textContent = `${arrow} ${Math.abs(delta).toFixed(2)}%`;
+    }
+    renderSparkline(elementId, tickerHistory[kind]);
 }
 
 async function fetchBitcoinPrice() {
-    // Coinbase Exchange là endpoint public, không cần API key.
-    // CoinGecko keyless được dùng làm nguồn dự phòng nếu Coinbase lỗi/CORS.
+    // Coinbase stats cho cả giá cuối và open 24h; CoinGecko là fallback.
     const sources = [
         async () => {
-            const res = await fetch('https://api.exchange.coinbase.com/products/BTC-USD/ticker', { cache: 'no-store' });
+            const res = await fetch('https://api.exchange.coinbase.com/products/BTC-USD/stats', { cache: 'no-store' });
             if (!res.ok) throw new Error(`Coinbase HTTP ${res.status}`);
             const d = await res.json();
-            return Number(d?.price);
+            const price = Number(d?.last), open = Number(d?.open);
+            return { price, changePct: Number.isFinite(open) && open > 0 ? ((price - open) / open) * 100 : null };
         },
         async () => {
-            const res = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd', { cache: 'no-store' });
+            const res = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true', { cache: 'no-store' });
             if (!res.ok) throw new Error(`CoinGecko HTTP ${res.status}`);
             const d = await res.json();
-            return Number(d?.bitcoin?.usd);
+            return { price: Number(d?.bitcoin?.usd), changePct: Number(d?.bitcoin?.usd_24h_change) };
         }
     ];
 
     for (const getPrice of sources) {
         try {
-            const price = await getPrice();
-            if (!isFinite(price) || price <= 0) continue;
+            const { price, changePct } = await getPrice();
+            if (!Number.isFinite(price) || price <= 0) continue;
             realBitcoinPrice = price;
+            realBitcoinChangePct = Number.isFinite(changePct) ? changePct : realBitcoinChangePct;
             if (displayedBitcoinPrice === null) displayedBitcoinPrice = price;
+            seedTickerHistory('btc', price, 70);
+            renderTicker(BTC_TICKER_ID, 'btc', displayedBitcoinPrice, null, realBitcoinChangePct);
             return;
-        } catch (err) {
-            // thử nguồn kế tiếp
-        }
+        } catch (err) { /* thử nguồn kế tiếp */ }
     }
-
     console.error('[ticker] Không lấy được giá BTC từ mọi nguồn dự phòng');
 }
 
 async function fetchOilPrice() {
-    // Nguồn chính: AmericasOilWatch — CORS mở, không cần API key.
-    // Yahoo qua proxy chỉ giữ làm fallback để tránh DẦU bị "--" khi một nguồn tạm lỗi.
     const sources = [
         async () => {
             const res = await fetch('https://americasoilwatch.com/api/v1/wti', { cache: 'no-store' });
             if (!res.ok) throw new Error(`AmericasOilWatch HTTP ${res.status}`);
             const d = await res.json();
-            return Number(d?.priceUsd);
+            return { price: Number(d?.priceUsd), changePct: Number(d?.changePct) };
         },
         ...['https://api.allorigins.win/raw?url=', 'https://corsproxy.io/?url='].map(proxy => async () => {
             const targetUrl = 'https://query1.finance.yahoo.com/v8/finance/chart/CL=F';
             const res = await fetch(proxy + encodeURIComponent(targetUrl), { cache: 'no-store' });
             if (!res.ok) throw new Error(`Oil fallback HTTP ${res.status}`);
             const d = await res.json();
-            return Number(d?.chart?.result?.[0]?.meta?.regularMarketPrice);
+            const meta = d?.chart?.result?.[0]?.meta || {};
+            const price = Number(meta.regularMarketPrice);
+            const prevClose = Number(meta.chartPreviousClose || meta.previousClose);
+            return { price, changePct: Number.isFinite(prevClose) && prevClose > 0 ? ((price - prevClose) / prevClose) * 100 : null };
         })
     ];
 
     for (const getPrice of sources) {
         try {
-            const price = await getPrice();
-            if (!isFinite(price) || price <= 0) continue;
+            const { price, changePct } = await getPrice();
+            if (!Number.isFinite(price) || price <= 0) continue;
             realOilPrice = price;
+            realOilChangePct = Number.isFinite(changePct) ? changePct : realOilChangePct;
             if (displayedOilPrice === null) displayedOilPrice = price;
+            seedTickerHistory('oil', price, 0.18);
+            renderTicker(OIL_TICKER_ID, 'oil', displayedOilPrice, null, realOilChangePct);
             return;
-        } catch (err) {
-            // thử nguồn kế tiếp
-        }
+        } catch (err) { /* thử nguồn kế tiếp */ }
     }
-
     console.error('[ticker] Không lấy được giá dầu từ mọi nguồn dự phòng');
 }
 
@@ -456,25 +505,26 @@ fetchBitcoinPrice(); fetchOilPrice();
 setInterval(fetchBitcoinPrice, 180000);
 setInterval(fetchOilPrice, 180000);
 
-// ─── FIX #4: Ticker noise — dừng khi tab bị ẩn ───
+// Ticker vẫn dao động local 800ms như bản cũ cho vui mắt; sparkline chỉ lấy mẫu ~3.2s/lần.
 let tickerIntervalId = null;
 function startTickerInterval() {
     if (tickerIntervalId) return;
     tickerIntervalId = setInterval(() => {
+        const now = Date.now();
+        const shouldSampleSpark = now - lastSparkSampleAt >= 3200;
         if (realBitcoinPrice !== null) {
-            // Dao động local nhỏ quanh giá thật để ticker vẫn "sống" giữa 2 lần fetch.
-            // ±$50 là rất nhỏ so với BTC nhưng đủ để số thay đổi trực quan.
-            const noise = (Math.random() - 0.5) * 100;
-            const newVal = realBitcoinPrice + noise;
-            renderTicker(BTC_TICKER_ID, newVal, displayedBitcoinPrice, 0);
+            const newVal = realBitcoinPrice + (Math.random() - 0.5) * 100;
+            if (shouldSampleSpark) pushTickerHistory('btc', newVal);
+            renderTicker(BTC_TICKER_ID, 'btc', newVal, displayedBitcoinPrice, realBitcoinChangePct);
             displayedBitcoinPrice = newVal;
         }
         if (realOilPrice !== null) {
-            const noise = (Math.random() - 0.5) * 0.3;
-            const newVal = realOilPrice + noise;
-            renderTicker('oil-ticker', newVal, displayedOilPrice, 2);
+            const newVal = realOilPrice + (Math.random() - 0.5) * 0.3;
+            if (shouldSampleSpark) pushTickerHistory('oil', newVal);
+            renderTicker(OIL_TICKER_ID, 'oil', newVal, displayedOilPrice, realOilChangePct);
             displayedOilPrice = newVal;
         }
+        if (shouldSampleSpark) lastSparkSampleAt = now;
     }, 800);
 }
 function stopTickerInterval() {
@@ -847,13 +897,17 @@ onValue(ordersRef, snap => {
     const nextOrders = snap.val() || {};
     const changed = changedTableIds(data.orders, nextOrders);
     if (!firstOrdersLoad && changed.size) {
-        // Không coi echo local của chính lần thanh toán là "remote remove".
-        // Các thay đổi thật từ bàn khác vẫn được flash/ting bình thường.
-        const ignoredTables = paymentInProgress && paymentTableId
-            ? new Set([paymentTableId])
-            : null;
+        // Không coi snapshot xóa bill của chính lần thanh toán trên máy này là remote remove.
+        const ignoredTables = localPaymentEchoTables.size ? new Set(localPaymentEchoTables) : null;
         const remoteChanges = queueRemoteOrderFlashes(data.orders, nextOrders, ignoredTables);
         if (remoteChanges > 0) document.getElementById('tingSound').play().catch(() => {});
+        if (ignoredTables) {
+            for (const tableId of ignoredTables) {
+                if (!nextOrders?.[tableId] || Object.keys(nextOrders[tableId]).length === 0) {
+                    localPaymentEchoTables.delete(tableId);
+                }
+            }
+        }
     }
     data.orders = nextOrders;
     firstOrdersLoad = false;
@@ -1024,28 +1078,24 @@ function changeBillLang(l) { if (paymentInProgress) return; triggerHaptic('nav')
 
 // ─── FIX #3: Bỏ setInterval(refresh, 30000) — Firebase onValue() đã đủ ───
 // ─── FIX #2: Dùng ITEM_MAP O(1) thay vì all.find() O(n) ───
-function calculateTableTotal(tableId) {
-    let total = 0;
+function calculateTableStats(tableId) {
+    let total = 0, foodQty = 0, drinkQty = 0;
     const order = data.orders[tableId] || {};
     for (const id in order) {
-        const item = ITEM_MAP.get(Number(id));
-        if (item && order[id] > 0) total += item.price * order[id];
+        const itemId = Number(id);
+        const item = ITEM_MAP.get(itemId);
+        const qty = Math.max(0, Number(order[id]) || 0);
+        if (!item || qty <= 0) continue;
+        total += item.price * qty;
+        if (DRINK_ITEM_IDS.has(itemId)) drinkQty += qty;
+        else foodQty += qty;
     }
-    return total;
+    return { total, foodQty, drinkQty };
 }
 
 function renderCurrentOrder() {
     if (!currentTab) return;
     const billArea = document.getElementById('bill-area');
-
-    // Firebase update thanh toán phát snapshot local gần như ngay lập tức.
-    // Trong ~650ms animation success, giữ bill ở nguyên trạng thay vì để snapshot làm nó biến mất.
-    if (paymentInProgress && paymentTableId === currentTab) {
-        document.getElementById('menu-area').style.display = 'none';
-        billArea.style.display = 'block';
-        document.getElementById('scroll-to-checkout')?.classList.add('hidden');
-        return;
-    }
 
     const isLock = !!data.locked?.[currentTab];
     document.getElementById('menu-area').style.display = isLock ? 'none' : 'block';
@@ -1090,13 +1140,18 @@ function renderTableTime(tableId, now = Date.now()) {
 function renderTable(tableId, now = Date.now()) {
     const dom = TABLE_DOM[tableId - 1];
     if (!dom) return;
-    const total = calculateTableTotal(tableId);
+    const { total, foodQty, drinkQty } = calculateTableStats(tableId);
     tableTotals[tableId] = total;
     const locked = !!data.locked?.[tableId];
 
     if (dom.sum) {
         dom.sum.classList.remove('skeleton');
         if (parseInt(dom.sum.innerText.replace(/\D/g, '')) !== total) animateNumber(`sum-${tableId}`, total);
+    }
+    if (dom.meta) {
+        dom.meta.classList.remove('skeleton');
+        dom.meta.textContent = total > 0 ? `🍽 ${foodQty} món · 🥤🍺 ${drinkQty}` : '';
+        dom.meta.title = total > 0 ? `${foodQty} phần món ăn · ${drinkQty} nước/bia` : '';
     }
     renderTableTime(tableId, now);
 
@@ -1194,98 +1249,40 @@ function setLock(v) {
     if (v) setTimeout(scrollBillIntoView, 100);
 }
 
-function delay(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-function setPaymentSuccessVisible(visible) {
-    const layer = document.getElementById('payment-success-layer');
-    if (!layer) return;
-    layer.classList.toggle('visible', visible);
-    layer.setAttribute('aria-hidden', visible ? 'false' : 'true');
-}
-
-async function playPaymentSuccessAnimation() {
-    const layer = document.getElementById('payment-success-layer');
-    const card = document.getElementById('payment-success-card');
-    const billArea = document.getElementById('bill-area');
-    if (!layer || !card || !billArea) {
-        await delay(PAYMENT_SUCCESS_MS);
-        return;
-    }
-
-    setPaymentSuccessVisible(true);
-    card.getAnimations().forEach(a => a.cancel());
-    billArea.getAnimations().forEach(a => a.cancel());
-
-    card.animate(
-        [
-            { opacity: 0, transform: 'scale(0.86) translateY(10px)' },
-            { opacity: 1, transform: 'scale(1.045) translateY(0)', offset: 0.68 },
-            { opacity: 1, transform: 'scale(1) translateY(0)' }
-        ],
-        { duration: PAYMENT_SUCCESS_MS, easing: 'cubic-bezier(0.22, 1, 0.36, 1)', fill: 'both' }
-    );
-
-    await delay(PAYMENT_SUCCESS_MS);
-
-    const exit = billArea.animate(
-        [
-            { opacity: 1, transform: 'scale(1)', maxHeight: `${Math.ceil(billArea.scrollHeight)}px` },
-            { opacity: 0, transform: 'scale(0.96) translateY(-8px)', maxHeight: '0px' }
-        ],
-        { duration: PAYMENT_EXIT_MS, easing: 'cubic-bezier(0.4, 0, 1, 1)', fill: 'forwards' }
-    );
-    await exit.finished.catch(() => {});
-}
-
-async function doPay() {
+function doPay() {
     if (!currentTab || paymentInProgress) return;
     if (!confirm("Xác nhận thanh toán?")) return;
 
     const tab = currentTab;
     paymentInProgress = true;
-    paymentTableId = tab;
+    localPaymentEchoTables.add(tab);
     stopBillScrollAnimation();
     triggerHaptic('success');
 
-    // Một multi-path update duy nhất: orders/locked/times biến mất atomically.
-    // Firebase vẫn phát snapshot local ngay, nhưng renderCurrentOrder giữ bill đến hết animation.
-    let writeError = null;
-    let paymentUiClosed = false;
+    // Atomic multi-path update: xóa cả order/lock/time trong một commit.
+    // Không chờ animation hay network trước khi đóng UI, nên cảm giác thanh toán là tức thì.
     const paymentWrite = update(dbRef, {
         [`orders/${tab}`]: null,
         [`locked/${tab}`]: null,
         [`times/${tab}`]: null
     });
-    paymentWrite.catch(err => {
-        writeError = err;
-        console.error('[payment] Lỗi ghi Firebase:', err);
-        if (paymentUiClosed) {
-            alert('Thanh toán chưa đồng bộ được lên hệ thống. Vui lòng kiểm tra lại bàn.');
-        }
-    });
 
-    await playPaymentSuccessAnimation();
+    // Optimistic clear để card bàn phản hồi ngay cả trước callback Firebase local.
+    if (data.orders) delete data.orders[tab];
+    if (data.locked) delete data.locked[tab];
+    if (data.times) delete data.times[tab];
+    tableTotals[tab] = 0;
+    scheduleRefresh(new Set([tab]), true);
 
-    if (writeError) {
-        setPaymentSuccessVisible(false);
-        document.getElementById('bill-area')?.getAnimations().forEach(a => a.cancel());
-        paymentInProgress = false;
-        paymentTableId = null;
-        refresh(new Set([tab]), true);
-        alert('Không thể ghi thanh toán lên hệ thống. Vui lòng thử lại.');
-        return;
-    }
-
-    // Không chờ network vô hạn nếu đang offline; RTDB sẽ tiếp tục đồng bộ write đã queue.
-    paymentUiClosed = true;
-    setPaymentSuccessVisible(false);
-    // Bỏ fill:forwards của exit animation để lần mở bill kế tiếp không bị opacity/max-height cũ giữ lại.
-    document.getElementById('bill-area')?.getAnimations().forEach(a => a.cancel());
-    paymentInProgress = false;
-    paymentTableId = null;
+    // Đóng khu order ngay; không còn 650ms payment-success delay.
     selectTable(null, { haptic: false, allowDuringPayment: true });
+    paymentInProgress = false;
+
+    paymentWrite.catch(err => {
+        localPaymentEchoTables.delete(tab);
+        console.error('[payment] Lỗi ghi Firebase:', err);
+        alert('Thanh toán chưa đồng bộ được lên hệ thống. Dữ liệu bàn sẽ được Firebase khôi phục nếu ghi thất bại.');
+    });
 }
 
 async function doReset() {

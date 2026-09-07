@@ -258,13 +258,16 @@ body.dark-mode .status-normal { background: rgba(230,81,0,0.18); color: #ffb74d;
 
 /* BÀN ĂN */
 .tables-container { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-bottom: 15px; }
-.table-card { background: var(--bg-card); padding: 10px 2px; text-align: center; border-radius: 12px; cursor: pointer; border: 2px solid var(--border-card); box-shadow: 0 3px 0 var(--border-card); display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 90px; position: relative; overflow: hidden; transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94), background-color 0.4s ease, color 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease; grid-column: span 2; }
+.table-card { background: var(--bg-card); padding: 10px 2px; text-align: center; border-radius: 12px; cursor: pointer; border: 2px solid var(--border-card); box-shadow: 0 3px 0 var(--border-card); display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 104px; position: relative; overflow: hidden; transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94), background-color 0.4s ease, color 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease; grid-column: span 2; }
 .full-width { grid-column: span 6; }
 .half-width { grid-column: span 3; }
 .table-card strong, .table-card span { position: relative; z-index: 10; }
 .table-card strong { font-size: 0.85em; color: var(--text-main); margin-bottom: 5px; transition: color 0.4s ease; }
 .table-price { color: var(--primary-red); font-weight: bold; font-size: 0.85em; background: rgba(var(--bg-card-rgb),0.8); padding: 2px 6px; border-radius: 4px; transition: background 0.4s ease; }
 .table-time { font-size: 0.7em; color: var(--text-muted); margin-top: 6px; font-weight: 500; transition: color 0.4s ease; }
+.table-meta { margin-top: 5px; font-size: 0.58em; line-height: 1.25; font-weight: 750; color: var(--text-muted); white-space: nowrap; padding: 2px 5px; border-radius: 999px; background: rgba(127,127,127,0.08); transition: color 0.3s ease, background-color 0.3s ease; }
+.table-meta:empty { display: none; }
+body.dark-mode .table-meta { background: rgba(255,255,255,0.06); }
 @keyframes pulse-green { 0% { background-color: var(--bg-card); } 50% { background-color: #1b3a20; } 100% { background-color: var(--bg-card); } }
 @keyframes pulse-green-light { 0% { background-color: #fff; } 50% { background-color: #e8f5e9; } 100% { background-color: #fff; } }
 .has-guest { animation: pulse-green-light 2s infinite; border-color: var(--success-green); }
@@ -388,67 +391,6 @@ body.dark-mode .total-container { animation: pulse-rgb-total-dark 2s infinite ea
 @keyframes rippleEffect { to { transform: scale(2.8); opacity: 0; } }
 
 /* PAYMENT SUCCESS */
-.payment-success-layer {
-    position: fixed;
-    inset: 0;
-    z-index: 1000;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 20px;
-    background: rgba(0, 0, 0, 0.08);
-    backdrop-filter: blur(2px);
-    -webkit-backdrop-filter: blur(2px);
-    opacity: 0;
-    visibility: hidden;
-    pointer-events: none;
-    touch-action: none;
-    transition: opacity 0.12s ease, visibility 0s linear 0.12s;
-}
-.payment-success-layer.visible {
-    opacity: 1;
-    visibility: visible;
-    pointer-events: auto;
-    transition: opacity 0.12s ease;
-}
-.payment-success-card {
-    width: min(82vw, 340px);
-    min-height: 180px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 12px;
-    padding: 24px 20px;
-    border-radius: 22px;
-    border: 2px solid var(--success-green);
-    background: var(--bg-card);
-    color: var(--text-main);
-    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.22), 0 0 0 6px rgba(76, 175, 80, 0.10);
-    text-align: center;
-    will-change: transform, opacity;
-}
-.payment-success-check {
-    width: 78px;
-    height: 78px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: var(--success-green);
-    color: #fff;
-    font-size: 3.2rem;
-    font-weight: 900;
-    line-height: 1;
-    box-shadow: 0 8px 24px rgba(76, 175, 80, 0.32);
-}
-.payment-success-title {
-    color: var(--success-green);
-    font-size: 1.28rem;
-    font-weight: 900;
-    letter-spacing: 0.045em;
-}
-body.dark-mode .payment-success-layer { background: rgba(0, 0, 0, 0.26); }
 
 /* CURSOR ĐỒNG NGHIỆP */
 .remote-cursor { position: fixed; width: 14px; height: 14px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.35); pointer-events: none; z-index: 200; transform: translate(-50%, -50%); transition: top 0.5s cubic-bezier(0.22, 0.61, 0.36, 1), left 0.5s cubic-bezier(0.22, 0.61, 0.36, 1), opacity 0.25s ease; opacity: 0; }
@@ -468,15 +410,42 @@ body.dark-mode .remote-cursor { border-color: #1c232b; }
 #scroll-to-checkout.hidden { display: none; }
 @keyframes bobArrow { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(6px); } }
 
-/* TICKER VÀNG & DẦU */
-.ticker-item { display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 0.72rem; font-weight: bold; background: rgba(0, 0, 0, 0.04); padding: 4px 6px; border-radius: 8px; min-width: 58px; min-height: 38px; box-sizing: border-box; border: 1px solid var(--border-soft); flex-shrink: 0; transition: background 0.4s ease, border-color 0.4s ease; }
-body.dark-mode .ticker-item { background: rgba(255, 255, 255, 0.05); }
-.ticker-label { font-size: 0.56rem; color: var(--text-muted); margin-bottom: 1px; letter-spacing: 0.3px; white-space: nowrap; }
-.ticker-value { font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1; white-space: nowrap; color: var(--text-main); transition: color 0.3s ease; }
-.ticker-item.up .ticker-value { color: var(--success-green); }
-.ticker-item.down .ticker-value { color: var(--primary-red); }
-
-@media (max-width: 480px) {
-    .ticker-item { font-size: 0.6rem; padding: 2px 4px; min-width: 46px; min-height: 32px; border-radius: 6px; }
-    .ticker-label { font-size: 0.48rem; }
+/* MARKET CARDS: BTC & DẦU — mềm, hiện đại, không theme cơ khí */
+.ticker-item {
+    width: 68px;
+    min-width: 68px;
+    height: 58px;
+    box-sizing: border-box;
+    padding: 5px 6px 4px;
+    border-radius: 11px;
+    border: 1px solid var(--border-soft);
+    background: linear-gradient(180deg, rgba(var(--bg-card-rgb),0.96), rgba(var(--bg-card-rgb),0.78));
+    box-shadow: 0 3px 10px var(--shadow-card);
+    display: grid;
+    grid-template-rows: auto auto auto 1fr;
+    justify-items: center;
+    align-items: center;
+    flex-shrink: 0;
+    overflow: hidden;
+    transition: background 0.4s ease, border-color 0.35s ease, box-shadow 0.35s ease;
 }
+body.dark-mode .ticker-item { background: linear-gradient(180deg, rgba(39,49,60,0.96), rgba(28,35,43,0.82)); }
+.ticker-label { font-size: 0.47rem; line-height: 1; color: var(--text-muted); font-weight: 800; letter-spacing: 0.28px; white-space: nowrap; }
+.ticker-value { margin-top: 2px; font-size: 0.68rem; line-height: 1; font-weight: 900; color: var(--text-main); white-space: nowrap; font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1; transition: color 0.25s ease; }
+.ticker-delta { margin-top: 2px; font-size: 0.44rem; line-height: 1; font-weight: 850; color: var(--text-muted); white-space: nowrap; transition: color 0.25s ease; }
+.ticker-sparkline { width: 56px; height: 11px; margin-top: 2px; overflow: visible; }
+.ticker-sparkline-line { fill: none; stroke: var(--text-muted); stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; transition: stroke 0.25s ease; }
+.ticker-item.up { border-color: rgba(76,175,80,0.28); }
+.ticker-item.up .ticker-delta, .ticker-item.up .ticker-sparkline-line { color: var(--success-green); stroke: var(--success-green); }
+.ticker-item.down { border-color: rgba(211,47,47,0.25); }
+.ticker-item.down .ticker-delta, .ticker-item.down .ticker-sparkline-line { color: var(--primary-red); stroke: var(--primary-red); }
+.ticker-item.flat .ticker-delta { color: var(--text-muted); }
+
+@media (max-width: 380px) {
+    .ticker-item { width: 54px; min-width: 54px; height: 53px; padding: 4px 3px 3px; border-radius: 9px; }
+    .ticker-label { font-size: 0.40rem; letter-spacing: 0; }
+    .ticker-value { font-size: 0.55rem; }
+    .ticker-delta { font-size: 0.38rem; }
+    .ticker-sparkline { width: 44px; height: 9px; }
+}
+
