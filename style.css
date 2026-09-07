@@ -387,6 +387,69 @@ body.dark-mode .total-container { animation: pulse-rgb-total-dark 2s infinite ea
 .ripple { position: absolute; border-radius: 50%; background: rgba(255,255,255,0.55); transform: scale(0); animation: rippleEffect 0.55s ease-out; pointer-events: none; }
 @keyframes rippleEffect { to { transform: scale(2.8); opacity: 0; } }
 
+/* PAYMENT SUCCESS */
+.payment-success-layer {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: rgba(0, 0, 0, 0.08);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    touch-action: none;
+    transition: opacity 0.12s ease, visibility 0s linear 0.12s;
+}
+.payment-success-layer.visible {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transition: opacity 0.12s ease;
+}
+.payment-success-card {
+    width: min(82vw, 340px);
+    min-height: 180px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 24px 20px;
+    border-radius: 22px;
+    border: 2px solid var(--success-green);
+    background: var(--bg-card);
+    color: var(--text-main);
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.22), 0 0 0 6px rgba(76, 175, 80, 0.10);
+    text-align: center;
+    will-change: transform, opacity;
+}
+.payment-success-check {
+    width: 78px;
+    height: 78px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--success-green);
+    color: #fff;
+    font-size: 3.2rem;
+    font-weight: 900;
+    line-height: 1;
+    box-shadow: 0 8px 24px rgba(76, 175, 80, 0.32);
+}
+.payment-success-title {
+    color: var(--success-green);
+    font-size: 1.28rem;
+    font-weight: 900;
+    letter-spacing: 0.045em;
+}
+body.dark-mode .payment-success-layer { background: rgba(0, 0, 0, 0.26); }
+
 /* CURSOR ĐỒNG NGHIỆP */
 .remote-cursor { position: fixed; width: 14px; height: 14px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.35); pointer-events: none; z-index: 200; transform: translate(-50%, -50%); transition: top 0.5s cubic-bezier(0.22, 0.61, 0.36, 1), left 0.5s cubic-bezier(0.22, 0.61, 0.36, 1), opacity 0.25s ease; opacity: 0; }
 .remote-cursor.visible { opacity: 1; }

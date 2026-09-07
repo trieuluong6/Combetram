@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-app.js";
-import { getDatabase, ref, child, set as _fbSet, update as _fbUpdate, increment, remove as _fbRemove, onValue as _fbOnValue, push as _fbPush, onDisconnect } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-database.js";
+import { getDatabase, ref, child, set as _fbSet, update as _fbUpdate, remove as _fbRemove, onValue as _fbOnValue, push as _fbPush, onDisconnect } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-database.js";
 
 import { menu } from "./menu.js";
 
@@ -57,6 +57,13 @@ let currentBillLang = 'vi';
 let currentTab = null;
 let data = { orders: {}, locked: {}, times: {} };
 let billWasShown = false;
+
+// Trạng thái thanh toán: giữ bill tại chỗ trong lúc animation success chạy,
+// đồng thời chặn thao tác lặp để tránh double-pay/double-click.
+const PAYMENT_SUCCESS_MS = 430;
+const PAYMENT_EXIT_MS = 220;
+let paymentInProgress = false;
+let paymentTableId = null;
 
 // ─── BILL ↔ QR: lật card + co/giãn chiều cao + cuộn đồng bộ ───
 const BILL_FLIP_MS = 560;
@@ -159,6 +166,7 @@ function scrollBillIntoView() {
 }
 
 function toggleBillQr() {
+    if (paymentInProgress) return;
     triggerHaptic('nav');
     const { shell, back, button } = getBillFlipDom();
     if (!shell) return;
@@ -770,14 +778,17 @@ document.getElementById('menu-list').addEventListener('click', (e) => {
 const pendingUpdates = {};
 let firstOrdersLoad = true;
 const initialBranchesLoaded = new Set();
+let initialDataReady = false;
 
 // Flash thay đổi từ thiết bị khác. Queue tới sau refresh để renderCurrentOrder/renderTable
 // không ghi đè class flash vừa thêm. Echo của chính thiết bị này được bỏ qua nếu
 // snapshot Firebase đúng bằng optimistic quantity đang chờ ghi.
 const pendingRemoteOrderFlashes = [];
 
-function queueRemoteOrderFlashes(prevOrders, nextOrders) {
+function queueRemoteOrderFlashes(prevOrders, nextOrders, ignoredTables = null) {
+    let queued = 0;
     for (let tableId = 1; tableId <= 9; tableId++) {
+        if (ignoredTables?.has(tableId)) continue;
         const prevTable = prevOrders?.[tableId] || {};
         const nextTable = nextOrders?.[tableId] || {};
         const itemIds = new Set([...Object.keys(prevTable), ...Object.keys(nextTable)]);
@@ -798,8 +809,10 @@ function queueRemoteOrderFlashes(prevOrders, nextOrders) {
                 itemId,
                 delta: newQty - oldQty
             });
+            queued++;
         }
     }
+    return queued;
 }
 
 function flushRemoteOrderFlashes() {
@@ -822,16 +835,25 @@ function flushRemoteOrderFlashes() {
 }
 
 function markInitialBranchLoaded(branch) {
+    if (initialDataReady) return;
     initialBranchesLoaded.add(branch);
-    if (initialBranchesLoaded.size === 3) scheduleRefresh(null);
+    if (initialBranchesLoaded.size === 3) {
+        initialDataReady = true;
+        scheduleRefresh(null);
+    }
 }
 
 onValue(ordersRef, snap => {
     const nextOrders = snap.val() || {};
     const changed = changedTableIds(data.orders, nextOrders);
     if (!firstOrdersLoad && changed.size) {
-        queueRemoteOrderFlashes(data.orders, nextOrders);
-        document.getElementById('tingSound').play().catch(() => {});
+        // Không coi echo local của chính lần thanh toán là "remote remove".
+        // Các thay đổi thật từ bàn khác vẫn được flash/ting bình thường.
+        const ignoredTables = paymentInProgress && paymentTableId
+            ? new Set([paymentTableId])
+            : null;
+        const remoteChanges = queueRemoteOrderFlashes(data.orders, nextOrders, ignoredTables);
+        if (remoteChanges > 0) document.getElementById('tingSound').play().catch(() => {});
     }
     data.orders = nextOrders;
     firstOrdersLoad = false;
@@ -855,8 +877,9 @@ onValue(timesRef, snap => {
     markInitialBranchLoaded('times');
 });
 
-function selectTable(n) {
-    triggerHaptic('nav');
+function selectTable(n, options = {}) {
+    if (paymentInProgress && !options.allowDuringPayment) return;
+    if (options.haptic !== false) triggerHaptic('nav');
     resetBillQrView(true);
     const previousTab = currentTab;
     const wasOpenForSameTable = (currentTab === n);
@@ -913,6 +936,19 @@ function playQtyBump(el) {
     };
 }
 
+function applyMenuRowQtyClasses(row, qty) {
+    if (!row) return;
+    const preserveRemoteFocus = row.classList.contains('remote-focus');
+    const preserveFlashAdd = row.classList.contains('flash-add');
+    const preserveFlashSub = row.classList.contains('flash-sub');
+    row.className = 'menu-item';
+    if (qty >= 5) row.classList.add('qty-5');
+    else if (qty > 0) row.classList.add('qty-' + qty);
+    if (preserveRemoteFocus) row.classList.add('remote-focus');
+    if (preserveFlashAdd) row.classList.add('flash-add');
+    if (preserveFlashSub) row.classList.add('flash-sub');
+}
+
 function change(id, delta) {
     if (!currentTab || (data.locked && data.locked[currentTab])) return;
     triggerHaptic(delta > 0 ? 'add' : 'sub');
@@ -933,8 +969,7 @@ function change(id, delta) {
     const row = itemDom?.row;
     if (qSpan) {
         qSpan.innerText = newQty;
-        row.className = 'menu-item';
-        if (newQty >= 5) row.classList.add('qty-5'); else if (newQty > 0) row.classList.add('qty-' + newQty);
+        applyMenuRowQtyClasses(row, newQty);
         playQtyBump(qSpan);
     }
     flashRow(id, delta);
@@ -985,7 +1020,7 @@ function flashRow(id, delta) {
     setTimeout(() => { if (row) row.classList.remove(cls); if (tabBtn) tabBtn.classList.remove(cls); }, 400);
 }
 
-function changeBillLang(l) { triggerHaptic('nav'); currentBillLang = l; renderCurrentOrder(); scrollBillIntoView(); }
+function changeBillLang(l) { if (paymentInProgress) return; triggerHaptic('nav'); currentBillLang = l; renderCurrentOrder(); scrollBillIntoView(); }
 
 // ─── FIX #3: Bỏ setInterval(refresh, 30000) — Firebase onValue() đã đủ ───
 // ─── FIX #2: Dùng ITEM_MAP O(1) thay vì all.find() O(n) ───
@@ -1001,9 +1036,19 @@ function calculateTableTotal(tableId) {
 
 function renderCurrentOrder() {
     if (!currentTab) return;
+    const billArea = document.getElementById('bill-area');
+
+    // Firebase update thanh toán phát snapshot local gần như ngay lập tức.
+    // Trong ~650ms animation success, giữ bill ở nguyên trạng thay vì để snapshot làm nó biến mất.
+    if (paymentInProgress && paymentTableId === currentTab) {
+        document.getElementById('menu-area').style.display = 'none';
+        billArea.style.display = 'block';
+        document.getElementById('scroll-to-checkout')?.classList.add('hidden');
+        return;
+    }
+
     const isLock = !!data.locked?.[currentTab];
     document.getElementById('menu-area').style.display = isLock ? 'none' : 'block';
-    const billArea = document.getElementById('bill-area');
     billArea.style.display = isLock ? 'block' : 'none';
     if (isLock && !billWasShown) {
         billArea.classList.remove('printing-out');
@@ -1023,13 +1068,23 @@ function renderCurrentOrder() {
         const row = itemDom?.row, qSpan = itemDom?.qty;
         if (row && qSpan && qSpan.innerText !== String(q)) {
             qSpan.innerText = q;
-            row.className = 'menu-item';
-            if (q >= 5) row.classList.add('qty-5');
-            else if (q > 0) row.classList.add('qty-' + q);
+            applyMenuRowQtyClasses(row, q);
         }
     });
 
     if (isLock) renderBillAsync(currentTab);
+}
+
+function renderTableTime(tableId, now = Date.now()) {
+    const dom = TABLE_DOM[tableId - 1];
+    if (!dom?.time) return;
+    dom.time.classList.remove('skeleton');
+    let txt = '';
+    if (tableTotals[tableId] > 0 && data.times?.[tableId]) {
+        const diff = Math.floor((now - data.times[tableId]) / 60000);
+        txt = diff > 0 ? `⏱ ${diff} phút` : '⏱ Mới vào';
+    }
+    if (dom.time.innerText !== txt) dom.time.innerText = txt;
 }
 
 function renderTable(tableId, now = Date.now()) {
@@ -1043,23 +1098,31 @@ function renderTable(tableId, now = Date.now()) {
         dom.sum.classList.remove('skeleton');
         if (parseInt(dom.sum.innerText.replace(/\D/g, '')) !== total) animateNumber(`sum-${tableId}`, total);
     }
-    if (dom.time) {
-        dom.time.classList.remove('skeleton');
-        let txt = '';
-        if (total > 0 && data.times?.[tableId]) {
-            const diff = Math.floor((now - data.times[tableId]) / 60000);
-            txt = diff > 0 ? `⏱ ${diff} phút` : '⏱ Mới vào';
-        }
-        if (dom.time.innerText !== txt) dom.time.innerText = txt;
-    }
+    renderTableTime(tableId, now);
+
     if (dom.card) {
+        const preserveViewer = dom.card.classList.contains('has-viewer');
+        const preserveFlashAdd = dom.card.classList.contains('flash-add');
+        const preserveFlashSub = dom.card.classList.contains('flash-sub');
         let className = tableId === 7 ? 'table-card full-width' : (tableId >= 8 ? 'table-card half-width' : 'table-card');
         if (tableId === currentTab) className += ' active';
         if (locked) className += tableId >= 7 ? ' is-locked-special' : ' is-locked';
         else if (total > 0) className += ' has-guest';
-        if (dom.card.className !== className) dom.card.className = className;
+        if (dom.card.className !== className) {
+            dom.card.className = className;
+            if (preserveViewer) dom.card.classList.add('has-viewer');
+            if (preserveFlashAdd) dom.card.classList.add('flash-add');
+            if (preserveFlashSub) dom.card.classList.add('flash-sub');
+        }
     }
 }
+
+// Thời gian trôi qua không tạo Firebase event. Chỉ cập nhật 9 text thời gian,
+// không render lại bill/menu/toàn app như timer refresh cũ.
+setInterval(() => {
+    const now = Date.now();
+    for (let i = 1; i <= 9; i++) renderTableTime(i, now);
+}, 30000);
 
 function renderCrowdAndReset() {
     let activeTablesCount = 0;
@@ -1123,6 +1186,7 @@ async function renderBillAsync(tab) {
 }
 
 function setLock(v) {
+    if (!currentTab || paymentInProgress) return;
     triggerHaptic(v ? 'lock' : 'nav');
     if (v) resetBillQrView(true);
     set(child(lockedRef, String(currentTab)), v);
@@ -1130,15 +1194,109 @@ function setLock(v) {
     if (v) setTimeout(scrollBillIntoView, 100);
 }
 
-function doPay() {
-    if (confirm("Xác nhận thanh toán?")) {
-        triggerHaptic('success'); remove(child(ordersRef, String(currentTab))); remove(child(lockedRef, String(currentTab))); remove(child(timesRef, String(currentTab))); selectTable(null);
-    }
+function delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-function doReset() {
+function setPaymentSuccessVisible(visible) {
+    const layer = document.getElementById('payment-success-layer');
+    if (!layer) return;
+    layer.classList.toggle('visible', visible);
+    layer.setAttribute('aria-hidden', visible ? 'false' : 'true');
+}
+
+async function playPaymentSuccessAnimation() {
+    const layer = document.getElementById('payment-success-layer');
+    const card = document.getElementById('payment-success-card');
+    const billArea = document.getElementById('bill-area');
+    if (!layer || !card || !billArea) {
+        await delay(PAYMENT_SUCCESS_MS);
+        return;
+    }
+
+    setPaymentSuccessVisible(true);
+    card.getAnimations().forEach(a => a.cancel());
+    billArea.getAnimations().forEach(a => a.cancel());
+
+    card.animate(
+        [
+            { opacity: 0, transform: 'scale(0.86) translateY(10px)' },
+            { opacity: 1, transform: 'scale(1.045) translateY(0)', offset: 0.68 },
+            { opacity: 1, transform: 'scale(1) translateY(0)' }
+        ],
+        { duration: PAYMENT_SUCCESS_MS, easing: 'cubic-bezier(0.22, 1, 0.36, 1)', fill: 'both' }
+    );
+
+    await delay(PAYMENT_SUCCESS_MS);
+
+    const exit = billArea.animate(
+        [
+            { opacity: 1, transform: 'scale(1)', maxHeight: `${Math.ceil(billArea.scrollHeight)}px` },
+            { opacity: 0, transform: 'scale(0.96) translateY(-8px)', maxHeight: '0px' }
+        ],
+        { duration: PAYMENT_EXIT_MS, easing: 'cubic-bezier(0.4, 0, 1, 1)', fill: 'forwards' }
+    );
+    await exit.finished.catch(() => {});
+}
+
+async function doPay() {
+    if (!currentTab || paymentInProgress) return;
+    if (!confirm("Xác nhận thanh toán?")) return;
+
+    const tab = currentTab;
+    paymentInProgress = true;
+    paymentTableId = tab;
+    stopBillScrollAnimation();
+    triggerHaptic('success');
+
+    // Một multi-path update duy nhất: orders/locked/times biến mất atomically.
+    // Firebase vẫn phát snapshot local ngay, nhưng renderCurrentOrder giữ bill đến hết animation.
+    let writeError = null;
+    let paymentUiClosed = false;
+    const paymentWrite = update(dbRef, {
+        [`orders/${tab}`]: null,
+        [`locked/${tab}`]: null,
+        [`times/${tab}`]: null
+    });
+    paymentWrite.catch(err => {
+        writeError = err;
+        console.error('[payment] Lỗi ghi Firebase:', err);
+        if (paymentUiClosed) {
+            alert('Thanh toán chưa đồng bộ được lên hệ thống. Vui lòng kiểm tra lại bàn.');
+        }
+    });
+
+    await playPaymentSuccessAnimation();
+
+    if (writeError) {
+        setPaymentSuccessVisible(false);
+        document.getElementById('bill-area')?.getAnimations().forEach(a => a.cancel());
+        paymentInProgress = false;
+        paymentTableId = null;
+        refresh(new Set([tab]), true);
+        alert('Không thể ghi thanh toán lên hệ thống. Vui lòng thử lại.');
+        return;
+    }
+
+    // Không chờ network vô hạn nếu đang offline; RTDB sẽ tiếp tục đồng bộ write đã queue.
+    paymentUiClosed = true;
+    setPaymentSuccessVisible(false);
+    // Bỏ fill:forwards của exit animation để lần mở bill kế tiếp không bị opacity/max-height cũ giữ lại.
+    document.getElementById('bill-area')?.getAnimations().forEach(a => a.cancel());
+    paymentInProgress = false;
+    paymentTableId = null;
+    selectTable(null, { haptic: false, allowDuringPayment: true });
+}
+
+async function doReset() {
     if (prompt("Mật khẩu xóa dữ liệu:") === "123") {
-        remove(child(dbRef, 'orders')); remove(child(dbRef, 'locked')); remove(child(dbRef, 'times')); location.reload();
+        try {
+            await update(dbRef, { orders: null, locked: null, times: null });
+            location.reload();
+        } catch (err) {
+            console.error('[reset] Lỗi xóa dữ liệu:', err);
+            alert('Không thể xóa dữ liệu. Vui lòng thử lại.');
+        }
     }
 }
 
