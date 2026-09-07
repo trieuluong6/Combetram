@@ -954,7 +954,12 @@ function selectTable(n, options = {}) {
     } else {
         section.classList.remove('section-visible');
         document.getElementById('scroll-to-checkout')?.classList.add('hidden');
-        setTimeout(() => { if (!currentTab) section.style.display = 'none'; }, 320);
+        if (options.instantClose) {
+            // Thanh toán cần phản hồi tức thì: bỏ riêng transition đóng 320ms.
+            section.style.display = 'none';
+        } else {
+            setTimeout(() => { if (!currentTab) section.style.display = 'none'; }, 320);
+        }
         refresh(new Set([previousTab].filter(Boolean)));
     }
 }
@@ -1275,7 +1280,7 @@ function doPay() {
     scheduleRefresh(new Set([tab]), true);
 
     // Đóng khu order ngay; không còn 650ms payment-success delay.
-    selectTable(null, { haptic: false, allowDuringPayment: true });
+    selectTable(null, { haptic: false, allowDuringPayment: true, instantClose: true });
     paymentInProgress = false;
 
     paymentWrite.catch(err => {
