@@ -434,121 +434,37 @@ body.dark-mode .ticker-item { background: linear-gradient(180deg, rgba(39,49,60,
 }
 
 
-/* ─── KONAN-STYLE CONTENT-MAPPED PAPER INTRO V6 ──────────────────────
-   The sheet itself carries the clipped widget fragment.  Back face = #DCE5EE,
-   front paper = #FFFFFF, background = #EEF2F6.  No separate "whole widget"
-   reveal is visible: live DOM is swapped in only after the paper already shows it. */
+/* ─── SINGLE-SHEET ORIGAMI INTRO V7 ─────────────────────────────────
+   Performance-first: the real widget itself folds in.  No cloned content,
+   no tile grid, no animated masks.  Decorative paper wisps are tiny and
+   short-lived; all motion uses transform + opacity only. */
 #paper-flip-overlay {
     position: fixed;
     inset: 0;
     z-index: 9998;
     pointer-events: none;
     overflow: hidden;
-    perspective: 1200px;
-    transform-style: preserve-3d;
 }
 
-.paper-sheet {
+.single-paper-wisp {
     position: fixed;
+    width: 9px;
+    height: 13px;
+    z-index: 1;
     pointer-events: none;
     opacity: 0;
-    transform-style: preserve-3d;
-    will-change: transform, opacity;
-    z-index: 1;
-}
-
-.paper-sheet-face {
-    position: absolute;
-    inset: 0;
-    display: block;
-    overflow: hidden;
-    transform-style: preserve-3d;
-    backface-visibility: hidden;
-    -webkit-backface-visibility: hidden;
-    border-radius: 1.5px;
-    border: 1px solid rgba(90, 105, 120, .18);
-    box-sizing: border-box;
-}
-
-.paper-sheet-front {
-    background: transparent;
-    box-shadow: 0 2px 6px rgba(30, 40, 50, .10);
-}
-
-.paper-sheet-back {
-    background: #DCE5EE;
-    transform: rotateY(180deg);
-    box-shadow: 0 3px 8px rgba(25, 35, 45, .14);
-}
-
-.paper-front-surface {
-    position: absolute;
-    inset: 0;
-    z-index: 1;
     background: #FFFFFF;
-    pointer-events: none;
+    border: 1px solid rgba(90, 105, 120, .16);
+    border-radius: 1.5px;
+    will-change: transform, opacity;
 }
 
-.paper-fragment-clone {
-    z-index: 2 !important;
-    overflow: visible !important;
-    box-sizing: border-box !important;
-    user-select: none !important;
-    -webkit-user-select: none !important;
+body.dark-mode .single-paper-wisp {
+    background: #F8FAFC;
+    border-color: rgba(180, 195, 208, .22);
 }
 
-.paper-fragment-clone,
-.paper-fragment-clone * {
-    pointer-events: none !important;
-}
-
-.paper-fold-shadow {
-    position: absolute;
-    z-index: 3;
-    pointer-events: none;
-    opacity: 0;
-}
-
-.paper-sheet.fold-left .paper-fold-shadow {
-    left: 0;
-    top: 0;
-    bottom: 0;
-    width: 48%;
-    background: linear-gradient(90deg, rgba(35, 50, 65, .22), rgba(35, 50, 65, 0));
-}
-
-.paper-sheet.fold-right .paper-fold-shadow {
-    right: 0;
-    top: 0;
-    bottom: 0;
-    width: 48%;
-    background: linear-gradient(270deg, rgba(35, 50, 65, .22), rgba(35, 50, 65, 0));
-}
-
-.paper-sheet.fold-top .paper-fold-shadow {
-    left: 0;
-    right: 0;
-    top: 0;
-    height: 48%;
-    background: linear-gradient(180deg, rgba(35, 50, 65, .22), rgba(35, 50, 65, 0));
-}
-
-.paper-sheet.fold-bottom .paper-fold-shadow {
-    left: 0;
-    right: 0;
-    bottom: 0;
-    height: 48%;
-    background: linear-gradient(0deg, rgba(35, 50, 65, .22), rgba(35, 50, 65, 0));
-}
-
-body.dark-mode .paper-sheet-back {
-    background: #C6D2DD;
-    box-shadow: 0 3px 8px rgba(0, 0, 0, .28);
-}
-body.dark-mode .paper-front-surface { background: #F8FAFC; }
-
-/* Layout exists from frame zero, while the live modules stay hidden until their
-   content-bearing paper copies have physically assembled over the same footprint. */
+/* Keep layout from frame zero but hide each module until its own fold starts. */
 html.paper-flip-pending #weather-hub,
 html.paper-flip-pending #presence-count,
 html.paper-flip-pending #dark-toggle,
@@ -563,24 +479,13 @@ html.paper-flip-pending .flip-clock-container > .flip-colon {
     opacity: 0;
 }
 
-html.paper-flip-pending .paper-reveal-live {
-    visibility: visible !important;
-    opacity: 1 !important;
-}
-
-#weather-hub,
-#presence-count,
-#dark-toggle,
-#load-speed-widget,
-#crowd-status,
-.header-title,
-#net-speed-widget,
-#btc-ticker,
-#oil-ticker,
-.flip-clock-container > .flip-unit,
-.flip-clock-container > .flip-colon {
+/* Temporarily stop CSS pulse/blink animations that would fight the intro's
+   transform/opacity. They resume immediately after that single widget opens. */
+.single-fold-active {
+    animation: none !important;
     backface-visibility: hidden;
-    transform-style: preserve-3d;
+    -webkit-backface-visibility: hidden;
+    will-change: transform, opacity;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -600,3 +505,4 @@ html.paper-flip-pending .paper-reveal-live {
         opacity: 1;
     }
 }
+

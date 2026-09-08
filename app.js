@@ -1359,300 +1359,142 @@ document.addEventListener('click', (e) => {
     setTimeout(() => ripple.remove(), 600);
 });
 
-// ─── KONAN-STYLE CONTENT-MAPPED PAPER INTRO V6 ────────────────────────
-// Each paper sheet carries a real clipped clone of the widget on its FRONT face.
-// While the sheet is >90deg folded, the blue-grey BACK face is what the eye sees.
-// As it folds toward 0deg, the real widget fragment appears on that same sheet.
-// Once every fragment is flat, the live widget is swapped in underneath with no pop.
-const PAPER_SHEET_DURATION = 660;
-const paperFlipAnimations = [];
-const paperFlipTimers = [];
-const paperRevealTargets = new Set();
-const paperTargetSheets = new Map();
+// ─── SINGLE-SHEET ORIGAMI INTRO V7 ────────────────────────────────────
+// Performance-first version: every widget is its own paper sheet.
+// No cloned DOM, no tiled masks, no per-fragment 3D layers.  Only the real
+// widget gets transform + opacity animation, plus a few tiny decorative wisps.
+const SINGLE_FOLD_DURATION = 420;
+const singleFoldAnimations = [];
+const singleFoldTimers = [];
+const singleFoldTargets = new Set();
 
 function paperFlipLater(fn, delay) {
     const id = setTimeout(fn, delay);
-    paperFlipTimers.push(id);
+    singleFoldTimers.push(id);
     return id;
 }
 
-function getPaperGrid(rect) {
-    const cols = rect.width < 18 ? 1 : Math.max(2, Math.min(6, Math.round(rect.width / 24)));
-    const rows = rect.height < 16 ? 1 : Math.max(2, Math.min(3, Math.round(rect.height / 15)));
-    return { cols, rows };
-}
-
-function getFoldWave(col, row, cols, rows, variant) {
+function getSingleFoldSpec(variant = 0) {
     switch (variant % 4) {
-        case 0: return col + row; // top-left -> bottom-right
-        case 1: return (cols - 1 - col) + row; // top-right -> bottom-left
-        case 2: return Math.abs(col - (cols - 1) / 2) + Math.abs(row - (rows - 1) / 2); // centre-out
-        default: return col + (rows - 1 - row); // bottom-left -> top-right
+        case 0: // left edge opens toward viewer
+            return {
+                origin: 'left center',
+                start: 'perspective(850px) translate3d(-16px,0,0) rotateY(84deg) scale(.96)',
+                mid:   'perspective(850px) translate3d(0,0,0) rotateY(-5deg) scale(1.01)'
+            };
+        case 1: // right edge
+            return {
+                origin: 'right center',
+                start: 'perspective(850px) translate3d(16px,0,0) rotateY(-84deg) scale(.96)',
+                mid:   'perspective(850px) translate3d(0,0,0) rotateY(5deg) scale(1.01)'
+            };
+        case 2: // top edge
+            return {
+                origin: 'center top',
+                start: 'perspective(850px) translate3d(0,-13px,0) rotateX(-80deg) scale(.97)',
+                mid:   'perspective(850px) translate3d(0,0,0) rotateX(4deg) scale(1.01)'
+            };
+        default: // bottom edge
+            return {
+                origin: 'center bottom',
+                start: 'perspective(850px) translate3d(0,13px,0) rotateX(80deg) scale(.97)',
+                mid:   'perspective(850px) translate3d(0,0,0) rotateX(-4deg) scale(1.01)'
+            };
     }
 }
 
-function getFoldSpec(col, row, variant) {
-    const mode = (col + row + variant) % 4;
-    if (mode === 0) return {
-        origin: 'left center',
-        edgeClass: 'fold-left',
-        rotate: deg => `rotateY(${deg}deg)`
-    };
-    if (mode === 1) return {
-        origin: 'right center',
-        edgeClass: 'fold-right',
-        rotate: deg => `rotateY(${-deg}deg)`
-    };
-    if (mode === 2) return {
-        origin: 'center top',
-        edgeClass: 'fold-top',
-        rotate: deg => `rotateX(${-deg}deg)`
-    };
-    return {
-        origin: 'center bottom',
-        edgeClass: 'fold-bottom',
-        rotate: deg => `rotateX(${deg}deg)`
-    };
-}
-
-function copyComputedRootStyle(source, clone) {
-    const computed = getComputedStyle(source);
-    for (let i = 0; i < computed.length; i++) {
-        const prop = computed[i];
-        // geometry is fixed explicitly below; copying everything else preserves ID-only styling
-        if (prop === 'position' || prop === 'left' || prop === 'right' ||
-            prop === 'top' || prop === 'bottom' || prop === 'inset' ||
-            prop === 'transform' || prop === 'visibility' || prop === 'opacity' ||
-            prop === 'animation' || prop.startsWith('animation-') ||
-            prop === 'transition' || prop.startsWith('transition-')) continue;
-        try { clone.style.setProperty(prop, computed.getPropertyValue(prop)); } catch (e) {}
-    }
-}
-
-function makePaperFragment(target, rect, col, row, tileW, tileH) {
-    const clone = target.cloneNode(true);
-    copyComputedRootStyle(target, clone);
-
-    // IDs are removed so realtime code always addresses the real widgets, never intro copies.
-    clone.removeAttribute('id');
-    clone.querySelectorAll('[id]').forEach(el => el.removeAttribute('id'));
-    clone.removeAttribute('onclick');
-    clone.querySelectorAll('[onclick]').forEach(el => el.removeAttribute('onclick'));
-
-    clone.classList.add('paper-fragment-clone');
-    clone.setAttribute('aria-hidden', 'true');
-    clone.style.setProperty('position', 'absolute', 'important');
-    clone.style.setProperty('left', `${-col * tileW}px`, 'important');
-    clone.style.setProperty('top', `${-row * tileH}px`, 'important');
-    clone.style.setProperty('width', `${rect.width}px`, 'important');
-    clone.style.setProperty('height', `${rect.height}px`, 'important');
-    clone.style.setProperty('margin', '0', 'important');
-    clone.style.setProperty('transform', 'none', 'important');
-    clone.style.setProperty('transform-origin', 'center center', 'important');
-    clone.style.setProperty('visibility', 'visible', 'important');
-    clone.style.setProperty('opacity', '1', 'important');
-    clone.style.setProperty('animation', 'none', 'important');
-    clone.style.setProperty('transition', 'none', 'important');
-    clone.style.setProperty('pointer-events', 'none', 'important');
-
-    return clone;
-}
-
-function removeTargetSheets(target) {
-    const nodes = paperTargetSheets.get(target);
-    if (!nodes) return;
-    for (const node of nodes) node.remove();
-    paperTargetSheets.delete(target);
-}
-
-function showLiveTarget(target) {
-    if (!target?.isConnected) return;
-
-    // Critical startup CSS hides most modules with ID selectors + !important.
-    // A class alone cannot beat that specificity, so hand the finished paper
-    // to the live widget with inline !important values. This is PER TARGET:
-    // no widget waits for the global intro cleanup anymore.
-    target.classList.add('paper-reveal-live');
-    target.style.setProperty('visibility', 'visible', 'important');
-    target.style.setProperty('opacity', '1', 'important');
-
-    // The sheets already show the same clipped content. Reveal the real element
-    // underneath first, then remove the assembled paper after two paints.
-    requestAnimationFrame(() => {
-        requestAnimationFrame(() => removeTargetSheets(target));
-    });
-}
-
-function createContentMappedPaper(target, delay = 0, variant = 0, intensity = 1) {
+function spawnPaperWisp(target, variant = 0) {
     const overlay = document.getElementById('paper-flip-overlay');
-    if (!overlay || !target) return;
+    if (!overlay || !target?.isConnected) return;
+
+    const rect = target.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+
+    const wisp = document.createElement('span');
+    wisp.className = 'single-paper-wisp';
+    const side = variant % 4;
+    const x = side === 0 ? rect.left - 7 : side === 1 ? rect.right - 5 : rect.left + rect.width * .72;
+    const y = side === 2 ? rect.top - 7 : side === 3 ? rect.bottom - 6 : rect.top + rect.height * .22;
+    wisp.style.left = `${x}px`;
+    wisp.style.top = `${y}px`;
+    overlay.appendChild(wisp);
+
+    const dx = side === 0 ? -22 : side === 1 ? 22 : (variant % 2 ? 14 : -14);
+    const dy = side === 2 ? -18 : side === 3 ? 18 : -10;
+    const rz = side % 2 ? 38 : -42;
+
+    const anim = wisp.animate([
+        { opacity: 0, transform: `translate3d(${-dx * .6}px,${-dy * .6}px,0) rotate(${rz * -.5}deg) scale(.65)` },
+        { opacity: .9, transform: 'translate3d(0,0,0) rotate(0deg) scale(1)', offset: .45 },
+        { opacity: 0, transform: `translate3d(${dx}px,${dy}px,0) rotate(${rz}deg) scale(.82)` }
+    ], {
+        duration: 390,
+        easing: 'cubic-bezier(.2,.72,.22,1)',
+        fill: 'forwards'
+    });
+    singleFoldAnimations.push(anim);
+    anim.onfinish = () => wisp.remove();
+}
+
+function animateSingleSheet(target, delay = 0, variant = 0, withWisp = false) {
+    if (!target) return;
+    singleFoldTargets.add(target);
 
     paperFlipLater(() => {
-        if (!target.isConnected || !overlay.isConnected) return;
+        if (!target.isConnected) return;
+        const spec = getSingleFoldSpec(variant);
 
-        // Keep temporary duplicate visuals AFTER the real DOM in tree order.
-        // This is extra insurance for any selector code that expects the first match to be live UI.
-        if (overlay.parentElement === document.body && overlay !== document.body.lastElementChild) {
-            document.body.appendChild(overlay);
-        }
+        // Critical startup CSS uses visibility:hidden !important; this inline
+        // handoff makes ONLY this target visible when its own fold begins.
+        target.style.setProperty('visibility', 'visible', 'important');
+        target.style.transformOrigin = spec.origin;
+        target.classList.add('single-fold-active');
 
-        const rect = target.getBoundingClientRect();
-        if (!rect.width || !rect.height) {
-            target.classList.add('paper-reveal-live');
-            return;
-        }
+        if (withWisp) spawnPaperWisp(target, variant);
 
-        const { cols, rows } = getPaperGrid(rect);
-        const tileW = rect.width / cols;
-        const tileH = rect.height / rows;
-        const total = cols * rows;
-        const cx = rect.left + rect.width / 2;
-        const cy = rect.top + rect.height / 2;
-        const radiusBase = Math.min(150, Math.max(64, 50 + Math.max(rect.width, rect.height) * .42)) * intensity;
-        const nodes = [];
-        let maxStagger = 0;
+        const anim = target.animate([
+            { opacity: 0, transform: spec.start },
+            { opacity: .42, transform: spec.start, offset: .10 },
+            { opacity: 1, transform: spec.mid, offset: .78 },
+            { opacity: 1, transform: 'perspective(850px) translate3d(0,0,0) rotateX(0deg) rotateY(0deg) scale(1)' }
+        ], {
+            duration: SINGLE_FOLD_DURATION,
+            easing: 'cubic-bezier(.18,.78,.18,1)',
+            fill: 'forwards'
+        });
+        singleFoldAnimations.push(anim);
 
-        for (let i = 0; i < total; i++) {
-            const col = i % cols;
-            const row = Math.floor(i / cols);
-            const fold = getFoldSpec(col, row, variant);
-            const wave = getFoldWave(col, row, cols, rows, variant);
-            const stagger = Math.round(wave * 42 + ((i * 13 + variant * 7) % 17));
-            maxStagger = Math.max(maxStagger, stagger);
-
-            const sheet = document.createElement('span');
-            sheet.className = `paper-sheet ${fold.edgeClass}`;
-            sheet.style.left = `${rect.left + col * tileW}px`;
-            sheet.style.top = `${rect.top + row * tileH}px`;
-            sheet.style.width = `${Math.max(4, tileW + .35)}px`;
-            sheet.style.height = `${Math.max(4, tileH + .35)}px`;
-            sheet.style.transformOrigin = fold.origin;
-
-            const back = document.createElement('span');
-            back.className = 'paper-sheet-face paper-sheet-back';
-
-            const front = document.createElement('span');
-            front.className = 'paper-sheet-face paper-sheet-front';
-
-            const paperSurface = document.createElement('span');
-            paperSurface.className = 'paper-front-surface';
-
-            const fragment = makePaperFragment(target, rect, col, row, tileW, tileH);
-            const foldShadow = document.createElement('span');
-            foldShadow.className = 'paper-fold-shadow';
-
-            front.append(paperSurface, fragment, foldShadow);
-            sheet.append(back, front);
-            overlay.appendChild(sheet);
-            nodes.push(sheet);
-
-            const angle = ((i / Math.max(1, total)) * Math.PI * 2) + variant * .67 + row * .28;
-            const radius = radiusBase * (.82 + ((i * 31 + variant * 19) % 27) / 100);
-            const sx = Math.cos(angle) * radius;
-            const sy = Math.sin(angle) * radius * .62;
-            const z = 34 + ((i * 37 + variant * 11) % 74);
-            const rz = ((i * 73 + variant * 29) % 250) - 125;
-
-            // Back face first -> edge-on -> content face progressively turns toward camera -> flat UI.
-            const anim = sheet.animate([
-                {
-                    opacity: 0,
-                    transform: `translate3d(${sx}px,${sy}px,${z}px) rotateZ(${rz}deg) ${fold.rotate(154)} scale(.56)`
-                },
-                {
-                    opacity: 1,
-                    transform: `translate3d(${sx * .68}px,${sy * .68}px,${z * .72}px) rotateZ(${rz * .72}deg) ${fold.rotate(128)} scale(.70)`,
-                    offset: .18
-                },
-                {
-                    opacity: 1,
-                    transform: `translate3d(${sx * .20}px,${sy * .20}px,15px) rotateZ(${rz * .22}deg) ${fold.rotate(94)} scale(.91)`,
-                    offset: .53
-                },
-                {
-                    opacity: 1,
-                    transform: `translate3d(0,0,4px) rotateZ(0deg) ${fold.rotate(54)} scale(.985)`,
-                    offset: .72
-                },
-                {
-                    opacity: 1,
-                    transform: `translate3d(0,0,1px) rotateZ(0deg) ${fold.rotate(-4)} scale(1)`,
-                    offset: .94
-                },
-                {
-                    opacity: 1,
-                    transform: `translate3d(0,0,0) rotateZ(0deg) ${fold.rotate(0)} scale(1)`
-                }
-            ], {
-                duration: PAPER_SHEET_DURATION,
-                delay: stagger,
-                easing: 'cubic-bezier(.16,.78,.18,1)',
-                fill: 'forwards'
-            });
-            paperFlipAnimations.push(anim);
-
-            const surfaceAnim = paperSurface.animate([
-                { opacity: 1 },
-                { opacity: 1, offset: .57 },
-                { opacity: .72, offset: .73 },
-                { opacity: 0, offset: 1 }
-            ], {
-                duration: PAPER_SHEET_DURATION,
-                delay: stagger,
-                easing: 'ease-out',
-                fill: 'forwards'
-            });
-            paperFlipAnimations.push(surfaceAnim);
-
-            const shadowAnim = foldShadow.animate([
-                { opacity: 0 },
-                { opacity: .12, offset: .36 },
-                { opacity: .48, offset: .55 },
-                { opacity: .24, offset: .76 },
-                { opacity: 0 }
-            ], {
-                duration: PAPER_SHEET_DURATION,
-                delay: stagger,
-                easing: 'ease-in-out',
-                fill: 'forwards'
-            });
-            paperFlipAnimations.push(shadowAnim);
-        }
-
-        paperTargetSheets.set(target, nodes);
-
-        // The live widget only replaces already-assembled, content-bearing sheets.
-        // Because the sheets and live DOM are pixel-aligned, this swap is visually invisible.
-        paperFlipLater(() => showLiveTarget(target), PAPER_SHEET_DURATION + maxStagger + 24);
+        anim.onfinish = () => {
+            if (!target.isConnected) return;
+            // Keep this widget visible while later widgets are still folded.
+            target.style.setProperty('opacity', '1', 'important');
+            target.style.setProperty('visibility', 'visible', 'important');
+            target.classList.remove('single-fold-active');
+            target.style.removeProperty('transform-origin');
+            try { anim.cancel(); } catch (e) {}
+        };
     }, delay);
-}
-
-function animatePaperReveal(target, delay, variant = 0, intensity = 1) {
-    if (!target) return;
-    paperRevealTargets.add(target);
-    createContentMappedPaper(target, delay, variant, intensity);
 }
 
 function finishPaperFlipIntro() {
     document.documentElement.classList.remove('paper-flip-pending');
     clearTimeout(window.__paperFlipFailsafe);
 
-    for (const timer of paperFlipTimers) clearTimeout(timer);
-    paperFlipTimers.length = 0;
+    for (const timer of singleFoldTimers) clearTimeout(timer);
+    singleFoldTimers.length = 0;
 
-    for (const anim of paperFlipAnimations) {
+    for (const anim of singleFoldAnimations) {
         try { anim.cancel(); } catch (e) {}
     }
-    paperFlipAnimations.length = 0;
+    singleFoldAnimations.length = 0;
 
-    for (const target of paperRevealTargets) {
-        target.classList.remove('paper-reveal-live');
+    for (const target of singleFoldTargets) {
+        target.classList.remove('single-fold-active');
         target.style.removeProperty('visibility');
         target.style.removeProperty('opacity');
-        removeTargetSheets(target);
+        target.style.removeProperty('transform-origin');
     }
-    paperRevealTargets.clear();
-    paperTargetSheets.clear();
+    singleFoldTargets.clear();
     document.getElementById('paper-flip-overlay')?.replaceChildren();
 }
 
@@ -1664,28 +1506,26 @@ function runPaperFlipIntro() {
     }
 
     clearTimeout(window.__paperFlipFailsafe);
-    window.__paperFlipFailsafe = setTimeout(finishPaperFlipIntro, 3600);
+    window.__paperFlipFailsafe = setTimeout(finishPaperFlipIntro, 2600);
 
     const $ = sel => document.querySelector(sel);
 
-    // Each module starts separately.  The visible content itself lives on the folding sheets,
-    // so there is no final reveal timer capable of making several widgets "pop" together.
-    animatePaperReveal($('.header-title'),       0,    2, 1.02);
-    animatePaperReveal($('#weather-hub'),        190,  0, .92);
-    animatePaperReveal($('#presence-count'),     360,  1, .86);
-    animatePaperReveal($('#dark-toggle'),        510,  2, .76);
-    animatePaperReveal($('#crowd-status'),       660,  1, .90);
-    animatePaperReveal($('#load-speed-widget'),  820,  3, .82);
-    animatePaperReveal($('#net-speed-widget'),   980,  0, .82);
-    animatePaperReveal($('#btc-ticker'),         1160, 1, .92);
+    // ~1.6 s total. At most a few single DOM nodes animate at once.
+    animateSingleSheet($('.header-title'),       0,    2, true);
+    animateSingleSheet($('#weather-hub'),        110,  0, true);
+    animateSingleSheet($('#presence-count'),     215,  1, false);
+    animateSingleSheet($('#dark-toggle'),        305,  2, false);
+    animateSingleSheet($('#crowd-status'),       400,  1, true);
+    animateSingleSheet($('#load-speed-widget'),  505,  3, false);
+    animateSingleSheet($('#net-speed-widget'),   605,  0, false);
+    animateSingleSheet($('#btc-ticker'),         710,  1, true);
 
     document.querySelectorAll('.flip-clock-container > .flip-unit, .flip-clock-container > .flip-colon')
-        .forEach((el, i) => animatePaperReveal(el, 1320 + i * 85, 2 + i, .80));
+        .forEach((el, i) => animateSingleSheet(el, 820 + i * 58, 2 + i, false));
 
-    animatePaperReveal($('#oil-ticker'),         1780, 3, .92);
+    animateSingleSheet($('#oil-ticker'),         1180, 3, true);
 
-    // Global cleanup happens only after every target's own paper-to-live handoff is complete.
-    paperFlipLater(finishPaperFlipIntro, 2900);
+    paperFlipLater(finishPaperFlipIntro, 1720);
 }
 
 // APIs/Firebase/tickers initialize in parallel; the intro is purely visual.
