@@ -434,106 +434,121 @@ body.dark-mode .ticker-item { background: linear-gradient(180deg, rgba(39,49,60,
 }
 
 
-/* ─── PAPER-SWARM STARTUP INTRO V4 ─────────────────────────────────────
-   Paper is the foreground object: small sheets flip/spiral into the exact
-   footprint of each module, then the live module is revealed underneath.
-   Everything is temporary and pointer-events:none. */
+/* ─── KONAN-STYLE CONTENT-MAPPED PAPER INTRO V6 ──────────────────────
+   The sheet itself carries the clipped widget fragment.  Back face = #DCE5EE,
+   front paper = #FFFFFF, background = #EEF2F6.  No separate "whole widget"
+   reveal is visible: live DOM is swapped in only after the paper already shows it. */
 #paper-flip-overlay {
     position: fixed;
     inset: 0;
     z-index: 9998;
     pointer-events: none;
     overflow: hidden;
-    perspective: 1000px;
+    perspective: 1200px;
     transform-style: preserve-3d;
-    contain: layout paint;
 }
 
-.paper-veil {
+.paper-sheet {
     position: fixed;
     pointer-events: none;
-    opacity: 1;
-    background: var(--bg-body);
-    border: 0;
-    box-shadow: none;
-    will-change: opacity;
-}
-
-.paper-tile {
-    position: fixed;
-    left: 0;
-    top: 0;
-    width: var(--tile-w, 18px);
-    height: var(--tile-h, 10px);
     opacity: 0;
-    pointer-events: none;
-    will-change: transform, opacity;
-    backface-visibility: hidden;
     transform-style: preserve-3d;
-    border-radius: 1.5px;
-    background: linear-gradient(155deg, #fff 0 61%, #edf1f5 62% 100%);
-    border: 1px solid rgba(90,105,120,.26);
-    box-shadow: 0 2px 5px rgba(30,40,50,.13);
-    clip-path: polygon(2% 4%, 97% 0, 100% 94%, 5% 100%);
+    will-change: transform, opacity;
+    z-index: 1;
 }
-.paper-tile.paper-tile-alt {
-    background: linear-gradient(25deg, #fbfcfd 0 58%, #e5edf4 59% 100%);
-    clip-path: polygon(0 9%, 94% 2%, 100% 100%, 7% 95%);
-}
-.paper-tile.paper-tile-cool {
-    background: linear-gradient(145deg, #fff 0 64%, #dceaf6 65% 100%);
-}
-.paper-tile::after {
-    content: '';
+
+.paper-sheet-face {
     position: absolute;
     inset: 0;
-    border-top: 1px solid rgba(255,255,255,.9);
-    opacity: .9;
-}
-
-.paper-trail {
-    position: fixed;
-    width: var(--trail-w, 12px);
-    height: var(--trail-h, 7px);
-    opacity: 0;
-    pointer-events: none;
-    will-change: transform, opacity;
-    border-radius: 1px;
-    background: rgba(252,253,254,.96);
-    border: 1px solid rgba(100,115,130,.22);
-    box-shadow: 0 1px 3px rgba(25,35,45,.10);
+    display: block;
+    overflow: hidden;
+    transform-style: preserve-3d;
     backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    border-radius: 1.5px;
+    border: 1px solid rgba(90, 105, 120, .18);
+    box-sizing: border-box;
 }
 
-.paper-seam-flash {
-    position: fixed;
+.paper-sheet-front {
+    background: transparent;
+    box-shadow: 0 2px 6px rgba(30, 40, 50, .10);
+}
+
+.paper-sheet-back {
+    background: #DCE5EE;
+    transform: rotateY(180deg);
+    box-shadow: 0 3px 8px rgba(25, 35, 45, .14);
+}
+
+.paper-front-surface {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    background: #FFFFFF;
+    pointer-events: none;
+}
+
+.paper-fragment-clone {
+    z-index: 2 !important;
+    overflow: visible !important;
+    box-sizing: border-box !important;
+    user-select: none !important;
+    -webkit-user-select: none !important;
+}
+
+.paper-fragment-clone,
+.paper-fragment-clone * {
+    pointer-events: none !important;
+}
+
+.paper-fold-shadow {
+    position: absolute;
+    z-index: 3;
     pointer-events: none;
     opacity: 0;
-    border: 1px solid rgba(105,160,205,.45);
-    border-radius: 8px;
-    box-shadow: 0 0 9px rgba(75,145,200,.14);
-    will-change: transform, opacity;
 }
 
-body.dark-mode .paper-tile {
-    background: linear-gradient(155deg, #f6f8fa 0 61%, #c9d4de 62% 100%);
-    border-color: rgba(180,195,208,.30);
-    box-shadow: 0 2px 6px rgba(0,0,0,.28);
-}
-body.dark-mode .paper-tile.paper-tile-alt {
-    background: linear-gradient(25deg, #eef2f5 0 58%, #bac9d5 59% 100%);
-}
-body.dark-mode .paper-tile.paper-tile-cool {
-    background: linear-gradient(145deg, #f7f9fb 0 64%, #c6ddef 65% 100%);
-}
-body.dark-mode .paper-trail {
-    background: rgba(238,244,248,.95);
-    border-color: rgba(175,195,210,.26);
+.paper-sheet.fold-left .paper-fold-shadow {
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 48%;
+    background: linear-gradient(90deg, rgba(35, 50, 65, .22), rgba(35, 50, 65, 0));
 }
 
-/* Layout exists from frame zero, but the modules themselves are invisible until
-   their paper swarm reaches them. visibility is also set by critical CSS in head
-   so the pulsing crowd badge cannot leak through before JS starts. */
+.paper-sheet.fold-right .paper-fold-shadow {
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 48%;
+    background: linear-gradient(270deg, rgba(35, 50, 65, .22), rgba(35, 50, 65, 0));
+}
+
+.paper-sheet.fold-top .paper-fold-shadow {
+    left: 0;
+    right: 0;
+    top: 0;
+    height: 48%;
+    background: linear-gradient(180deg, rgba(35, 50, 65, .22), rgba(35, 50, 65, 0));
+}
+
+.paper-sheet.fold-bottom .paper-fold-shadow {
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 48%;
+    background: linear-gradient(0deg, rgba(35, 50, 65, .22), rgba(35, 50, 65, 0));
+}
+
+body.dark-mode .paper-sheet-back {
+    background: #C6D2DD;
+    box-shadow: 0 3px 8px rgba(0, 0, 0, .28);
+}
+body.dark-mode .paper-front-surface { background: #F8FAFC; }
+
+/* Layout exists from frame zero, while the live modules stay hidden until their
+   content-bearing paper copies have physically assembled over the same footprint. */
 html.paper-flip-pending #weather-hub,
 html.paper-flip-pending #presence-count,
 html.paper-flip-pending #dark-toggle,
@@ -547,7 +562,11 @@ html.paper-flip-pending .flip-clock-container > .flip-unit,
 html.paper-flip-pending .flip-clock-container > .flip-colon {
     opacity: 0;
 }
-html.paper-flip-pending .paper-reveal-live { visibility: visible !important; opacity: 1 !important; }
+
+html.paper-flip-pending .paper-reveal-live {
+    visibility: visible !important;
+    opacity: 1 !important;
+}
 
 #weather-hub,
 #presence-count,

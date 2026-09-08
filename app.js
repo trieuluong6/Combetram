@@ -1359,15 +1359,16 @@ document.addEventListener('click', (e) => {
     setTimeout(() => ripple.remove(), 600);
 });
 
-// ─── PAPER-SWARM STARTUP INTRO V4 ─────────────────────────────────────
-// Progressive reveal: the live module is visible under a body-coloured tiled veil.
-// Each incoming paper sheet lands on one veil tile, then folds away from that edge;
-// the matching content region is revealed immediately underneath. No whole-card pop.
-const PAPER_SWARM_DURATION = 760;
-const PAPER_FOLD_DURATION = 185;
+// ─── KONAN-STYLE CONTENT-MAPPED PAPER INTRO V6 ────────────────────────
+// Each paper sheet carries a real clipped clone of the widget on its FRONT face.
+// While the sheet is >90deg folded, the blue-grey BACK face is what the eye sees.
+// As it folds toward 0deg, the real widget fragment appears on that same sheet.
+// Once every fragment is flat, the live widget is swapped in underneath with no pop.
+const PAPER_SHEET_DURATION = 660;
 const paperFlipAnimations = [];
 const paperFlipTimers = [];
 const paperRevealTargets = new Set();
+const paperTargetSheets = new Map();
 
 function paperFlipLater(fn, delay) {
     const id = setTimeout(fn, delay);
@@ -1376,13 +1377,12 @@ function paperFlipLater(fn, delay) {
 }
 
 function getPaperGrid(rect) {
-    const cols = Math.max(2, Math.min(6, Math.round(rect.width / 22)));
-    const rows = Math.max(2, Math.min(3, Math.round(rect.height / 14)));
+    const cols = rect.width < 18 ? 1 : Math.max(2, Math.min(6, Math.round(rect.width / 24)));
+    const rows = rect.height < 16 ? 1 : Math.max(2, Math.min(3, Math.round(rect.height / 15)));
     return { cols, rows };
 }
 
 function getFoldWave(col, row, cols, rows, variant) {
-    // Diagonal / centre-out waves make the reveal visibly follow fold lines.
     switch (variant % 4) {
         case 0: return col + row; // top-left -> bottom-right
         case 1: return (cols - 1 - col) + row; // top-right -> bottom-left
@@ -1391,22 +1391,116 @@ function getFoldWave(col, row, cols, rows, variant) {
     }
 }
 
-function getFoldAxis(col, row, cols, rows, variant) {
+function getFoldSpec(col, row, variant) {
     const mode = (col + row + variant) % 4;
-    if (mode === 0) return { origin: 'left center',  transform: 'translate3d(0,0,11px) rotateY(104deg) scale(.985)' };
-    if (mode === 1) return { origin: 'right center', transform: 'translate3d(0,0,11px) rotateY(-104deg) scale(.985)' };
-    if (mode === 2) return { origin: 'center top',   transform: 'translate3d(0,0,11px) rotateX(-104deg) scale(.985)' };
-    return { origin: 'center bottom', transform: 'translate3d(0,0,11px) rotateX(104deg) scale(.985)' };
+    if (mode === 0) return {
+        origin: 'left center',
+        edgeClass: 'fold-left',
+        rotate: deg => `rotateY(${deg}deg)`
+    };
+    if (mode === 1) return {
+        origin: 'right center',
+        edgeClass: 'fold-right',
+        rotate: deg => `rotateY(${-deg}deg)`
+    };
+    if (mode === 2) return {
+        origin: 'center top',
+        edgeClass: 'fold-top',
+        rotate: deg => `rotateX(${-deg}deg)`
+    };
+    return {
+        origin: 'center bottom',
+        edgeClass: 'fold-bottom',
+        rotate: deg => `rotateX(${deg}deg)`
+    };
 }
 
-function createPaperSwarm(target, delay = 0, variant = 0, intensity = 1) {
+function copyComputedRootStyle(source, clone) {
+    const computed = getComputedStyle(source);
+    for (let i = 0; i < computed.length; i++) {
+        const prop = computed[i];
+        // geometry is fixed explicitly below; copying everything else preserves ID-only styling
+        if (prop === 'position' || prop === 'left' || prop === 'right' ||
+            prop === 'top' || prop === 'bottom' || prop === 'inset' ||
+            prop === 'transform' || prop === 'visibility' || prop === 'opacity' ||
+            prop === 'animation' || prop.startsWith('animation-') ||
+            prop === 'transition' || prop.startsWith('transition-')) continue;
+        try { clone.style.setProperty(prop, computed.getPropertyValue(prop)); } catch (e) {}
+    }
+}
+
+function makePaperFragment(target, rect, col, row, tileW, tileH) {
+    const clone = target.cloneNode(true);
+    copyComputedRootStyle(target, clone);
+
+    // IDs are removed so realtime code always addresses the real widgets, never intro copies.
+    clone.removeAttribute('id');
+    clone.querySelectorAll('[id]').forEach(el => el.removeAttribute('id'));
+    clone.removeAttribute('onclick');
+    clone.querySelectorAll('[onclick]').forEach(el => el.removeAttribute('onclick'));
+
+    clone.classList.add('paper-fragment-clone');
+    clone.setAttribute('aria-hidden', 'true');
+    clone.style.setProperty('position', 'absolute', 'important');
+    clone.style.setProperty('left', `${-col * tileW}px`, 'important');
+    clone.style.setProperty('top', `${-row * tileH}px`, 'important');
+    clone.style.setProperty('width', `${rect.width}px`, 'important');
+    clone.style.setProperty('height', `${rect.height}px`, 'important');
+    clone.style.setProperty('margin', '0', 'important');
+    clone.style.setProperty('transform', 'none', 'important');
+    clone.style.setProperty('transform-origin', 'center center', 'important');
+    clone.style.setProperty('visibility', 'visible', 'important');
+    clone.style.setProperty('opacity', '1', 'important');
+    clone.style.setProperty('animation', 'none', 'important');
+    clone.style.setProperty('transition', 'none', 'important');
+    clone.style.setProperty('pointer-events', 'none', 'important');
+
+    return clone;
+}
+
+function removeTargetSheets(target) {
+    const nodes = paperTargetSheets.get(target);
+    if (!nodes) return;
+    for (const node of nodes) node.remove();
+    paperTargetSheets.delete(target);
+}
+
+function showLiveTarget(target) {
+    if (!target?.isConnected) return;
+
+    // Critical startup CSS hides most modules with ID selectors + !important.
+    // A class alone cannot beat that specificity, so hand the finished paper
+    // to the live widget with inline !important values. This is PER TARGET:
+    // no widget waits for the global intro cleanup anymore.
+    target.classList.add('paper-reveal-live');
+    target.style.setProperty('visibility', 'visible', 'important');
+    target.style.setProperty('opacity', '1', 'important');
+
+    // The sheets already show the same clipped content. Reveal the real element
+    // underneath first, then remove the assembled paper after two paints.
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => removeTargetSheets(target));
+    });
+}
+
+function createContentMappedPaper(target, delay = 0, variant = 0, intensity = 1) {
     const overlay = document.getElementById('paper-flip-overlay');
     if (!overlay || !target) return;
 
     paperFlipLater(() => {
         if (!target.isConnected || !overlay.isConnected) return;
+
+        // Keep temporary duplicate visuals AFTER the real DOM in tree order.
+        // This is extra insurance for any selector code that expects the first match to be live UI.
+        if (overlay.parentElement === document.body && overlay !== document.body.lastElementChild) {
+            document.body.appendChild(overlay);
+        }
+
         const rect = target.getBoundingClientRect();
-        if (!rect.width || !rect.height) return;
+        if (!rect.width || !rect.height) {
+            target.classList.add('paper-reveal-live');
+            return;
+        }
 
         const { cols, rows } = getPaperGrid(rect);
         const tileW = rect.width / cols;
@@ -1414,164 +1508,151 @@ function createPaperSwarm(target, delay = 0, variant = 0, intensity = 1) {
         const total = cols * rows;
         const cx = rect.left + rect.width / 2;
         const cy = rect.top + rect.height / 2;
-        const radiusBase = Math.min(138, Math.max(58, 48 + Math.max(rect.width, rect.height) * .38)) * intensity;
-
-        // Build an invisible-looking veil first, then expose the live module underneath.
-        // The veil uses body background so there is no blank-card flash before folding starts.
-        const veils = [];
-        for (let i = 0; i < total; i++) {
-            const col = i % cols;
-            const row = Math.floor(i / cols);
-            const veil = document.createElement('span');
-            veil.className = 'paper-veil';
-            veil.style.left = `${rect.left + col * tileW - .6}px`;
-            veil.style.top = `${rect.top + row * tileH - .6}px`;
-            veil.style.width = `${tileW + 1.2}px`;
-            veil.style.height = `${tileH + 1.2}px`;
-            overlay.appendChild(veil);
-            veils.push(veil);
-        }
-
-        if (target.id === 'crowd-status') target.style.animation = 'none';
-        target.classList.add('paper-reveal-live');
+        const radiusBase = Math.min(150, Math.max(64, 50 + Math.max(rect.width, rect.height) * .42)) * intensity;
+        const nodes = [];
+        let maxStagger = 0;
 
         for (let i = 0; i < total; i++) {
             const col = i % cols;
             const row = Math.floor(i / cols);
-            const tile = document.createElement('span');
-            const cool = (i + variant * 2) % 5 === 0 ? ' paper-tile-cool' : '';
-            tile.className = `paper-tile${(i + variant) % 2 ? ' paper-tile-alt' : ''}${cool}`;
-            tile.style.setProperty('--tile-w', `${Math.max(7, tileW + .8)}px`);
-            tile.style.setProperty('--tile-h', `${Math.max(6, tileH + .8)}px`);
-            tile.style.left = `${rect.left + col * tileW - .2}px`;
-            tile.style.top = `${rect.top + row * tileH - .2}px`;
+            const fold = getFoldSpec(col, row, variant);
+            const wave = getFoldWave(col, row, cols, rows, variant);
+            const stagger = Math.round(wave * 42 + ((i * 13 + variant * 7) % 17));
+            maxStagger = Math.max(maxStagger, stagger);
 
-            const fold = getFoldAxis(col, row, cols, rows, variant);
-            tile.style.transformOrigin = fold.origin;
-            overlay.appendChild(tile);
+            const sheet = document.createElement('span');
+            sheet.className = `paper-sheet ${fold.edgeClass}`;
+            sheet.style.left = `${rect.left + col * tileW}px`;
+            sheet.style.top = `${rect.top + row * tileH}px`;
+            sheet.style.width = `${Math.max(4, tileW + .35)}px`;
+            sheet.style.height = `${Math.max(4, tileH + .35)}px`;
+            sheet.style.transformOrigin = fold.origin;
 
-            const angle = ((i / total) * Math.PI * 2) + variant * .63 + row * .22;
-            const radius = radiusBase * (.78 + ((i * 29 + variant * 17) % 29) / 100);
+            const back = document.createElement('span');
+            back.className = 'paper-sheet-face paper-sheet-back';
+
+            const front = document.createElement('span');
+            front.className = 'paper-sheet-face paper-sheet-front';
+
+            const paperSurface = document.createElement('span');
+            paperSurface.className = 'paper-front-surface';
+
+            const fragment = makePaperFragment(target, rect, col, row, tileW, tileH);
+            const foldShadow = document.createElement('span');
+            foldShadow.className = 'paper-fold-shadow';
+
+            front.append(paperSurface, fragment, foldShadow);
+            sheet.append(back, front);
+            overlay.appendChild(sheet);
+            nodes.push(sheet);
+
+            const angle = ((i / Math.max(1, total)) * Math.PI * 2) + variant * .67 + row * .28;
+            const radius = radiusBase * (.82 + ((i * 31 + variant * 19) % 27) / 100);
             const sx = Math.cos(angle) * radius;
             const sy = Math.sin(angle) * radius * .62;
-            const z = 28 + ((i * 31 + variant * 13) % 70);
-            const rz = ((i * 71 + variant * 27) % 260) - 130;
-            const rx = 65 + ((i * 41 + variant * 19) % 95);
-            const ry = ((i * 59 + variant * 23) % 180) - 90;
+            const z = 34 + ((i * 37 + variant * 11) % 74);
+            const rz = ((i * 73 + variant * 29) % 250) - 125;
 
-            // The reveal follows a visible diagonal/centre wave instead of all pieces landing together.
-            const wave = getFoldWave(col, row, cols, rows, variant);
-            const stagger = Math.round(wave * 38 + ((i + variant) % 2) * 7);
-
-            const anim = tile.animate([
+            // Back face first -> edge-on -> content face progressively turns toward camera -> flat UI.
+            const anim = sheet.animate([
                 {
                     opacity: 0,
-                    transform: `translate3d(${sx}px,${sy}px,${z}px) rotateZ(${rz}deg) rotateX(${rx}deg) rotateY(${ry}deg) scale(.58)`
+                    transform: `translate3d(${sx}px,${sy}px,${z}px) rotateZ(${rz}deg) ${fold.rotate(154)} scale(.56)`
                 },
                 {
                     opacity: 1,
-                    transform: `translate3d(${sx * .72}px,${sy * .72}px,${z * .72}px) rotateZ(${rz * .78}deg) rotateX(${rx * .75}deg) rotateY(${ry * .75}deg) scale(.72)`,
-                    offset: .16
+                    transform: `translate3d(${sx * .68}px,${sy * .68}px,${z * .72}px) rotateZ(${rz * .72}deg) ${fold.rotate(128)} scale(.70)`,
+                    offset: .18
                 },
                 {
                     opacity: 1,
-                    transform: `translate3d(${sx * .30}px,${sy * .30}px,16px) rotateZ(${rz * .33}deg) rotateX(${rx * .38}deg) rotateY(${ry * .38}deg) scale(.90)`,
-                    offset: .48
+                    transform: `translate3d(${sx * .20}px,${sy * .20}px,15px) rotateZ(${rz * .22}deg) ${fold.rotate(94)} scale(.91)`,
+                    offset: .53
                 },
                 {
                     opacity: 1,
-                    transform: 'translate3d(0,0,1px) rotateZ(0deg) rotateX(0deg) rotateY(0deg) scale(1)',
-                    offset: .68
+                    transform: `translate3d(0,0,4px) rotateZ(0deg) ${fold.rotate(54)} scale(.985)`,
+                    offset: .72
                 },
                 {
-                    opacity: .98,
-                    transform: 'translate3d(0,0,3px) rotateZ(0deg) rotateX(0deg) rotateY(0deg) scale(1)',
-                    offset: .76
+                    opacity: 1,
+                    transform: `translate3d(0,0,1px) rotateZ(0deg) ${fold.rotate(-4)} scale(1)`,
+                    offset: .94
                 },
                 {
-                    opacity: 0,
-                    transform: fold.transform,
-                    offset: 1
+                    opacity: 1,
+                    transform: `translate3d(0,0,0) rotateZ(0deg) ${fold.rotate(0)} scale(1)`
                 }
             ], {
-                duration: PAPER_SWARM_DURATION,
+                duration: PAPER_SHEET_DURATION,
                 delay: stagger,
-                easing: 'cubic-bezier(.16,.76,.16,1)',
+                easing: 'cubic-bezier(.16,.78,.18,1)',
                 fill: 'forwards'
             });
             paperFlipAnimations.push(anim);
-            anim.finished.catch(() => {}).finally(() => tile.remove());
 
-            // The body-coloured veil disappears exactly as this paper sheet becomes flat.
-            // From that moment onward, the folding sheet itself is the only cover, so the
-            // underlying live UI is revealed progressively along the physical fold edge.
-            const unveilAt = Math.round(PAPER_SWARM_DURATION * .675) + stagger;
-            paperFlipLater(() => {
-                const veil = veils[i];
-                if (!veil?.isConnected) return;
-                const veilAnim = veil.animate([
-                    { opacity: 1 },
-                    { opacity: 0 }
-                ], {
-                    duration: 36,
-                    easing: 'linear',
-                    fill: 'forwards'
-                });
-                paperFlipAnimations.push(veilAnim);
-                veilAnim.finished.catch(() => {}).finally(() => veil.remove());
-            }, unveilAt);
-        }
-
-        // A couple of loose sheets trail off after the last folds. Decorative only.
-        const trailCount = rect.width > 100 ? 2 : 1;
-        for (let i = 0; i < trailCount; i++) {
-            const trail = document.createElement('span');
-            trail.className = 'paper-trail';
-            trail.style.setProperty('--trail-w', `${10 + (i % 2) * 3}px`);
-            trail.style.setProperty('--trail-h', `${6 + (i % 3)}px`);
-            trail.style.left = `${cx - 5}px`;
-            trail.style.top = `${cy - 3}px`;
-            overlay.appendChild(trail);
-            const a = variant * .83 + i * 2.1;
-            const ex = Math.cos(a) * (28 + i * 10);
-            const ey = Math.sin(a) * (18 + i * 7);
-            const trailAnim = trail.animate([
-                { opacity: 0, transform: 'translate3d(0,0,12px) rotateX(75deg) rotateZ(0deg) scale(.6)' },
-                { opacity: .78, offset: .18 },
-                { opacity: .58, transform: `translate3d(${ex}px,${ey}px,2px) rotateX(12deg) rotateZ(${100 + i * 70}deg) scale(.9)`, offset: .62 },
-                { opacity: 0, transform: `translate3d(${ex * 1.55}px,${ey * 1.55}px,-9px) rotateX(-40deg) rotateZ(${220 + i * 90}deg) scale(.50)` }
+            const surfaceAnim = paperSurface.animate([
+                { opacity: 1 },
+                { opacity: 1, offset: .57 },
+                { opacity: .72, offset: .73 },
+                { opacity: 0, offset: 1 }
             ], {
-                duration: 390,
-                delay: 560 + i * 34,
+                duration: PAPER_SHEET_DURATION,
+                delay: stagger,
                 easing: 'ease-out',
                 fill: 'forwards'
             });
-            paperFlipAnimations.push(trailAnim);
-            trailAnim.finished.catch(() => {}).finally(() => trail.remove());
+            paperFlipAnimations.push(surfaceAnim);
+
+            const shadowAnim = foldShadow.animate([
+                { opacity: 0 },
+                { opacity: .12, offset: .36 },
+                { opacity: .48, offset: .55 },
+                { opacity: .24, offset: .76 },
+                { opacity: 0 }
+            ], {
+                duration: PAPER_SHEET_DURATION,
+                delay: stagger,
+                easing: 'ease-in-out',
+                fill: 'forwards'
+            });
+            paperFlipAnimations.push(shadowAnim);
         }
+
+        paperTargetSheets.set(target, nodes);
+
+        // The live widget only replaces already-assembled, content-bearing sheets.
+        // Because the sheets and live DOM are pixel-aligned, this swap is visually invisible.
+        paperFlipLater(() => showLiveTarget(target), PAPER_SHEET_DURATION + maxStagger + 24);
     }, delay);
 }
 
 function animatePaperReveal(target, delay, variant = 0, intensity = 1) {
     if (!target) return;
     paperRevealTargets.add(target);
-    createPaperSwarm(target, delay, variant, intensity);
+    createContentMappedPaper(target, delay, variant, intensity);
 }
 
 function finishPaperFlipIntro() {
     document.documentElement.classList.remove('paper-flip-pending');
     clearTimeout(window.__paperFlipFailsafe);
+
     for (const timer of paperFlipTimers) clearTimeout(timer);
     paperFlipTimers.length = 0;
+
     for (const anim of paperFlipAnimations) {
         try { anim.cancel(); } catch (e) {}
     }
     paperFlipAnimations.length = 0;
+
     for (const target of paperRevealTargets) {
         target.classList.remove('paper-reveal-live');
-        if (target.id === 'crowd-status') target.style.removeProperty('animation');
+        target.style.removeProperty('visibility');
+        target.style.removeProperty('opacity');
+        removeTargetSheets(target);
     }
     paperRevealTargets.clear();
+    paperTargetSheets.clear();
     document.getElementById('paper-flip-overlay')?.replaceChildren();
 }
 
@@ -1583,31 +1664,28 @@ function runPaperFlipIntro() {
     }
 
     clearTimeout(window.__paperFlipFailsafe);
-    window.__paperFlipFailsafe = setTimeout(finishPaperFlipIntro, 3000);
+    window.__paperFlipFailsafe = setTimeout(finishPaperFlipIntro, 3600);
+
     const $ = sel => document.querySelector(sel);
 
-    // V5: widget-level sequencing.  The old V4 gaps were only 20–40 ms, so on a
-    // 30/60 fps phone several modules visually committed in the same frame.
-    // Keep the fold animation overlapping, but space the *first unveil* of each
-    // module far enough apart that the dashboard is visibly built one piece at a time.
-    animatePaperReveal($('.header-title'),       0,    2, 1.08);
-    animatePaperReveal($('#weather-hub'),        160,  0, .92);
-    animatePaperReveal($('#presence-count'),     285,  1, .86);
-    animatePaperReveal($('#dark-toggle'),        400,  2, .76);
-    animatePaperReveal($('#crowd-status'),       520,  1, .92);
-    animatePaperReveal($('#load-speed-widget'),  645,  3, .82);
-    animatePaperReveal($('#net-speed-widget'),   770,  0, .82);
-    animatePaperReveal($('#btc-ticker'),         920,  1, .94);
+    // Each module starts separately.  The visible content itself lives on the folding sheets,
+    // so there is no final reveal timer capable of making several widgets "pop" together.
+    animatePaperReveal($('.header-title'),       0,    2, 1.02);
+    animatePaperReveal($('#weather-hub'),        190,  0, .92);
+    animatePaperReveal($('#presence-count'),     360,  1, .86);
+    animatePaperReveal($('#dark-toggle'),        510,  2, .76);
+    animatePaperReveal($('#crowd-status'),       660,  1, .90);
+    animatePaperReveal($('#load-speed-widget'),  820,  3, .82);
+    animatePaperReveal($('#net-speed-widget'),   980,  0, .82);
+    animatePaperReveal($('#btc-ticker'),         1160, 1, .92);
 
-    // Build the clock left-to-right instead of revealing all five clock chunks together.
     document.querySelectorAll('.flip-clock-container > .flip-unit, .flip-clock-container > .flip-colon')
-        .forEach((el, i) => animatePaperReveal(el, 1040 + i * 65, 2 + i, .82));
+        .forEach((el, i) => animatePaperReveal(el, 1320 + i * 85, 2 + i, .80));
 
-    animatePaperReveal($('#oil-ticker'),         1390, 3, .94);
+    animatePaperReveal($('#oil-ticker'),         1780, 3, .92);
 
-    // Do not clear the veil globally until the last widget has had time to finish
-    // its own fold.  This prevents the old "everything appears at once" fallback.
-    paperFlipLater(finishPaperFlipIntro, 2550);
+    // Global cleanup happens only after every target's own paper-to-live handoff is complete.
+    paperFlipLater(finishPaperFlipIntro, 2900);
 }
 
 // APIs/Firebase/tickers initialize in parallel; the intro is purely visual.
