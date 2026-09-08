@@ -1359,12 +1359,13 @@ document.addEventListener('click', (e) => {
     setTimeout(() => ripple.remove(), 600);
 });
 
-// ─── PAPER-SWARM STARTUP INTRO ─────────────────────────────────────────
-// Konan-inspired paper reconstruction: several short-lived tiles spiral in,
-// align over each module, then dissolve into the live UI. No loop remains.
-const PAPER_SWARM_DURATION = 650;
+// ─── PAPER-SWARM STARTUP INTRO V3 ─────────────────────────────────────
+// Small paper sheets are the visible foreground. They spiral/flip into the exact
+// footprint of each module; only after they nearly align does the live UI appear.
+const PAPER_SWARM_DURATION = 720;
 const paperFlipAnimations = [];
 const paperFlipTimers = [];
+const paperRevealTargets = new Set();
 
 function paperFlipLater(fn, delay) {
     const id = setTimeout(fn, delay);
@@ -1373,10 +1374,11 @@ function paperFlipLater(fn, delay) {
 }
 
 function getPaperGrid(rect) {
-    // Small controls need fewer pieces; wide cards get a 3×2 paper mosaic.
-    if (rect.width < 52 || rect.height < 28) return { cols: 2, rows: 2 };
-    if (rect.width > 120) return { cols: 3, rows: 2 };
-    return { cols: 2, rows: 3 };
+    // Smaller pieces than V2: the target should look rebuilt from sheets, not
+    // covered by a few giant translucent slabs.
+    const cols = Math.max(2, Math.min(6, Math.round(rect.width / 22)));
+    const rows = Math.max(2, Math.min(3, Math.round(rect.height / 14)));
+    return { cols, rows };
 }
 
 function createPaperSwarm(target, delay = 0, variant = 0, intensity = 1) {
@@ -1394,86 +1396,92 @@ function createPaperSwarm(target, delay = 0, variant = 0, intensity = 1) {
         const total = cols * rows;
         const cx = rect.left + rect.width / 2;
         const cy = rect.top + rect.height / 2;
-        const radiusBase = Math.min(150, Math.max(66, 54 + Math.max(rect.width, rect.height) * .48)) * intensity;
+        const radiusBase = Math.min(138, Math.max(58, 48 + Math.max(rect.width, rect.height) * .38)) * intensity;
 
         for (let i = 0; i < total; i++) {
             const col = i % cols;
             const row = Math.floor(i / cols);
             const tile = document.createElement('span');
-            tile.className = `paper-tile${(i + variant) % 2 ? ' paper-tile-alt' : ''}`;
-            tile.style.setProperty('--tile-w', `${Math.max(8, tileW + .8)}px`);
-            tile.style.setProperty('--tile-h', `${Math.max(7, tileH + .8)}px`);
+            const cool = (i + variant * 2) % 5 === 0 ? ' paper-tile-cool' : '';
+            tile.className = `paper-tile${(i + variant) % 2 ? ' paper-tile-alt' : ''}${cool}`;
+            tile.style.setProperty('--tile-w', `${Math.max(7, tileW + .55)}px`);
+            tile.style.setProperty('--tile-h', `${Math.max(6, tileH + .55)}px`);
             tile.style.left = `${rect.left + col * tileW}px`;
             tile.style.top = `${rect.top + row * tileH}px`;
             overlay.appendChild(tile);
 
-            // Deterministic spiral: each piece approaches the exact cell it will occupy.
-            const angle = ((i / total) * Math.PI * 2) + variant * .71;
-            const radius = radiusBase * (.82 + ((i * 37 + variant * 11) % 31) / 100);
+            // Each sheet begins around the target on a shallow spiral, with a real
+            // paper-like 3D flip. The path is deterministic to avoid jitter.
+            const angle = ((i / total) * Math.PI * 2) + variant * .63 + row * .22;
+            const radius = radiusBase * (.78 + ((i * 29 + variant * 17) % 29) / 100);
             const sx = Math.cos(angle) * radius;
-            const sy = Math.sin(angle) * radius * .66;
-            const z = 36 + ((i * 29 + variant * 17) % 72);
-            const rz = ((i * 67 + variant * 31) % 240) - 120;
-            const rx = ((i * 43 + variant * 19) % 150) - 75;
-            const ry = ((i * 53 + variant * 23) % 170) - 85;
-            const stagger = i * 18;
+            const sy = Math.sin(angle) * radius * .62;
+            const z = 28 + ((i * 31 + variant * 13) % 70);
+            const rz = ((i * 71 + variant * 27) % 260) - 130;
+            const rx = 65 + ((i * 41 + variant * 19) % 95);
+            const ry = ((i * 59 + variant * 23) % 180) - 90;
+            const stagger = (i % cols) * 10 + row * 15;
 
             const anim = tile.animate([
                 {
                     opacity: 0,
-                    transform: `translate3d(${sx}px,${sy}px,${z}px) rotateZ(${rz}deg) rotateX(${rx}deg) rotateY(${ry}deg) scale(.62)`
-                },
-                {
-                    opacity: .98,
-                    transform: `translate3d(${sx * .72}px,${sy * .72}px,${z * .65}px) rotateZ(${rz * .72}deg) rotateX(${rx * .72}deg) rotateY(${ry * .72}deg) scale(.76)`,
-                    offset: .18
+                    transform: `translate3d(${sx}px,${sy}px,${z}px) rotateZ(${rz}deg) rotateX(${rx}deg) rotateY(${ry}deg) scale(.58)`
                 },
                 {
                     opacity: 1,
-                    transform: `translate3d(${sx * .18}px,${sy * .18}px,10px) rotateZ(${rz * .16}deg) rotateX(${rx * .18}deg) rotateY(${ry * .18}deg) scale(.96)`,
-                    offset: .64
+                    transform: `translate3d(${sx * .72}px,${sy * .72}px,${z * .72}px) rotateZ(${rz * .78}deg) rotateX(${rx * .75}deg) rotateY(${ry * .75}deg) scale(.72)`,
+                    offset: .16
+                },
+                {
+                    opacity: 1,
+                    transform: `translate3d(${sx * .30}px,${sy * .30}px,16px) rotateZ(${rz * .33}deg) rotateX(${rx * .38}deg) rotateY(${ry * .38}deg) scale(.90)`,
+                    offset: .50
                 },
                 {
                     opacity: 1,
                     transform: 'translate3d(0,0,1px) rotateZ(0deg) rotateX(0deg) rotateY(0deg) scale(1)',
-                    offset: .79
+                    offset: .73
+                },
+                {
+                    opacity: .96,
+                    transform: 'translate3d(0,0,0) rotateZ(0deg) rotateX(0deg) rotateY(0deg) scale(1)',
+                    offset: .84
                 },
                 {
                     opacity: 0,
-                    transform: 'translate3d(0,0,0) rotateZ(0deg) rotateX(0deg) rotateY(0deg) scale(.985)'
+                    transform: 'translate3d(0,0,-2px) rotateZ(0deg) rotateX(0deg) rotateY(0deg) scale(.99)'
                 }
             ], {
                 duration: PAPER_SWARM_DURATION,
                 delay: stagger,
-                easing: 'cubic-bezier(.18,.78,.16,1)',
+                easing: 'cubic-bezier(.16,.76,.16,1)',
                 fill: 'forwards'
             });
             paperFlipAnimations.push(anim);
             anim.finished.catch(() => {}).finally(() => tile.remove());
         }
 
-        // A few tiny sheets overshoot the merge, which makes the motion feel less like
-        // a generic card transition and more like a paper swarm collapsing into form.
+        // A few loose sheets circle past the merge point, like the tail of a paper swarm.
         const trailCount = rect.width > 100 ? 3 : 2;
         for (let i = 0; i < trailCount; i++) {
             const trail = document.createElement('span');
             trail.className = 'paper-trail';
-            trail.style.setProperty('--trail-w', `${8 + i * 2}px`);
-            trail.style.setProperty('--trail-h', `${6 + (i % 2) * 2}px`);
+            trail.style.setProperty('--trail-w', `${10 + (i % 2) * 3}px`);
+            trail.style.setProperty('--trail-h', `${6 + (i % 3)}px`);
             trail.style.left = `${cx - 5}px`;
-            trail.style.top = `${cy - 4}px`;
+            trail.style.top = `${cy - 3}px`;
             overlay.appendChild(trail);
-            const a = variant * .9 + i * 2.2;
-            const ex = Math.cos(a) * (28 + i * 12);
-            const ey = Math.sin(a) * (22 + i * 9);
+            const a = variant * .83 + i * 2.1;
+            const ex = Math.cos(a) * (30 + i * 11);
+            const ey = Math.sin(a) * (20 + i * 8);
             const trailAnim = trail.animate([
-                { opacity: 0, transform: 'translate3d(0,0,8px) rotate(0deg) scale(.6)' },
-                { opacity: .72, offset: .18 },
-                { opacity: .5, transform: `translate3d(${ex}px,${ey}px,0) rotate(${95 + i * 55}deg) scale(.86)`, offset: .62 },
-                { opacity: 0, transform: `translate3d(${ex * 1.8}px,${ey * 1.8}px,-8px) rotate(${180 + i * 80}deg) scale(.52)` }
+                { opacity: 0, transform: 'translate3d(0,0,12px) rotateX(75deg) rotateZ(0deg) scale(.6)' },
+                { opacity: .82, offset: .18 },
+                { opacity: .66, transform: `translate3d(${ex}px,${ey}px,2px) rotateX(12deg) rotateZ(${100 + i * 70}deg) scale(.9)`, offset: .62 },
+                { opacity: 0, transform: `translate3d(${ex * 1.65}px,${ey * 1.65}px,-9px) rotateX(-40deg) rotateZ(${220 + i * 90}deg) scale(.50)` }
             ], {
-                duration: 390,
-                delay: 475 + i * 20,
+                duration: 430,
+                delay: 470 + i * 28,
                 easing: 'ease-out',
                 fill: 'forwards'
             });
@@ -1483,19 +1491,19 @@ function createPaperSwarm(target, delay = 0, variant = 0, intensity = 1) {
 
         const seam = document.createElement('span');
         seam.className = 'paper-seam-flash';
-        seam.style.left = `${rect.left - 2}px`;
-        seam.style.top = `${rect.top - 2}px`;
-        seam.style.width = `${rect.width + 4}px`;
-        seam.style.height = `${rect.height + 4}px`;
+        seam.style.left = `${rect.left - 1}px`;
+        seam.style.top = `${rect.top - 1}px`;
+        seam.style.width = `${rect.width + 2}px`;
+        seam.style.height = `${rect.height + 2}px`;
         seam.style.borderRadius = getComputedStyle(target).borderRadius || '8px';
         overlay.appendChild(seam);
         const seamAnim = seam.animate([
-            { opacity: 0, transform: 'scale(.94)' },
-            { opacity: .85, transform: 'scale(1.015)', offset: .42 },
-            { opacity: 0, transform: 'scale(1.04)' }
+            { opacity: 0, transform: 'scale(.97)' },
+            { opacity: .62, transform: 'scale(1.01)', offset: .42 },
+            { opacity: 0, transform: 'scale(1.025)' }
         ], {
-            duration: 260,
-            delay: 505,
+            duration: 210,
+            delay: 520,
             easing: 'ease-out',
             fill: 'forwards'
         });
@@ -1506,23 +1514,32 @@ function createPaperSwarm(target, delay = 0, variant = 0, intensity = 1) {
 
 function animatePaperReveal(target, delay, variant = 0, intensity = 1) {
     if (!target) return;
+    paperRevealTargets.add(target);
     createPaperSwarm(target, delay, variant, intensity);
 
-    const leanX = (variant % 2 ? -1 : 1) * (8 + (variant % 3) * 2);
-    const leanY = (variant % 3 ? 1 : -1) * (10 + (variant % 2) * 3);
-    const anim = target.animate([
-        { opacity: 0, transform: `perspective(850px) rotateX(${leanX}deg) rotateY(${leanY}deg) scale(.91)` },
-        { opacity: 0, transform: `perspective(850px) rotateX(${leanX * .65}deg) rotateY(${leanY * .65}deg) scale(.94)`, offset: .48 },
-        { opacity: .35, offset: .62 },
-        { opacity: 1, transform: 'perspective(850px) rotateX(0deg) rotateY(0deg) scale(1.035)', offset: .84 },
-        { opacity: 1, transform: 'perspective(850px) rotateX(0deg) rotateY(0deg) scale(1)' }
-    ], {
-        duration: 470,
-        delay: delay + 320,
-        easing: 'cubic-bezier(.16,.84,.22,1)',
-        fill: 'forwards'
-    });
-    paperFlipAnimations.push(anim);
+    // Wait until the sheets are almost aligned, then reveal the actual live module.
+    paperFlipLater(() => {
+        if (!target.isConnected) return;
+        target.classList.add('paper-reveal-live');
+
+        // Crowd badge has its own CSS pulse animation (opacity + transform). Disable it
+        // during the reveal or it can punch through the startup hide / fight this motion.
+        if (target.id === 'crowd-status') target.style.animation = 'none';
+
+        const leanX = (variant % 2 ? -1 : 1) * (6 + (variant % 3) * 2);
+        const leanY = (variant % 3 ? 1 : -1) * (8 + (variant % 2) * 3);
+        const anim = target.animate([
+            { opacity: 0, transform: `perspective(850px) rotateX(${leanX}deg) rotateY(${leanY}deg) scale(.96)` },
+            { opacity: .22, offset: .22 },
+            { opacity: 1, transform: 'perspective(850px) rotateX(0deg) rotateY(0deg) scale(1.018)', offset: .74 },
+            { opacity: 1, transform: 'perspective(850px) rotateX(0deg) rotateY(0deg) scale(1)' }
+        ], {
+            duration: 250,
+            easing: 'cubic-bezier(.18,.82,.2,1)',
+            fill: 'forwards'
+        });
+        paperFlipAnimations.push(anim);
+    }, delay + 505);
 }
 
 function finishPaperFlipIntro() {
@@ -1534,6 +1551,11 @@ function finishPaperFlipIntro() {
         try { anim.cancel(); } catch (e) {}
     }
     paperFlipAnimations.length = 0;
+    for (const target of paperRevealTargets) {
+        target.classList.remove('paper-reveal-live');
+        if (target.id === 'crowd-status') target.style.removeProperty('animation');
+    }
+    paperRevealTargets.clear();
     document.getElementById('paper-flip-overlay')?.replaceChildren();
 }
 
@@ -1545,26 +1567,26 @@ function runPaperFlipIntro() {
     }
 
     clearTimeout(window.__paperFlipFailsafe);
-    window.__paperFlipFailsafe = setTimeout(finishPaperFlipIntro, 2700);
+    window.__paperFlipFailsafe = setTimeout(finishPaperFlipIntro, 2800);
     const $ = sel => document.querySelector(sel);
 
-    // Start from the identity of the page, then spread outward like a paper technique.
-    animatePaperReveal($('.header-title'),       0,   0, 1.18);
-    animatePaperReveal($('#weather-hub'),        95,  1, .92);
-    animatePaperReveal($('#presence-count'),     125, 2, .90);
-    animatePaperReveal($('#dark-toggle'),        165, 3, .82);
+    // One spreading wave rather than unrelated cards firing separately.
+    animatePaperReveal($('.header-title'),       0,   0, 1.08);
+    animatePaperReveal($('#crowd-status'),       80,  1, .92);
 
-    animatePaperReveal($('#crowd-status'),       285, 4, .95);
-    animatePaperReveal($('#load-speed-widget'),  330, 5, .88);
-    animatePaperReveal($('#net-speed-widget'),   360, 6, .88);
+    animatePaperReveal($('#weather-hub'),        135, 2, .92);
+    animatePaperReveal($('#presence-count'),     155, 3, .86);
+    animatePaperReveal($('#dark-toggle'),        185, 4, .76);
+    animatePaperReveal($('#load-speed-widget'),  230, 5, .82);
+    animatePaperReveal($('#net-speed-widget'),   255, 6, .82);
 
-    // Market + clock row lands last as the heaviest visual beat.
-    animatePaperReveal($('#btc-ticker'),         520, 7, 1.00);
+    // Market + clock row is the final, denser paper wave.
+    animatePaperReveal($('#btc-ticker'),         390, 7, .94);
     document.querySelectorAll('.flip-clock-container > .flip-unit, .flip-clock-container > .flip-colon')
-        .forEach((el, i) => animatePaperReveal(el, 500 + i * 34, 8 + i, .88));
-    animatePaperReveal($('#oil-ticker'),         545, 14, 1.00);
+        .forEach((el, i) => animatePaperReveal(el, 370 + i * 28, 8 + i, .82));
+    animatePaperReveal($('#oil-ticker'),         425, 14, .94);
 
-    paperFlipLater(finishPaperFlipIntro, 1680);
+    paperFlipLater(finishPaperFlipIntro, 1640);
 }
 
 // APIs/Firebase/tickers initialize in parallel; the intro is purely visual.

@@ -430,17 +430,17 @@ body.dark-mode .ticker-item { background: linear-gradient(180deg, rgba(39,49,60,
 }
 
 
-/* ─── PAPER-SWARM STARTUP INTRO ────────────────────────────────────────
-   Konan-inspired: each module is rebuilt from several independent paper tiles.
-   Pieces spiral in 3D, align into the module's footprint, then dissolve into the
-   live UI. Everything is temporary and pointer-events:none. */
+/* ─── PAPER-SWARM STARTUP INTRO V3 ─────────────────────────────────────
+   Paper is the foreground object: small sheets flip/spiral into the exact
+   footprint of each module, then the live module is revealed underneath.
+   Everything is temporary and pointer-events:none. */
 #paper-flip-overlay {
     position: fixed;
     inset: 0;
     z-index: 9998;
     pointer-events: none;
     overflow: hidden;
-    perspective: 1100px;
+    perspective: 1000px;
     transform-style: preserve-3d;
     contain: layout paint;
 }
@@ -449,76 +449,77 @@ body.dark-mode .ticker-item { background: linear-gradient(180deg, rgba(39,49,60,
     position: fixed;
     left: 0;
     top: 0;
-    width: var(--tile-w, 22px);
-    height: var(--tile-h, 16px);
+    width: var(--tile-w, 18px);
+    height: var(--tile-h, 10px);
     opacity: 0;
     pointer-events: none;
     will-change: transform, opacity;
     backface-visibility: hidden;
     transform-style: preserve-3d;
-    border-radius: 2px;
-    background:
-        linear-gradient(140deg, rgba(255,255,255,.99) 0 52%, rgba(220,236,250,.98) 53% 100%);
-    border: 1px solid rgba(57,126,190,.28);
-    box-shadow: 0 2px 7px rgba(25,70,115,.15);
-    clip-path: polygon(2% 4%, 96% 0, 100% 93%, 5% 100%);
+    border-radius: 1.5px;
+    background: linear-gradient(155deg, #fff 0 61%, #edf1f5 62% 100%);
+    border: 1px solid rgba(90,105,120,.26);
+    box-shadow: 0 2px 5px rgba(30,40,50,.13);
+    clip-path: polygon(2% 4%, 97% 0, 100% 94%, 5% 100%);
 }
-
 .paper-tile.paper-tile-alt {
-    background:
-        linear-gradient(320deg, rgba(250,253,255,.99) 0 55%, rgba(198,224,247,.98) 56% 100%);
-    clip-path: polygon(0 10%, 92% 2%, 100% 100%, 8% 94%);
+    background: linear-gradient(25deg, #fbfcfd 0 58%, #e5edf4 59% 100%);
+    clip-path: polygon(0 9%, 94% 2%, 100% 100%, 7% 95%);
 }
-
+.paper-tile.paper-tile-cool {
+    background: linear-gradient(145deg, #fff 0 64%, #dceaf6 65% 100%);
+}
 .paper-tile::after {
     content: '';
     position: absolute;
     inset: 0;
-    border-top: 1px solid rgba(255,255,255,.72);
-    opacity: .8;
+    border-top: 1px solid rgba(255,255,255,.9);
+    opacity: .9;
 }
 
 .paper-trail {
     position: fixed;
-    width: var(--trail-w, 10px);
+    width: var(--trail-w, 12px);
     height: var(--trail-h, 7px);
     opacity: 0;
     pointer-events: none;
     will-change: transform, opacity;
     border-radius: 1px;
-    background: rgba(235,247,255,.92);
-    border: 1px solid rgba(70,140,205,.22);
-    box-shadow: 0 1px 4px rgba(20,70,120,.12);
+    background: rgba(252,253,254,.96);
+    border: 1px solid rgba(100,115,130,.22);
+    box-shadow: 0 1px 3px rgba(25,35,45,.10);
+    backface-visibility: hidden;
 }
 
 .paper-seam-flash {
     position: fixed;
     pointer-events: none;
     opacity: 0;
-    border: 1px solid rgba(90,170,235,.58);
+    border: 1px solid rgba(105,160,205,.45);
     border-radius: 8px;
-    box-shadow: 0 0 12px rgba(80,160,230,.18), inset 0 0 10px rgba(120,190,245,.08);
+    box-shadow: 0 0 9px rgba(75,145,200,.14);
     will-change: transform, opacity;
 }
 
 body.dark-mode .paper-tile {
-    background: linear-gradient(140deg, rgba(58,70,83,.98) 0 52%, rgba(35,68,99,.98) 53% 100%);
-    border-color: rgba(112,175,235,.34);
-    box-shadow: 0 3px 8px rgba(0,0,0,.30);
+    background: linear-gradient(155deg, #f6f8fa 0 61%, #c9d4de 62% 100%);
+    border-color: rgba(180,195,208,.30);
+    box-shadow: 0 2px 6px rgba(0,0,0,.28);
 }
 body.dark-mode .paper-tile.paper-tile-alt {
-    background: linear-gradient(320deg, rgba(54,68,82,.98) 0 55%, rgba(38,82,119,.98) 56% 100%);
+    background: linear-gradient(25deg, #eef2f5 0 58%, #bac9d5 59% 100%);
+}
+body.dark-mode .paper-tile.paper-tile-cool {
+    background: linear-gradient(145deg, #f7f9fb 0 64%, #c6ddef 65% 100%);
 }
 body.dark-mode .paper-trail {
-    background: rgba(58,83,106,.94);
-    border-color: rgba(115,180,240,.28);
-}
-body.dark-mode .paper-seam-flash {
-    border-color: rgba(115,185,245,.56);
-    box-shadow: 0 0 14px rgba(65,150,230,.22), inset 0 0 10px rgba(100,175,240,.10);
+    background: rgba(238,244,248,.95);
+    border-color: rgba(175,195,210,.26);
 }
 
-/* Reserve every module's normal layout from frame zero; only visibility changes. */
+/* Layout exists from frame zero, but the modules themselves are invisible until
+   their paper swarm reaches them. visibility is also set by critical CSS in head
+   so the pulsing crowd badge cannot leak through before JS starts. */
 html.paper-flip-pending #weather-hub,
 html.paper-flip-pending #presence-count,
 html.paper-flip-pending #dark-toggle,
@@ -532,6 +533,7 @@ html.paper-flip-pending .flip-clock-container > .flip-unit,
 html.paper-flip-pending .flip-clock-container > .flip-colon {
     opacity: 0;
 }
+html.paper-flip-pending .paper-reveal-live { visibility: visible !important; }
 
 #weather-hub,
 #presence-count,
@@ -560,6 +562,8 @@ html.paper-flip-pending .flip-clock-container > .flip-colon {
     html.paper-flip-pending #btc-ticker,
     html.paper-flip-pending #oil-ticker,
     html.paper-flip-pending .flip-clock-container > .flip-unit,
-    html.paper-flip-pending .flip-clock-container > .flip-colon { opacity: 1; }
+    html.paper-flip-pending .flip-clock-container > .flip-colon {
+        visibility: visible !important;
+        opacity: 1;
+    }
 }
-
