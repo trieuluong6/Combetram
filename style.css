@@ -430,118 +430,90 @@ body.dark-mode .ticker-item { background: linear-gradient(180deg, rgba(39,49,60,
 }
 
 
-/* ─── ROBOT ASSEMBLY INTRO ───────────────────────────────────────────────
-   Chỉ dùng transform/opacity để giữ animation nhẹ; overlay không chặn thao tác.
-   Nếu JS/CDN lỗi, failsafe trong <head> tự bỏ assembly-pending sau 3.2s. */
-#assembly-overlay {
+/* ─── PAPER-FLIP STARTUP INTRO ─────────────────────────────────────────
+   Inspired by folding paper/panel shards: each dashboard module flips out of
+   empty space, then snaps into place. Overlay never captures taps. */
+#paper-flip-overlay {
     position: fixed;
     inset: 0;
-    z-index: 9999;
+    z-index: 9998;
     pointer-events: none;
     overflow: hidden;
-    contain: layout paint;
-}
-.robot-arm-svg {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    overflow: visible;
-    opacity: 0;
-    filter: drop-shadow(0 4px 5px rgba(0,0,0,0.24));
-}
-.robot-segment-back {
-    stroke: rgba(15,23,42,0.42);
-    stroke-width: 16;
-    stroke-linecap: round;
-}
-.robot-segment {
-    stroke: #aeb8c5;
-    stroke-width: 11;
-    stroke-linecap: round;
-    stroke-dasharray: 1;
-    stroke-dashoffset: 1;
-}
-.robot-joint {
-    fill: #394756;
-    stroke: #dbe2ea;
-    stroke-width: 4;
-    transform-box: fill-box;
-    transform-origin: center;
-}
-.robot-joint-core { fill: #ffb300; }
-.robot-base {
-    fill: #364352;
-    stroke: #d7dee6;
-    stroke-width: 3;
-}
-.robot-gripper {
-    fill: none;
-    stroke: #27323d;
-    stroke-width: 5;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-}
-.robot-arm-svg.is-running { animation: robotArmFade 620ms ease both; }
-.robot-arm-svg.is-running .robot-segment { animation: robotSegmentExtend 260ms cubic-bezier(.22,.75,.25,1) forwards; }
-.robot-arm-svg.is-running .robot-joint { animation: robotJointPop 250ms 150ms cubic-bezier(.2,1.6,.45,1) both; }
-.robot-arm-svg.is-running .robot-gripper { animation: robotGripperClamp 190ms 235ms ease-out both; }
-@keyframes robotArmFade {
-    0% { opacity: 0; }
-    12%, 73% { opacity: 1; }
-    100% { opacity: 0; }
-}
-@keyframes robotSegmentExtend { to { stroke-dashoffset: 0; } }
-@keyframes robotJointPop {
-    0% { opacity: 0; transform: scale(.45); }
-    100% { opacity: 1; transform: scale(1); }
-}
-@keyframes robotGripperClamp {
-    0% { opacity: 0; transform: scale(1.35); transform-origin: center; }
-    100% { opacity: 1; transform: scale(1); transform-origin: center; }
-}
-.assembly-spark {
-    position: fixed;
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: #ffd54f;
-    box-shadow: 0 0 0 0 rgba(255,193,7,.75), 0 0 14px 3px rgba(255,193,7,.8);
-    transform: translate(-50%, -50%);
-    animation: assemblySpark 300ms ease-out both;
-}
-@keyframes assemblySpark {
-    0% { opacity: 0; transform: translate(-50%,-50%) scale(.2); box-shadow: 0 0 0 0 rgba(255,193,7,.8), 0 0 8px 2px rgba(255,193,7,.8); }
-    35% { opacity: 1; }
-    100% { opacity: 0; transform: translate(-50%,-50%) scale(1.8); box-shadow: 0 0 0 14px rgba(255,193,7,0), 0 0 18px 4px rgba(255,193,7,0); }
+    perspective: 900px;
+    transform-style: preserve-3d;
 }
 
-/* Giữ nguyên layout để không nhảy trang; chỉ ẩn các module được robot "mang" vào. */
-html.assembly-pending #weather-hub,
-html.assembly-pending #presence-count,
-html.assembly-pending #dark-toggle,
-html.assembly-pending #load-speed-widget,
-html.assembly-pending #crowd-status,
-html.assembly-pending .header-title,
-html.assembly-pending #net-speed-widget,
-html.assembly-pending #btc-ticker,
-html.assembly-pending #oil-ticker,
-html.assembly-pending .flip-clock-container > .flip-unit,
-html.assembly-pending .flip-clock-container > .flip-colon {
+/* Temporary fragments. They are created only during the <1.2s intro and
+   removed immediately afterwards. No permanent animation loop. */
+.paper-shard {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: var(--shard-w, 24px);
+    height: var(--shard-h, 18px);
+    border-radius: 3px;
     opacity: 0;
+    pointer-events: none;
+    will-change: transform, opacity;
+    backface-visibility: hidden;
+    background: linear-gradient(135deg, rgba(255,255,255,.98), rgba(187,222,251,.96));
+    border: 1px solid rgba(33,150,243,.34);
+    box-shadow: 0 2px 8px rgba(20, 65, 120, .16);
+    clip-path: polygon(8% 0, 100% 12%, 88% 100%, 0 82%);
+}
+
+.paper-shard.paper-shard-alt {
+    clip-path: polygon(0 16%, 84% 0, 100% 86%, 12% 100%);
+}
+
+body.dark-mode .paper-shard {
+    background: linear-gradient(135deg, rgba(45,55,66,.98), rgba(49,86,122,.96));
+    border-color: rgba(100,169,255,.42);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, .28);
+}
+
+/* Keep layout dimensions intact so page content never jumps. */
+html.paper-flip-pending #weather-hub,
+html.paper-flip-pending #presence-count,
+html.paper-flip-pending #dark-toggle,
+html.paper-flip-pending #load-speed-widget,
+html.paper-flip-pending #crowd-status,
+html.paper-flip-pending .header-title,
+html.paper-flip-pending #net-speed-widget,
+html.paper-flip-pending #btc-ticker,
+html.paper-flip-pending #oil-ticker,
+html.paper-flip-pending .flip-clock-container > .flip-unit,
+html.paper-flip-pending .flip-clock-container > .flip-colon {
+    opacity: 0;
+}
+
+/* 3D folding looks cleaner when the module itself does not show its back face. */
+#weather-hub,
+#presence-count,
+#dark-toggle,
+#load-speed-widget,
+#crowd-status,
+.header-title,
+#net-speed-widget,
+#btc-ticker,
+#oil-ticker,
+.flip-clock-container > .flip-unit,
+.flip-clock-container > .flip-colon {
+    backface-visibility: hidden;
+    transform-style: preserve-3d;
 }
 
 @media (prefers-reduced-motion: reduce) {
-    #assembly-overlay { display: none; }
-    html.assembly-pending #weather-hub,
-    html.assembly-pending #presence-count,
-    html.assembly-pending #dark-toggle,
-    html.assembly-pending #load-speed-widget,
-    html.assembly-pending #crowd-status,
-    html.assembly-pending .header-title,
-    html.assembly-pending #net-speed-widget,
-    html.assembly-pending #btc-ticker,
-    html.assembly-pending #oil-ticker,
-    html.assembly-pending .flip-clock-container > .flip-unit,
-    html.assembly-pending .flip-clock-container > .flip-colon { opacity: 1; }
+    #paper-flip-overlay { display: none; }
+    html.paper-flip-pending #weather-hub,
+    html.paper-flip-pending #presence-count,
+    html.paper-flip-pending #dark-toggle,
+    html.paper-flip-pending #load-speed-widget,
+    html.paper-flip-pending #crowd-status,
+    html.paper-flip-pending .header-title,
+    html.paper-flip-pending #net-speed-widget,
+    html.paper-flip-pending #btc-ticker,
+    html.paper-flip-pending #oil-ticker,
+    html.paper-flip-pending .flip-clock-container > .flip-unit,
+    html.paper-flip-pending .flip-clock-container > .flip-colon { opacity: 1; }
 }

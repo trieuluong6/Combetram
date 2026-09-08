@@ -1359,150 +1359,150 @@ document.addEventListener('click', (e) => {
     setTimeout(() => ripple.remove(), 600);
 });
 
-// ─── ROBOT ASSEMBLY INTRO ────────────────────────────────────────────────
-// Overlay pointer-events:none, còn các bàn và logic Firebase hoạt động ngay từ đầu.
-const ASSEMBLY_DURATION = 520;
-const assemblyAnimations = [];
+// ─── PAPER-FLIP STARTUP INTRO ───────────────────────────────────────────
+// Konan-inspired folding-panel reveal, kept intentionally lightweight:
+// only transform/opacity on the real widgets + a few short-lived fragments.
+const PAPER_FLIP_DURATION = 460;
+const paperFlipAnimations = [];
+const paperFlipTimers = [];
 
-function assemblyPointForEdge(rect, edge) {
-    const vw = window.innerWidth, vh = window.innerHeight;
-    const tx = rect.left + rect.width / 2;
-    const ty = rect.top + rect.height / 2;
-    if (edge === 'left') return { ax: -18, ay: ty, ex: Math.max(42, tx * 0.48), ey: ty - 28, tx, ty };
-    if (edge === 'right') return { ax: vw + 18, ay: ty, ex: vw - Math.max(42, (vw - tx) * 0.48), ey: ty + 28, tx, ty };
-    if (edge === 'bottom') return { ax: tx, ay: vh + 18, ex: tx + 30, ey: Math.min(vh - 45, ty + (vh - ty) * 0.48), tx, ty };
-    return { ax: tx, ay: -18, ex: tx - 30, ey: Math.max(42, ty * 0.48), tx, ty };
+function paperFlipLater(fn, delay) {
+    const id = setTimeout(fn, delay);
+    paperFlipTimers.push(id);
+    return id;
 }
 
-function createRobotArm(target, edge = 'left', delay = 0) {
-    const overlay = document.getElementById('assembly-overlay');
+function createPaperShards(target, delay = 0, variant = 0) {
+    const overlay = document.getElementById('paper-flip-overlay');
     if (!overlay || !target) return;
-    const rect = target.getBoundingClientRect();
-    const p = assemblyPointForEdge(rect, edge);
-    const ns = 'http://www.w3.org/2000/svg';
-    const svg = document.createElementNS(ns, 'svg');
-    svg.setAttribute('class', 'robot-arm-svg');
-    svg.setAttribute('viewBox', `0 0 ${window.innerWidth} ${window.innerHeight}`);
-    svg.setAttribute('preserveAspectRatio', 'none');
 
-    const baseW = edge === 'left' || edge === 'right' ? 30 : 48;
-    const baseH = edge === 'left' || edge === 'right' ? 48 : 28;
-    const base = document.createElementNS(ns, 'rect');
-    base.setAttribute('class', 'robot-base');
-    base.setAttribute('x', p.ax - baseW / 2); base.setAttribute('y', p.ay - baseH / 2);
-    base.setAttribute('width', baseW); base.setAttribute('height', baseH); base.setAttribute('rx', 7);
-
-    const mkLine = (klass, x1, y1, x2, y2) => {
-        const line = document.createElementNS(ns, 'line');
-        line.setAttribute('class', klass); line.setAttribute('x1', x1); line.setAttribute('y1', y1);
-        line.setAttribute('x2', x2); line.setAttribute('y2', y2); line.setAttribute('pathLength', '1');
-        return line;
-    };
-    svg.append(base,
-        mkLine('robot-segment-back', p.ax, p.ay, p.ex, p.ey),
-        mkLine('robot-segment-back', p.ex, p.ey, p.tx, p.ty),
-        mkLine('robot-segment', p.ax, p.ay, p.ex, p.ey),
-        mkLine('robot-segment', p.ex, p.ey, p.tx, p.ty)
-    );
-
-    const joint = document.createElementNS(ns, 'circle');
-    joint.setAttribute('class', 'robot-joint'); joint.setAttribute('cx', p.ex); joint.setAttribute('cy', p.ey); joint.setAttribute('r', 11);
-    const core = document.createElementNS(ns, 'circle');
-    core.setAttribute('class', 'robot-joint-core'); core.setAttribute('cx', p.ex); core.setAttribute('cy', p.ey); core.setAttribute('r', 4);
-    svg.append(joint, core);
-
-    const grip = document.createElementNS(ns, 'path');
-    let d;
-    if (edge === 'left') d = `M ${p.tx} ${p.ty} l 11 -8 M ${p.tx} ${p.ty} l 11 8`;
-    else if (edge === 'right') d = `M ${p.tx} ${p.ty} l -11 -8 M ${p.tx} ${p.ty} l -11 8`;
-    else if (edge === 'bottom') d = `M ${p.tx} ${p.ty} l -8 -11 M ${p.tx} ${p.ty} l 8 -11`;
-    else d = `M ${p.tx} ${p.ty} l -8 11 M ${p.tx} ${p.ty} l 8 11`;
-    grip.setAttribute('class', 'robot-gripper'); grip.setAttribute('d', d);
-    svg.append(grip);
-    overlay.appendChild(svg);
-
-    setTimeout(() => svg.classList.add('is-running'), delay);
-    setTimeout(() => svg.remove(), delay + 700);
-}
-
-function createAssemblySpark(target, delay = 0) {
-    const overlay = document.getElementById('assembly-overlay');
-    if (!overlay || !target) return;
-    setTimeout(() => {
+    paperFlipLater(() => {
+        if (!target.isConnected || !overlay.isConnected) return;
         const rect = target.getBoundingClientRect();
-        const spark = document.createElement('span');
-        spark.className = 'assembly-spark';
-        spark.style.left = `${rect.left + rect.width / 2}px`;
-        spark.style.top = `${rect.top + rect.height / 2}px`;
-        overlay.appendChild(spark);
-        setTimeout(() => spark.remove(), 340);
+        if (!rect.width || !rect.height) return;
+
+        const cx = rect.left + rect.width / 2;
+        const cy = rect.top + rect.height / 2;
+        const baseW = Math.max(12, Math.min(34, rect.width * 0.28));
+        const baseH = Math.max(9, Math.min(24, rect.height * 0.42));
+
+        // Fixed patterns avoid Math.random() visual jitter between reloads.
+        const patterns = [
+            [-1.35, -0.80, -72,  42, -28],
+            [ 1.20, -0.58,  66, -48,  22],
+            [-1.08,  0.82,  54,  38,  31],
+            [ 1.28,  0.68, -61, -34, -24]
+        ];
+
+        patterns.forEach((p, i) => {
+            const shard = document.createElement('span');
+            shard.className = `paper-shard${i % 2 ? ' paper-shard-alt' : ''}`;
+            shard.style.setProperty('--shard-w', `${baseW * (i === 1 ? .82 : 1)}px`);
+            shard.style.setProperty('--shard-h', `${baseH * (i === 2 ? .78 : 1)}px`);
+            shard.style.left = `${cx - baseW / 2}px`;
+            shard.style.top = `${cy - baseH / 2}px`;
+            overlay.appendChild(shard);
+
+            const spreadX = Math.min(86, 34 + rect.width * .18);
+            const spreadY = Math.min(62, 24 + rect.height * .28);
+            const sx = p[0] * spreadX;
+            const sy = p[1] * spreadY;
+            const twist = p[2] + variant * (i % 2 ? 7 : -6);
+            const rx = p[3];
+            const ry = p[4];
+
+            const anim = shard.animate([
+                { opacity: 0, transform: `translate3d(${sx}px, ${sy}px, 0) rotateZ(${twist}deg) rotateX(${rx}deg) rotateY(${ry}deg) scale(.72)` },
+                { opacity: .92, offset: .22 },
+                { opacity: .82, transform: `translate3d(${sx * .22}px, ${sy * .22}px, 8px) rotateZ(${twist * .20}deg) rotateX(${rx * .22}deg) rotateY(${ry * .22}deg) scale(.94)`, offset: .66 },
+                { opacity: 0, transform: 'translate3d(0,0,0) rotateZ(0deg) rotateX(0deg) rotateY(0deg) scale(.56)' }
+            ], {
+                duration: 360,
+                easing: 'cubic-bezier(.22,.72,.18,1)',
+                fill: 'forwards'
+            });
+            paperFlipAnimations.push(anim);
+            anim.finished.catch(() => {}).finally(() => shard.remove());
+        });
     }, delay);
 }
 
-function animateAssemblyPart(target, edge, delay, distance = 70, showArm = true) {
+function animatePaperFlipPart(target, delay, axis = 'y', variant = 0) {
     if (!target) return;
-    const horizontal = edge === 'left' || edge === 'right';
-    const sign = edge === 'left' || edge === 'top' ? -1 : 1;
-    const dx = horizontal ? sign * distance : 0;
-    const dy = horizontal ? 0 : sign * Math.min(distance, 54);
-    if (showArm) createRobotArm(target, edge, delay);
-    createAssemblySpark(target, delay + 305);
+    createPaperShards(target, delay, variant);
+
+    const rotateStart = axis === 'x'
+        ? `rotateX(${variant % 2 ? -78 : 78}deg) rotateY(${variant % 3 ? 8 : -8}deg)`
+        : `rotateY(${variant % 2 ? -82 : 82}deg) rotateX(${variant % 3 ? 7 : -7}deg)`;
+    const origin = axis === 'x'
+        ? (variant % 2 ? '50% 0%' : '50% 100%')
+        : (variant % 2 ? '0% 50%' : '100% 50%');
+
+    const oldOrigin = target.style.transformOrigin;
+    target.style.transformOrigin = origin;
     const anim = target.animate([
-        { opacity: 0, transform: `translate3d(${dx}px, ${dy}px, 0) scale(.93)` },
-        { opacity: 1, transform: 'translate3d(0,0,0) scale(1.035)', offset: .78 },
-        { opacity: 1, transform: 'translate3d(0,0,0) scale(1)' }
+        { opacity: 0, transform: `perspective(700px) ${rotateStart} scale(.72)` },
+        { opacity: .68, offset: .28 },
+        { opacity: 1, transform: 'perspective(700px) rotateX(0deg) rotateY(0deg) scale(1.025)', offset: .82 },
+        { opacity: 1, transform: 'perspective(700px) rotateX(0deg) rotateY(0deg) scale(1)' }
     ], {
-        duration: ASSEMBLY_DURATION,
+        duration: PAPER_FLIP_DURATION,
         delay,
-        easing: 'cubic-bezier(.2,.8,.2,1)',
+        easing: 'cubic-bezier(.18,.82,.2,1)',
         fill: 'forwards'
     });
-    assemblyAnimations.push(anim);
+    paperFlipAnimations.push(anim);
+    anim.finished.catch(() => {}).finally(() => { target.style.transformOrigin = oldOrigin; });
 }
 
-function finishAssemblyIntro() {
-    document.documentElement.classList.remove('assembly-pending');
-    clearTimeout(window.__assemblyFailsafe);
-    for (const anim of assemblyAnimations) {
+function finishPaperFlipIntro() {
+    document.documentElement.classList.remove('paper-flip-pending');
+    clearTimeout(window.__paperFlipFailsafe);
+    for (const timer of paperFlipTimers) clearTimeout(timer);
+    paperFlipTimers.length = 0;
+    for (const anim of paperFlipAnimations) {
         try { anim.cancel(); } catch (e) {}
     }
-    assemblyAnimations.length = 0;
-    setTimeout(() => document.getElementById('assembly-overlay')?.replaceChildren(), 50);
+    paperFlipAnimations.length = 0;
+    document.getElementById('paper-flip-overlay')?.replaceChildren();
 }
 
-function runAssemblyIntro() {
-    if (!document.documentElement.classList.contains('assembly-pending')) return;
+function runPaperFlipIntro() {
+    if (!document.documentElement.classList.contains('paper-flip-pending')) return;
     if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
-        finishAssemblyIntro();
+        finishPaperFlipIntro();
         return;
     }
-    // Module đã chạy được thì thay failsafe ban đầu bằng failsafe ngắn cho chính intro.
-    clearTimeout(window.__assemblyFailsafe);
-    window.__assemblyFailsafe = setTimeout(finishAssemblyIntro, 2400);
+
+    // Replace the head failsafe with a shorter runtime failsafe once JS is alive.
+    clearTimeout(window.__paperFlipFailsafe);
+    window.__paperFlipFailsafe = setTimeout(finishPaperFlipIntro, 2200);
 
     const $ = sel => document.querySelector(sel);
-    // Pha 1: thanh trên.
-    animateAssemblyPart($('#weather-hub'), 'left', 0, 90);
-    animateAssemblyPart($('#presence-count'), 'right', 35, 90);
-    animateAssemblyPart($('#dark-toggle'), 'right', 125, 55, false);
 
-    // Pha 2: trạng thái / tiêu đề / hiệu suất.
-    animateAssemblyPart($('#load-speed-widget'), 'left', 300, 80);
-    animateAssemblyPart($('#crowd-status'), 'top', 285, 60);
-    animateAssemblyPart($('.header-title'), 'top', 360, 55, false);
-    animateAssemblyPart($('#net-speed-widget'), 'right', 330, 80);
+    // Phase 1 — top status modules materialize first.
+    animatePaperFlipPart($('#weather-hub'),      0,   'y', 0);
+    animatePaperFlipPart($('#presence-count'),  35,  'y', 1);
+    animatePaperFlipPart($('#dark-toggle'),     80,  'x', 2);
 
-    // Pha 3: BTC + đồng hồ + WTI.
-    animateAssemblyPart($('#btc-ticker'), 'left', 610, 92);
-    animateAssemblyPart($('#oil-ticker'), 'right', 610, 92);
+    // Phase 2 — title/status/performance. crowd-status is intentionally hidden
+    // from frame zero and now participates in the same fold sequence.
+    animatePaperFlipPart($('#load-speed-widget'), 190, 'y', 3);
+    animatePaperFlipPart($('#crowd-status'),      165, 'x', 4);
+    animatePaperFlipPart($('.header-title'),      235, 'x', 5);
+    animatePaperFlipPart($('#net-speed-widget'),  215, 'y', 6);
+
+    // Phase 3 — market cards + the five clock groups fold in as one dashboard row.
+    animatePaperFlipPart($('#btc-ticker'), 420, 'y', 7);
+    animatePaperFlipPart($('#oil-ticker'), 440, 'y', 8);
     document.querySelectorAll('.flip-clock-container > .flip-unit, .flip-clock-container > .flip-colon')
-        .forEach((el, i) => animateAssemblyPart(el, 'bottom', 650 + i * 42, 50, i === 2));
+        .forEach((el, i) => animatePaperFlipPart(el, 400 + i * 32, i % 2 ? 'y' : 'x', 9 + i));
 
-    setTimeout(finishAssemblyIntro, 1420);
+    paperFlipLater(finishPaperFlipIntro, 1080);
 }
 
-// Chạy ngay khi module đã sẵn sàng; fetch thời tiết/ticker/Firebase vẫn chạy song song.
-requestAnimationFrame(runAssemblyIntro);
+// API/Firebase/weather/tickers continue initializing in parallel; this is visual only.
+requestAnimationFrame(runPaperFlipIntro);
 
 // DARK MODE
 function applyDarkMode(isDark) {
