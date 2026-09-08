@@ -1359,10 +1359,12 @@ document.addEventListener('click', (e) => {
     setTimeout(() => ripple.remove(), 600);
 });
 
-// ─── PAPER-SWARM STARTUP INTRO V3 ─────────────────────────────────────
-// Small paper sheets are the visible foreground. They spiral/flip into the exact
-// footprint of each module; only after they nearly align does the live UI appear.
-const PAPER_SWARM_DURATION = 720;
+// ─── PAPER-SWARM STARTUP INTRO V4 ─────────────────────────────────────
+// Progressive reveal: the live module is visible under a body-coloured tiled veil.
+// Each incoming paper sheet lands on one veil tile, then folds away from that edge;
+// the matching content region is revealed immediately underneath. No whole-card pop.
+const PAPER_SWARM_DURATION = 760;
+const PAPER_FOLD_DURATION = 185;
 const paperFlipAnimations = [];
 const paperFlipTimers = [];
 const paperRevealTargets = new Set();
@@ -1374,11 +1376,27 @@ function paperFlipLater(fn, delay) {
 }
 
 function getPaperGrid(rect) {
-    // Smaller pieces than V2: the target should look rebuilt from sheets, not
-    // covered by a few giant translucent slabs.
     const cols = Math.max(2, Math.min(6, Math.round(rect.width / 22)));
     const rows = Math.max(2, Math.min(3, Math.round(rect.height / 14)));
     return { cols, rows };
+}
+
+function getFoldWave(col, row, cols, rows, variant) {
+    // Diagonal / centre-out waves make the reveal visibly follow fold lines.
+    switch (variant % 4) {
+        case 0: return col + row; // top-left -> bottom-right
+        case 1: return (cols - 1 - col) + row; // top-right -> bottom-left
+        case 2: return Math.abs(col - (cols - 1) / 2) + Math.abs(row - (rows - 1) / 2); // centre-out
+        default: return col + (rows - 1 - row); // bottom-left -> top-right
+    }
+}
+
+function getFoldAxis(col, row, cols, rows, variant) {
+    const mode = (col + row + variant) % 4;
+    if (mode === 0) return { origin: 'left center',  transform: 'translate3d(0,0,11px) rotateY(104deg) scale(.985)' };
+    if (mode === 1) return { origin: 'right center', transform: 'translate3d(0,0,11px) rotateY(-104deg) scale(.985)' };
+    if (mode === 2) return { origin: 'center top',   transform: 'translate3d(0,0,11px) rotateX(-104deg) scale(.985)' };
+    return { origin: 'center bottom', transform: 'translate3d(0,0,11px) rotateX(104deg) scale(.985)' };
 }
 
 function createPaperSwarm(target, delay = 0, variant = 0, intensity = 1) {
@@ -1398,20 +1416,40 @@ function createPaperSwarm(target, delay = 0, variant = 0, intensity = 1) {
         const cy = rect.top + rect.height / 2;
         const radiusBase = Math.min(138, Math.max(58, 48 + Math.max(rect.width, rect.height) * .38)) * intensity;
 
+        // Build an invisible-looking veil first, then expose the live module underneath.
+        // The veil uses body background so there is no blank-card flash before folding starts.
+        const veils = [];
+        for (let i = 0; i < total; i++) {
+            const col = i % cols;
+            const row = Math.floor(i / cols);
+            const veil = document.createElement('span');
+            veil.className = 'paper-veil';
+            veil.style.left = `${rect.left + col * tileW - .6}px`;
+            veil.style.top = `${rect.top + row * tileH - .6}px`;
+            veil.style.width = `${tileW + 1.2}px`;
+            veil.style.height = `${tileH + 1.2}px`;
+            overlay.appendChild(veil);
+            veils.push(veil);
+        }
+
+        if (target.id === 'crowd-status') target.style.animation = 'none';
+        target.classList.add('paper-reveal-live');
+
         for (let i = 0; i < total; i++) {
             const col = i % cols;
             const row = Math.floor(i / cols);
             const tile = document.createElement('span');
             const cool = (i + variant * 2) % 5 === 0 ? ' paper-tile-cool' : '';
             tile.className = `paper-tile${(i + variant) % 2 ? ' paper-tile-alt' : ''}${cool}`;
-            tile.style.setProperty('--tile-w', `${Math.max(7, tileW + .55)}px`);
-            tile.style.setProperty('--tile-h', `${Math.max(6, tileH + .55)}px`);
-            tile.style.left = `${rect.left + col * tileW}px`;
-            tile.style.top = `${rect.top + row * tileH}px`;
+            tile.style.setProperty('--tile-w', `${Math.max(7, tileW + .8)}px`);
+            tile.style.setProperty('--tile-h', `${Math.max(6, tileH + .8)}px`);
+            tile.style.left = `${rect.left + col * tileW - .2}px`;
+            tile.style.top = `${rect.top + row * tileH - .2}px`;
+
+            const fold = getFoldAxis(col, row, cols, rows, variant);
+            tile.style.transformOrigin = fold.origin;
             overlay.appendChild(tile);
 
-            // Each sheet begins around the target on a shallow spiral, with a real
-            // paper-like 3D flip. The path is deterministic to avoid jitter.
             const angle = ((i / total) * Math.PI * 2) + variant * .63 + row * .22;
             const radius = radiusBase * (.78 + ((i * 29 + variant * 17) % 29) / 100);
             const sx = Math.cos(angle) * radius;
@@ -1420,7 +1458,10 @@ function createPaperSwarm(target, delay = 0, variant = 0, intensity = 1) {
             const rz = ((i * 71 + variant * 27) % 260) - 130;
             const rx = 65 + ((i * 41 + variant * 19) % 95);
             const ry = ((i * 59 + variant * 23) % 180) - 90;
-            const stagger = (i % cols) * 10 + row * 15;
+
+            // The reveal follows a visible diagonal/centre wave instead of all pieces landing together.
+            const wave = getFoldWave(col, row, cols, rows, variant);
+            const stagger = Math.round(wave * 38 + ((i + variant) % 2) * 7);
 
             const anim = tile.animate([
                 {
@@ -1435,21 +1476,22 @@ function createPaperSwarm(target, delay = 0, variant = 0, intensity = 1) {
                 {
                     opacity: 1,
                     transform: `translate3d(${sx * .30}px,${sy * .30}px,16px) rotateZ(${rz * .33}deg) rotateX(${rx * .38}deg) rotateY(${ry * .38}deg) scale(.90)`,
-                    offset: .50
+                    offset: .48
                 },
                 {
                     opacity: 1,
                     transform: 'translate3d(0,0,1px) rotateZ(0deg) rotateX(0deg) rotateY(0deg) scale(1)',
-                    offset: .73
+                    offset: .68
                 },
                 {
-                    opacity: .96,
-                    transform: 'translate3d(0,0,0) rotateZ(0deg) rotateX(0deg) rotateY(0deg) scale(1)',
-                    offset: .84
+                    opacity: .98,
+                    transform: 'translate3d(0,0,3px) rotateZ(0deg) rotateX(0deg) rotateY(0deg) scale(1)',
+                    offset: .76
                 },
                 {
                     opacity: 0,
-                    transform: 'translate3d(0,0,-2px) rotateZ(0deg) rotateX(0deg) rotateY(0deg) scale(.99)'
+                    transform: fold.transform,
+                    offset: 1
                 }
             ], {
                 duration: PAPER_SWARM_DURATION,
@@ -1459,10 +1501,29 @@ function createPaperSwarm(target, delay = 0, variant = 0, intensity = 1) {
             });
             paperFlipAnimations.push(anim);
             anim.finished.catch(() => {}).finally(() => tile.remove());
+
+            // The body-coloured veil disappears exactly as this paper sheet becomes flat.
+            // From that moment onward, the folding sheet itself is the only cover, so the
+            // underlying live UI is revealed progressively along the physical fold edge.
+            const unveilAt = Math.round(PAPER_SWARM_DURATION * .675) + stagger;
+            paperFlipLater(() => {
+                const veil = veils[i];
+                if (!veil?.isConnected) return;
+                const veilAnim = veil.animate([
+                    { opacity: 1 },
+                    { opacity: 0 }
+                ], {
+                    duration: 36,
+                    easing: 'linear',
+                    fill: 'forwards'
+                });
+                paperFlipAnimations.push(veilAnim);
+                veilAnim.finished.catch(() => {}).finally(() => veil.remove());
+            }, unveilAt);
         }
 
-        // A few loose sheets circle past the merge point, like the tail of a paper swarm.
-        const trailCount = rect.width > 100 ? 3 : 2;
+        // A couple of loose sheets trail off after the last folds. Decorative only.
+        const trailCount = rect.width > 100 ? 2 : 1;
         for (let i = 0; i < trailCount; i++) {
             const trail = document.createElement('span');
             trail.className = 'paper-trail';
@@ -1472,43 +1533,22 @@ function createPaperSwarm(target, delay = 0, variant = 0, intensity = 1) {
             trail.style.top = `${cy - 3}px`;
             overlay.appendChild(trail);
             const a = variant * .83 + i * 2.1;
-            const ex = Math.cos(a) * (30 + i * 11);
-            const ey = Math.sin(a) * (20 + i * 8);
+            const ex = Math.cos(a) * (28 + i * 10);
+            const ey = Math.sin(a) * (18 + i * 7);
             const trailAnim = trail.animate([
                 { opacity: 0, transform: 'translate3d(0,0,12px) rotateX(75deg) rotateZ(0deg) scale(.6)' },
-                { opacity: .82, offset: .18 },
-                { opacity: .66, transform: `translate3d(${ex}px,${ey}px,2px) rotateX(12deg) rotateZ(${100 + i * 70}deg) scale(.9)`, offset: .62 },
-                { opacity: 0, transform: `translate3d(${ex * 1.65}px,${ey * 1.65}px,-9px) rotateX(-40deg) rotateZ(${220 + i * 90}deg) scale(.50)` }
+                { opacity: .78, offset: .18 },
+                { opacity: .58, transform: `translate3d(${ex}px,${ey}px,2px) rotateX(12deg) rotateZ(${100 + i * 70}deg) scale(.9)`, offset: .62 },
+                { opacity: 0, transform: `translate3d(${ex * 1.55}px,${ey * 1.55}px,-9px) rotateX(-40deg) rotateZ(${220 + i * 90}deg) scale(.50)` }
             ], {
-                duration: 430,
-                delay: 470 + i * 28,
+                duration: 390,
+                delay: 560 + i * 34,
                 easing: 'ease-out',
                 fill: 'forwards'
             });
             paperFlipAnimations.push(trailAnim);
             trailAnim.finished.catch(() => {}).finally(() => trail.remove());
         }
-
-        const seam = document.createElement('span');
-        seam.className = 'paper-seam-flash';
-        seam.style.left = `${rect.left - 1}px`;
-        seam.style.top = `${rect.top - 1}px`;
-        seam.style.width = `${rect.width + 2}px`;
-        seam.style.height = `${rect.height + 2}px`;
-        seam.style.borderRadius = getComputedStyle(target).borderRadius || '8px';
-        overlay.appendChild(seam);
-        const seamAnim = seam.animate([
-            { opacity: 0, transform: 'scale(.97)' },
-            { opacity: .62, transform: 'scale(1.01)', offset: .42 },
-            { opacity: 0, transform: 'scale(1.025)' }
-        ], {
-            duration: 210,
-            delay: 520,
-            easing: 'ease-out',
-            fill: 'forwards'
-        });
-        paperFlipAnimations.push(seamAnim);
-        seamAnim.finished.catch(() => {}).finally(() => seam.remove());
     }, delay);
 }
 
@@ -1516,30 +1556,6 @@ function animatePaperReveal(target, delay, variant = 0, intensity = 1) {
     if (!target) return;
     paperRevealTargets.add(target);
     createPaperSwarm(target, delay, variant, intensity);
-
-    // Wait until the sheets are almost aligned, then reveal the actual live module.
-    paperFlipLater(() => {
-        if (!target.isConnected) return;
-        target.classList.add('paper-reveal-live');
-
-        // Crowd badge has its own CSS pulse animation (opacity + transform). Disable it
-        // during the reveal or it can punch through the startup hide / fight this motion.
-        if (target.id === 'crowd-status') target.style.animation = 'none';
-
-        const leanX = (variant % 2 ? -1 : 1) * (6 + (variant % 3) * 2);
-        const leanY = (variant % 3 ? 1 : -1) * (8 + (variant % 2) * 3);
-        const anim = target.animate([
-            { opacity: 0, transform: `perspective(850px) rotateX(${leanX}deg) rotateY(${leanY}deg) scale(.96)` },
-            { opacity: .22, offset: .22 },
-            { opacity: 1, transform: 'perspective(850px) rotateX(0deg) rotateY(0deg) scale(1.018)', offset: .74 },
-            { opacity: 1, transform: 'perspective(850px) rotateX(0deg) rotateY(0deg) scale(1)' }
-        ], {
-            duration: 250,
-            easing: 'cubic-bezier(.18,.82,.2,1)',
-            fill: 'forwards'
-        });
-        paperFlipAnimations.push(anim);
-    }, delay + 505);
 }
 
 function finishPaperFlipIntro() {
@@ -1567,26 +1583,24 @@ function runPaperFlipIntro() {
     }
 
     clearTimeout(window.__paperFlipFailsafe);
-    window.__paperFlipFailsafe = setTimeout(finishPaperFlipIntro, 2800);
+    window.__paperFlipFailsafe = setTimeout(finishPaperFlipIntro, 3000);
     const $ = sel => document.querySelector(sel);
 
-    // One spreading wave rather than unrelated cards firing separately.
-    animatePaperReveal($('.header-title'),       0,   0, 1.08);
-    animatePaperReveal($('#crowd-status'),       80,  1, .92);
+    animatePaperReveal($('.header-title'),       0,   2, 1.08);
+    animatePaperReveal($('#crowd-status'),       85,  1, .92);
 
-    animatePaperReveal($('#weather-hub'),        135, 2, .92);
-    animatePaperReveal($('#presence-count'),     155, 3, .86);
-    animatePaperReveal($('#dark-toggle'),        185, 4, .76);
-    animatePaperReveal($('#load-speed-widget'),  230, 5, .82);
-    animatePaperReveal($('#net-speed-widget'),   255, 6, .82);
+    animatePaperReveal($('#weather-hub'),        145, 0, .92);
+    animatePaperReveal($('#presence-count'),     165, 1, .86);
+    animatePaperReveal($('#dark-toggle'),        195, 2, .76);
+    animatePaperReveal($('#load-speed-widget'),  235, 3, .82);
+    animatePaperReveal($('#net-speed-widget'),   265, 0, .82);
 
-    // Market + clock row is the final, denser paper wave.
-    animatePaperReveal($('#btc-ticker'),         390, 7, .94);
+    animatePaperReveal($('#btc-ticker'),         410, 1, .94);
     document.querySelectorAll('.flip-clock-container > .flip-unit, .flip-clock-container > .flip-colon')
-        .forEach((el, i) => animatePaperReveal(el, 370 + i * 28, 8 + i, .82));
-    animatePaperReveal($('#oil-ticker'),         425, 14, .94);
+        .forEach((el, i) => animatePaperReveal(el, 390 + i * 34, 2 + i, .82));
+    animatePaperReveal($('#oil-ticker'),         450, 3, .94);
 
-    paperFlipLater(finishPaperFlipIntro, 1640);
+    paperFlipLater(finishPaperFlipIntro, 1840);
 }
 
 // APIs/Firebase/tickers initialize in parallel; the intro is purely visual.

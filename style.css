@@ -434,7 +434,7 @@ body.dark-mode .ticker-item { background: linear-gradient(180deg, rgba(39,49,60,
 }
 
 
-/* ─── PAPER-SWARM STARTUP INTRO V3 ─────────────────────────────────────
+/* ─── PAPER-SWARM STARTUP INTRO V4 ─────────────────────────────────────
    Paper is the foreground object: small sheets flip/spiral into the exact
    footprint of each module, then the live module is revealed underneath.
    Everything is temporary and pointer-events:none. */
@@ -447,6 +447,16 @@ body.dark-mode .ticker-item { background: linear-gradient(180deg, rgba(39,49,60,
     perspective: 1000px;
     transform-style: preserve-3d;
     contain: layout paint;
+}
+
+.paper-veil {
+    position: fixed;
+    pointer-events: none;
+    opacity: 1;
+    background: var(--bg-body);
+    border: 0;
+    box-shadow: none;
+    will-change: opacity;
 }
 
 .paper-tile {
@@ -537,7 +547,7 @@ html.paper-flip-pending .flip-clock-container > .flip-unit,
 html.paper-flip-pending .flip-clock-container > .flip-colon {
     opacity: 0;
 }
-html.paper-flip-pending .paper-reveal-live { visibility: visible !important; }
+html.paper-flip-pending .paper-reveal-live { visibility: visible !important; opacity: 1 !important; }
 
 #weather-hub,
 #presence-count,
