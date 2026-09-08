@@ -1586,21 +1586,28 @@ function runPaperFlipIntro() {
     window.__paperFlipFailsafe = setTimeout(finishPaperFlipIntro, 3000);
     const $ = sel => document.querySelector(sel);
 
-    animatePaperReveal($('.header-title'),       0,   2, 1.08);
-    animatePaperReveal($('#crowd-status'),       85,  1, .92);
+    // V5: widget-level sequencing.  The old V4 gaps were only 20–40 ms, so on a
+    // 30/60 fps phone several modules visually committed in the same frame.
+    // Keep the fold animation overlapping, but space the *first unveil* of each
+    // module far enough apart that the dashboard is visibly built one piece at a time.
+    animatePaperReveal($('.header-title'),       0,    2, 1.08);
+    animatePaperReveal($('#weather-hub'),        160,  0, .92);
+    animatePaperReveal($('#presence-count'),     285,  1, .86);
+    animatePaperReveal($('#dark-toggle'),        400,  2, .76);
+    animatePaperReveal($('#crowd-status'),       520,  1, .92);
+    animatePaperReveal($('#load-speed-widget'),  645,  3, .82);
+    animatePaperReveal($('#net-speed-widget'),   770,  0, .82);
+    animatePaperReveal($('#btc-ticker'),         920,  1, .94);
 
-    animatePaperReveal($('#weather-hub'),        145, 0, .92);
-    animatePaperReveal($('#presence-count'),     165, 1, .86);
-    animatePaperReveal($('#dark-toggle'),        195, 2, .76);
-    animatePaperReveal($('#load-speed-widget'),  235, 3, .82);
-    animatePaperReveal($('#net-speed-widget'),   265, 0, .82);
-
-    animatePaperReveal($('#btc-ticker'),         410, 1, .94);
+    // Build the clock left-to-right instead of revealing all five clock chunks together.
     document.querySelectorAll('.flip-clock-container > .flip-unit, .flip-clock-container > .flip-colon')
-        .forEach((el, i) => animatePaperReveal(el, 390 + i * 34, 2 + i, .82));
-    animatePaperReveal($('#oil-ticker'),         450, 3, .94);
+        .forEach((el, i) => animatePaperReveal(el, 1040 + i * 65, 2 + i, .82));
 
-    paperFlipLater(finishPaperFlipIntro, 1840);
+    animatePaperReveal($('#oil-ticker'),         1390, 3, .94);
+
+    // Do not clear the veil globally until the last widget has had time to finish
+    // its own fold.  This prevents the old "everything appears at once" fallback.
+    paperFlipLater(finishPaperFlipIntro, 2550);
 }
 
 // APIs/Firebase/tickers initialize in parallel; the intro is purely visual.
