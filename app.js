@@ -1197,7 +1197,7 @@ function renderTable(tableId, now = Date.now()) {
     }
     if (dom.meta) {
         dom.meta.classList.remove('skeleton');
-        dom.meta.textContent = total > 0 ? `🍽 ${foodQty} món · 🥤🍺 ${drinkQty}` : '';
+        dom.meta.innerHTML = total > 0 ? `🍽 <span class="table-meta-count">${foodQty}</span> món · 🥤🍺 <span class="table-meta-count">${drinkQty}</span>` : '';
         dom.meta.title = total > 0 ? `${foodQty} phần món ăn · ${drinkQty} nước/bia` : '';
     }
     renderTableTime(tableId, now);

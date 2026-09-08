@@ -248,6 +248,10 @@ body.dark-mode .status-normal { background: rgba(230,81,0,0.18); color: #ffb74d;
 .table-meta { margin-top: 5px; font-size: 0.58em; line-height: 1.25; font-weight: 750; color: var(--text-muted); white-space: nowrap; padding: 2px 5px; border-radius: 999px; background: rgba(127,127,127,0.08); transition: color 0.3s ease, background-color 0.3s ease; }
 .table-meta:empty { display: none; }
 body.dark-mode .table-meta { background: rgba(255,255,255,0.06); }
+/* Chỉ nhấn màu con số trong tóm tắt món / nước trên card bàn. */
+.table-meta-count { color: #b45309; }
+body.dark-mode .table-meta-count { color: #fbbf24; }
+
 @keyframes pulse-green { 0% { background-color: var(--bg-card); } 50% { background-color: #1b3a20; } 100% { background-color: var(--bg-card); } }
 @keyframes pulse-green-light { 0% { background-color: #fff; } 50% { background-color: #e8f5e9; } 100% { background-color: #fff; } }
 .has-guest { animation: pulse-green-light 2s infinite; border-color: var(--success-green); }
