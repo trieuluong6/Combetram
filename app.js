@@ -291,7 +291,10 @@ async function getLangData(lang) {
     if (!dictLoadPromise) {
         dictLoadPromise = import('./dict.js').then(m => {
             dictCache = m.dict;
-        }).catch(() => {});
+        }).catch((err) => {
+            console.error('[dict] Lỗi tải từ điển đa ngôn ngữ:', err);
+            dictLoadPromise = null;
+        });
     }
     await dictLoadPromise;
     return dictCache[lang] || dictCache['vi'];
@@ -1258,11 +1261,12 @@ function refresh(tableIds = null, updateCurrentOrder = true) {
     flushRemoteOrderFlashes();
 }
 
-// ─── FIX #9: Async bill render với lazy-load dict ───
+// ─── FIX #9: Async bill render với lazy-load dict (tra cứu theo item.id) ───
 async function renderBillAsync(tab) {
-    const langData = await getLangData(currentBillLang);
-    // Kiểm tra tab vẫn còn active sau khi await
-    if (currentTab !== tab) return;
+    const targetLang = currentBillLang;
+    const langData = await getLangData(targetLang);
+    // Kiểm tra tab và ngôn ngữ vẫn khớp sau khi await (tránh race condition khi bấm đổi cờ liên tục)
+    if (currentTab !== tab || currentBillLang !== targetLang) return;
 
     let h = "", t = 0, my = data.orders[tab] || {};
     document.getElementById('txt-total-label').innerText = langData.total;
@@ -1272,7 +1276,7 @@ async function renderBillAsync(tab) {
         const itm = ITEM_MAP.get(Number(id)); // FIX #11
         if (itm && my[id] > 0) {
             let p = itm.price * my[id]; t += p;
-            let nameShow = (currentBillLang !== 'vi' && langData.items && langData.items[itm.name]) ? langData.items[itm.name] : itm.name;
+            let nameShow = (targetLang !== 'vi' && langData.items?.[itm.id]) ? langData.items[itm.id] : itm.name;
             h += `<div class="bill-row" style="animation-delay: ${idx * 0.08}s">
                     <span class="item-name">${nameShow}</span>
                     <span class="item-qty">x${my[id]}</span>
