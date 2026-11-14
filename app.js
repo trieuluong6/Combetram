@@ -691,7 +691,133 @@ document.addEventListener('visibilitychange', () => {
 });
 startClockInterval();
 
-// ─── ÂM THANH THAO TÁC (WEB AUDIO API ZERO-LATENCY) + RUNG HAPTIC ────
+// ─── ÂM THANH THAO TÁC (HYBRID HTML5 WAV POOL + WEB AUDIO API) + HAPTIC ────
+// Dùng kênh media playback để kêu rõ ngay cả khi iPhone bật cần gạt Im lặng
+if (typeof navigator !== 'undefined' && navigator.audioSession) {
+    try { navigator.audioSession.type = 'playback'; } catch (e) {}
+}
+
+const IS_IOS_DEVICE = typeof navigator !== 'undefined' && (
+    /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+);
+
+const SOUND_PATTERNS = {
+    nav: [
+        { freq: 660, endFreq: 540, dur: 0.075, wave: 'sine', vol: 0.52 }
+    ],
+    add: [
+        { freq: 587.33, endFreq: 880, dur: 0.11, wave: 'triangle', vol: 0.62 }
+    ],
+    sub: [
+        { freq: 493.88, endFreq: 349.23, dur: 0.11, wave: 'triangle', vol: 0.56 }
+    ],
+    lock: [
+        { freq: 659.25, dur: 0.095, wave: 'sine', vol: 0.60 },
+        { freq: 987.77, dur: 0.15, delay: 0.085, wave: 'sine', vol: 0.64 }
+    ],
+    success: [
+        { freq: 587.33, dur: 0.09, wave: 'triangle', vol: 0.58 },
+        { freq: 783.99, dur: 0.09, delay: 0.08, wave: 'triangle', vol: 0.62 },
+        { freq: 1174.66, dur: 0.20, delay: 0.16, wave: 'sine', vol: 0.68 }
+    ],
+    ting: [
+        { freq: 1318.51, dur: 0.45, wave: 'sine', vol: 0.68 },
+        { freq: 2637.02, dur: 0.32, wave: 'sine', vol: 0.28 }
+    ]
+};
+
+function buildWavBlobUrl(notes, sampleRate = 22050) {
+    const totalDur = Math.max(...notes.map(n => (n.delay || 0) + (n.dur || 0.1))) + 0.025;
+    const numSamples = Math.max(1, Math.floor(sampleRate * totalDur));
+    const mix = new Float32Array(numSamples);
+
+    for (const n of notes) {
+        const delay = n.delay || 0;
+        const dur = n.dur || 0.1;
+        const f0 = n.freq;
+        const f1 = n.endFreq || f0;
+        const vol = n.vol || 0.55;
+        const wave = n.wave || 'sine';
+        const startIdx = Math.floor(delay * sampleRate);
+        const lenIdx = Math.max(1, Math.floor(dur * sampleRate));
+        const attackSamples = Math.max(1, Math.floor(0.006 * sampleRate));
+        let phase = 0;
+
+        for (let i = 0; i < lenIdx && (startIdx + i) < numSamples; i++) {
+            const t = lenIdx > 1 ? i / (lenIdx - 1) : 0;
+            const freq = f1 !== f0 ? f0 * Math.pow(f1 / f0, t) : f0;
+            phase += (2 * Math.PI * freq) / sampleRate;
+            let sample;
+            if (wave === 'triangle') {
+                const cyc = (phase / (2 * Math.PI)) % 1;
+                sample = 2 * Math.abs(2 * cyc - 1) - 1;
+            } else {
+                sample = Math.sin(phase) + 0.22 * Math.sin(2 * phase);
+            }
+            const attack = Math.min(1, i / attackSamples);
+            const decay = Math.pow(1 - t, 1.35);
+            mix[startIdx + i] += sample * vol * attack * decay;
+        }
+    }
+
+    const dataSize = numSamples * 2;
+    const buffer = new ArrayBuffer(44 + dataSize);
+    const view = new DataView(buffer);
+    const writeStr = (off, str) => {
+        for (let i = 0; i < str.length; i++) view.setUint8(off + i, str.charCodeAt(i));
+    };
+
+    writeStr(0, 'RIFF');
+    view.setUint32(4, 36 + dataSize, true);
+    writeStr(8, 'WAVE');
+    writeStr(12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, 1, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * 2, true);
+    view.setUint16(32, 2, true);
+    view.setUint16(34, 16, true);
+    writeStr(36, 'data');
+    view.setUint32(40, dataSize, true);
+
+    for (let i = 0; i < numSamples; i++) {
+        const clamped = Math.max(-0.98, Math.min(0.98, mix[i]));
+        view.setInt16(44 + i * 2, Math.round(clamped * 32767), true);
+    }
+
+    return URL.createObjectURL(new Blob([buffer], { type: 'audio/wav' }));
+}
+
+const wavUrlMap = {};
+const htmlAudioPools = {};
+const htmlAudioPoolIdx = {};
+let audioUnlocked = false;
+
+function initSoundPools() {
+    if (typeof URL === 'undefined' || typeof Blob === 'undefined') return;
+    for (const [type, notes] of Object.entries(SOUND_PATTERNS)) {
+        try {
+            const url = buildWavBlobUrl(notes);
+            wavUrlMap[type] = url;
+            htmlAudioPoolIdx[type] = 0;
+            htmlAudioPools[type] = Array.from({ length: 3 }, () => {
+                const a = new Audio(url);
+                a.preload = 'auto';
+                a.setAttribute('playsinline', '');
+                return a;
+            });
+        } catch (e) {}
+    }
+    const tingEl = document.getElementById('tingSound');
+    if (tingEl && wavUrlMap.ting) {
+        tingEl.src = wavUrlMap.ting;
+        tingEl.load();
+    }
+}
+initSoundPools();
+
 let sharedAudioCtx = null;
 function getAudioContext() {
     if (!sharedAudioCtx) {
@@ -706,67 +832,104 @@ function getAudioContext() {
     return sharedAudioCtx;
 }
 
-function playToneSequence(notes) {
+function unlockAllAudio() {
+    if (typeof navigator !== 'undefined' && navigator.audioSession) {
+        try { navigator.audioSession.type = 'playback'; } catch (e) {}
+    }
     const ctx = getAudioContext();
-    if (!ctx) return;
+    if (ctx && !audioUnlocked) {
+        try {
+            const silentBuf = ctx.createBuffer(1, 1, 22050);
+            const src = ctx.createBufferSource();
+            src.buffer = silentBuf;
+            src.connect(ctx.destination);
+            src.start(0);
+        } catch (e) {}
+    }
+    if (!audioUnlocked) {
+        audioUnlocked = true;
+        for (const pool of Object.values(htmlAudioPools)) {
+            for (const a of pool) {
+                try {
+                    a.muted = true;
+                    const p = a.play();
+                    if (p && p.then) {
+                        p.then(() => { a.pause(); a.currentTime = 0; a.muted = false; }).catch(() => { a.muted = false; });
+                    } else {
+                        a.pause(); a.currentTime = 0; a.muted = false;
+                    }
+                } catch (e) { a.muted = false; }
+            }
+        }
+    }
+}
+
+function playHtmlWav(type) {
+    const pool = htmlAudioPools[type] || htmlAudioPools.nav;
+    if (!pool || !pool.length) return false;
+    const idx = (htmlAudioPoolIdx[type] || 0) % pool.length;
+    htmlAudioPoolIdx[type] = idx + 1;
+    const audio = pool[idx];
+    try {
+        audio.muted = false;
+        audio.volume = 1.0;
+        audio.currentTime = 0;
+        const p = audio.play();
+        if (p && p.catch) p.catch(() => {});
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
+
+function playWebAudioNotes(notes) {
+    const ctx = getAudioContext();
+    if (!ctx || ctx.state !== 'running') return false;
     const baseTime = ctx.currentTime;
     for (const n of notes) {
         const osc = ctx.createOscillator();
+        const overtone = ctx.createOscillator();
         const gain = ctx.createGain();
         const start = baseTime + (n.delay || 0);
-        const dur = n.dur || 0.08;
+        const dur = n.dur || 0.1;
         osc.type = n.wave || 'sine';
         osc.frequency.setValueAtTime(n.freq, start);
+        overtone.type = 'sine';
+        overtone.frequency.setValueAtTime(n.freq * 2, start);
         if (n.endFreq) {
             osc.frequency.exponentialRampToValueAtTime(n.endFreq, start + dur);
+            overtone.frequency.exponentialRampToValueAtTime(n.endFreq * 2, start + dur);
         }
+        const overtoneGain = ctx.createGain();
+        overtoneGain.gain.setValueAtTime(0.22, start);
+
+        const peak = Math.min(0.85, (n.vol || 0.5) * 0.9);
         gain.gain.setValueAtTime(0.0001, start);
-        gain.gain.linearRampToValueAtTime(n.vol || 0.16, start + 0.008);
+        gain.gain.linearRampToValueAtTime(peak, start + 0.006);
         gain.gain.exponentialRampToValueAtTime(0.0001, start + dur);
+
         osc.connect(gain);
+        overtone.connect(overtoneGain);
+        overtoneGain.connect(gain);
         gain.connect(ctx.destination);
+
         osc.start(start);
-        osc.stop(start + dur + 0.01);
+        overtone.start(start);
+        osc.stop(start + dur + 0.015);
+        overtone.stop(start + dur + 0.015);
     }
+    return true;
 }
 
 function playUiSound(type = 'nav') {
     try {
-        switch (type) {
-            case 'add':
-                playToneSequence([
-                    { freq: 523.25, endFreq: 783.99, dur: 0.075, wave: 'triangle', vol: 0.18 }
-                ]);
-                break;
-            case 'sub':
-                playToneSequence([
-                    { freq: 440, endFreq: 311.13, dur: 0.075, wave: 'triangle', vol: 0.15 }
-                ]);
-                break;
-            case 'lock':
-                playToneSequence([
-                    { freq: 659.25, dur: 0.08, wave: 'sine', vol: 0.18 },
-                    { freq: 880, dur: 0.12, delay: 0.075, wave: 'sine', vol: 0.2 }
-                ]);
-                break;
-            case 'success':
-                playToneSequence([
-                    { freq: 587.33, dur: 0.08, wave: 'triangle', vol: 0.18 },
-                    { freq: 783.99, dur: 0.08, delay: 0.07, wave: 'triangle', vol: 0.19 },
-                    { freq: 1046.5, dur: 0.18, delay: 0.14, wave: 'sine', vol: 0.22 }
-                ]);
-                break;
-            case 'ting':
-                playToneSequence([
-                    { freq: 1318.51, dur: 0.28, wave: 'sine', vol: 0.22 },
-                    { freq: 2637.02, dur: 0.22, wave: 'sine', vol: 0.09 }
-                ]);
-                break;
-            default:
-                playToneSequence([
-                    { freq: 640, endFreq: 520, dur: 0.045, wave: 'sine', vol: 0.13 }
-                ]);
-                break;
+        const notes = SOUND_PATTERNS[type] || SOUND_PATTERNS.nav;
+        // Trên iOS/iPadOS ưu tiên HTMLAudioElement WAV để phát qua kênh media (kêu cả khi gạt nút Im lặng)
+        if (IS_IOS_DEVICE) {
+            if (playHtmlWav(type)) return;
+        }
+        if (!playWebAudioNotes(notes)) {
+            playHtmlWav(type);
         }
     } catch (e) {}
 }
@@ -1208,12 +1371,10 @@ window.addEventListener('scroll', () => {
     });
 }, { passive: true });
 
-// Mở khóa AudioContext & preload audio sau tương tác đầu tiên
-document.addEventListener('pointerdown', () => {
-    getAudioContext();
-    const ting = document.getElementById('tingSound');
-    if (ting) { ting.preload = 'auto'; ting.load(); }
-}, { once: true, passive: true });
+// Mở khóa toàn bộ kênh âm thanh ngay từ chạm đầu tiên
+['pointerdown', 'touchstart', 'keydown'].forEach(evt => {
+    document.addEventListener(evt, unlockAllAudio, { once: true, passive: true, capture: true });
+});
 
 document.getElementById('menu-list').addEventListener('click', (e) => {
     const btn = e.target.closest('.btn-qty'); if (!btn) return;
@@ -1564,7 +1725,7 @@ function change(id, delta) {
 function flashRow(id, delta) {
     const itemDom = ITEM_DOM.get(id), row = itemDom?.row, tabBtn = currentTab ? TABLE_DOM[currentTab - 1]?.card : null, cls = delta > 0 ? 'flash-add' : 'flash-sub';
     if (row) row.classList.add(cls); if (tabBtn) tabBtn.classList.add(cls);
-    setTimeout(() => { if (row) row.classList.remove(cls); if (tabBtn) tabBtn.classList.remove(cls); }, 400);
+    setTimeout(() => { if (row) row.classList.remove(cls); if (tabBtn) tabBtn.classList.remove(cls); }, 320);
 }
 
 function changeBillLang(l) {
