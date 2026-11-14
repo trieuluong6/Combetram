@@ -153,32 +153,34 @@ body.dark-mode #offline-badge {
 .header-row { position: relative; display: flex; justify-content: center; margin-top: 10px; min-height: 34px; }
 .header-center { width: 100%; }
 .header-row .status-container { margin-top: 0; }
-.header-row .header-title { margin: 6px 0 15px 0; }
+.header-row .header-title { margin: 8px 0 14px 0; }
 .side-widget {
     position: absolute;
-    top: 50%;
-    transform: translateY(-50%);
+    top: 0;
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 3px;
     background: var(--bg-card);
-    padding: 4px 10px;
+    padding: 3px 7px;
     border-radius: 20px;
-    font-size: 0.68em;
+    font-size: 0.62em;
     font-weight: 800;
     color: var(--text-muted);
     box-shadow: 0 2px 6px var(--shadow-card);
-    border: 2px solid var(--border-soft);
+    border: 1.5px solid var(--border-soft);
     white-space: nowrap;
     flex-shrink: 0;
     transition: background 0.4s ease, border-color 0.4s ease, color 0.4s ease;
 }
-.side-icon { font-size: 1.05em; line-height: 1; }
+.side-icon { font-size: 1em; line-height: 1; }
 .side-left { left: 0; }
 .side-right { right: 0; }
 .net-val { transition: color 0.15s ease, text-shadow 0.15s ease; }
-.net-divider { width: 1px; height: 11px; background: var(--border-soft); flex-shrink: 0; }
-@media (max-width: 380px) { .side-widget { font-size: 0.6em; padding: 3px 7px; } }
+.net-divider { width: 1px; height: 10px; background: var(--border-soft); flex-shrink: 0; }
+@media (max-width: 380px) {
+    .side-widget { font-size: 0.56em; padding: 2px 6px; gap: 2px; }
+    .header-row .header-title { font-size: 1.28em; }
+}
 
 /* TRẠNG THÁI KHÁCH (GPU-composited transform + opacity) */
 .status-container { display: flex; justify-content: center; margin-bottom: 5px; margin-top: 10px; }
@@ -296,7 +298,9 @@ body.dark-mode .active strong { color: #bbdefb; }
 /* GPU-composited LED viền cho bàn đang khóa bill */
 .is-locked { border-color: transparent !important; }
 .is-locked::before { content: ""; position: absolute; top: -50%; left: -50%; width: 200%; height: 200%; background: conic-gradient(#ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000); animation: rotate-led 3s linear infinite; will-change: transform; z-index: 1; }
-.is-locked::after { content: ""; position: absolute; inset: 4px; background: var(--bg-card); border-radius: 8px; z-index: 2; transition: background-color 0.4s ease; }
+.is-locked::after { display: block !important; content: ""; position: absolute; inset: 4px; background: var(--bg-card); border-radius: 8px; z-index: 2; pointer-events: none; transition: background-color 0.4s ease; }
+.table-card.active.is-locked::after { background: #e3f2fd; }
+body.dark-mode .table-card.active.is-locked::after { background: #1a3a5c; }
 
 .is-locked-special { border-color: transparent !important; }
 .is-locked-special::before { content: ""; position: absolute; inset: 0; border-radius: 12px; padding: 4px; background: linear-gradient(45deg, #ff0000, #00ff00, #0000ff, #ff0000); -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0); mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0); -webkit-mask-composite: xor; mask-composite: exclude; animation: blink-rgb-opacity 1s ease-in-out infinite; z-index: 5; }
@@ -343,10 +347,19 @@ body.dark-mode .flash-sub { background-color: #5c2b2b !important; }
     transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
 }
 .cat-pill:active { transform: scale(0.94); }
-.cat-pill.active {
-    background: var(--blue);
-    color: #fff;
-    border-color: var(--blue);
+.cat-pill.active,
+.cat-pill.is-current {
+    background: #1565c0 !important;
+    color: #ffffff !important;
+    border-color: #1565c0 !important;
+    box-shadow: 0 2px 6px rgba(21, 101, 192, 0.35);
+}
+body.dark-mode .cat-pill.active,
+body.dark-mode .cat-pill.is-current {
+    background: #2196f3 !important;
+    color: #ffffff !important;
+    border-color: #42a5f5 !important;
+    box-shadow: 0 2px 8px rgba(33, 150, 243, 0.4);
 }
 
 .category-title { background: var(--bg-category); padding: 8px 12px; font-weight: bold; margin-top: 15px; border-radius: 6px; color: var(--text-muted); font-size: 0.85em; scroll-margin-top: 52px; transition: background 0.4s ease, color 0.4s ease; }
