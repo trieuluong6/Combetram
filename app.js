@@ -1600,7 +1600,7 @@ function renderTable(tableId, now = getServerNow()) {
         const preserveFlashSub = dom.card.classList.contains('flash-sub');
         let className = tableId === 7 ? 'table-card full-width' : (tableId >= 8 ? 'table-card half-width' : 'table-card');
         if (tableId === currentTab) className += ' active';
-        if (locked) className += tableId >= 7 ? ' is-locked-special' : ' is-locked';
+        if (locked) className += ' is-locked';
         else if (total > 0) className += ' has-guest';
         if (dom.card.className !== className) {
             dom.card.className = className;
