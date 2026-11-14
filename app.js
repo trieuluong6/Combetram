@@ -698,11 +698,11 @@ function triggerHaptic(type) {
 
 // ─── animateNumber với cancel flag ────────────────────────────────────
 const animatingFlags = {};
-function animateNumber(elementId, newValue) {
+function animateNumber(elementId, newValue, suffix = '') {
     const el = document.getElementById(elementId);
     if (!el) return;
     const startValue = parseInt(el.textContent.replace(/\D/g, '')) || 0;
-    if (startValue === newValue) return;
+    if (startValue === newValue && (!suffix || el.textContent.endsWith(suffix))) return;
     const diff = newValue - startValue;
     const duration = 750, startTime = performance.now();
     const token = Symbol();
@@ -722,9 +722,9 @@ function animateNumber(elementId, newValue) {
         if (progress > 0.85) { const step = 1000; val = Math.round(val / step) * step; }
         val = Math.round(val);
         val = diff >= 0 ? Math.min(val, newValue) : Math.max(val, newValue);
-        el.textContent = val.toLocaleString();
+        el.textContent = `${val.toLocaleString()}${suffix}`;
         if (progress < 1) requestAnimationFrame(updateAnim);
-        else { el.textContent = newValue.toLocaleString(); delete animatingFlags[elementId]; }
+        else { el.textContent = `${newValue.toLocaleString()}${suffix}`; delete animatingFlags[elementId]; }
     }
     requestAnimationFrame(updateAnim);
 }
@@ -1585,7 +1585,7 @@ function renderTable(tableId, now = getServerNow()) {
 
     if (dom.sum) {
         dom.sum.classList.remove('skeleton');
-        if (parseInt(dom.sum.textContent.replace(/\D/g, '')) !== total) animateNumber(`sum-${tableId}`, total);
+        if (parseInt(dom.sum.textContent.replace(/\D/g, '')) !== total || !dom.sum.textContent.endsWith('đ')) animateNumber(`sum-${tableId}`, total, 'đ');
     }
     if (dom.meta) {
         dom.meta.classList.remove('skeleton');
