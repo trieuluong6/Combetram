@@ -17,6 +17,27 @@ const app = initializeApp(firebaseConfig);
 const database = getDatabase(app);
 const dbRef = ref(database, 'combetram_v6_data');
 
+// ─── ĐỒNG BỘ GIỜ SERVER FIREBASE ──────────────────────────────────────
+let serverTimeOffset = 0;
+onValue(ref(database, '.info/serverTimeOffset'), (snap) => {
+    const offset = Number(snap.val());
+    if (Number.isFinite(offset)) serverTimeOffset = offset;
+});
+function getServerNow() {
+    return Date.now() + serverTimeOffset;
+}
+
+// ─── HELPER FETCH CÓ TIMEOUT CHỐNG TREO PROXY/API ─────────────────────
+async function fetchWithTimeout(url, options = {}, timeoutMs = 5500) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        return await fetch(url, { ...options, signal: controller.signal });
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
 // ─── ƯỚC TÍNH PAYLOAD JSON ĐẨY LÊN/XUỐNG FIREBASE (không gồm overhead WebSocket) ───
 let fbDownBytes = 0, fbUpBytes = 0;
 function formatBytes(n) {
@@ -48,8 +69,8 @@ function flashNetValue(el, direction) {
 function updateNetWidget(direction) {
     const downEl = document.getElementById('net-down-val');
     const upEl = document.getElementById('net-up-val');
-    if (downEl) downEl.innerText = `↓${formatBytes(fbDownBytes)}`;
-    if (upEl) upEl.innerText = `↑${formatBytes(fbUpBytes)}`;
+    if (downEl) downEl.textContent = `↓${formatBytes(fbDownBytes)}`;
+    if (upEl) upEl.textContent = `↑${formatBytes(fbUpBytes)}`;
     if (direction === 'down' && downEl) flashNetValue(downEl, 'down');
     if (direction === 'up' && upEl) flashNetValue(upEl, 'up');
 }
@@ -71,7 +92,6 @@ let data = { orders: {}, locked: {}, times: {} };
 let billWasShown = false;
 
 // Chặn double-click trong đúng khoảnh khắc xác nhận thanh toán.
-// localPaymentEchoTables giúp snapshot xóa bill của chính máy này không bị hiểu là thay đổi remote.
 let paymentInProgress = false;
 const localPaymentEchoTables = new Set();
 
@@ -170,7 +190,6 @@ function resetBillQrView(instant = true) {
 }
 
 function scrollBillIntoView() {
-    // Khi mặt QR đang mở, không cho các auto-scroll cũ của bill giành quyền cuộn.
     if (billViewMode !== 'bill') return;
     document.querySelector('.bill-front .bill-box')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
@@ -194,7 +213,6 @@ function toggleBillQr() {
         if (back) back.setAttribute('aria-hidden', 'false');
         if (button) button.textContent = 'XEM BILL';
 
-        // Cùng một frame: card bắt đầu lật, wrapper co về QR và trang kéo QR vào giữa.
         requestAnimationFrame(() => {
             shell.classList.add('is-qr');
             shell.style.height = `${targetHeight}px`;
@@ -209,15 +227,13 @@ function toggleBillQr() {
     }
 }
 
-// ─── FIX #2: Menu lookup Map O(1) thay vì find() O(n) trong mỗi vòng lặp ───
+// ─── Menu lookup Map O(1) ──────────────────────────────────────────────
 const ALL_ITEMS = menu.flatMap(g => g.items);
 const ITEM_MAP = new Map(ALL_ITEMS.map(i => [i.id, i]));
-// Nước uống + bia được gom thành một nhóm để hiển thị nhanh trên card bàn.
 const DRINK_ITEM_IDS = new Set(
     menu.filter(group => /NƯỚC|BEER/i.test(group.cat)).flatMap(group => group.items.map(item => item.id))
 );
 
-// Listener dữ liệu chính được tách theo nhánh để tránh tải lại locked/times khi chỉ orders đổi.
 const ordersRef = child(dbRef, 'orders');
 const lockedRef = child(dbRef, 'locked');
 const timesRef = child(dbRef, 'times');
@@ -233,8 +249,6 @@ const TABLE_DOM = Array.from({ length: 9 }, (_, idx) => {
     };
 });
 const ITEM_DOM = new Map();
-
-// Tổng tiền cache theo bàn để chỉ tính lại bàn vừa thay đổi.
 const tableTotals = Array(10).fill(0);
 
 function shallowRecordEqual(a, b) {
@@ -274,17 +288,18 @@ function scheduleRefresh(tableIds = null, updateCurrentOrder = false) {
     requestAnimationFrame(() => {
         scheduledRefresh = false;
         const ids = scheduledFullRefresh ? null : new Set(dirtyTables);
-        const updateCurrentOrder = scheduledCurrentOrderRefresh;
+        const shouldUpdateOrder = scheduledCurrentOrderRefresh;
         scheduledFullRefresh = false;
         scheduledCurrentOrderRefresh = false;
         dirtyTables.clear();
-        refresh(ids, updateCurrentOrder);
+        refresh(ids, shouldUpdateOrder);
     });
 }
 
-// ─── FIX #9: Lazy-load dict theo ngôn ngữ ───
+// ─── Lazy-load dict theo ngôn ngữ + Preload bill assets ─────────────────
 let dictCache = { vi: { flag: "🇻🇳", total: "TỔNG", items: {} } };
 let dictLoadPromise = null;
+let billAssetsPreloaded = false;
 
 async function getLangData(lang) {
     if (dictCache[lang]) return dictCache[lang];
@@ -298,6 +313,28 @@ async function getLangData(lang) {
     }
     await dictLoadPromise;
     return dictCache[lang] || dictCache['vi'];
+}
+
+function preloadBillAssets() {
+    if (billAssetsPreloaded) return;
+    billAssetsPreloaded = true;
+    getLangData('en').catch(() => {});
+    const qrImg = document.getElementById('payment-qr');
+    if (qrImg) {
+        if (qrImg.complete) {
+            qrImg.decode?.().catch(() => {});
+        } else {
+            const pre = new Image();
+            pre.src = qrImg.currentSrc || qrImg.src;
+            pre.decode?.().catch(() => {});
+        }
+    }
+}
+
+function syncActiveLangButton(lang) {
+    document.querySelectorAll('#lang-grid .lang-btn').forEach(btn => {
+        btn.classList.toggle('active-lang', btn.dataset.lang === lang);
+    });
 }
 
 // CACHE THỜI TIẾT
@@ -332,7 +369,7 @@ function renderWeather(status, temp, windSpeed, windDir) {
         else if (status === 'partlyCloudy') finalStatus = 'night_partlyCloudy';
     }
     document.getElementById('w-icon-container').innerHTML = SVG_ICONS[finalStatus] || SVG_ICONS.sunny;
-    document.getElementById('w-temp').innerText = `${temp.toFixed(1)}°C`;
+    document.getElementById('w-temp').textContent = `${temp.toFixed(1)}°C`;
     const hub = document.getElementById('weather-hub');
     let windIcon = SVG_ICONS.windNone;
     hub.className = '';
@@ -340,14 +377,18 @@ function renderWeather(status, temp, windSpeed, windDir) {
     else if (windSpeed >= 20 && windSpeed <= 39) { windIcon = SVG_ICONS.windFast; hub.classList.add('wind-warning'); }
     else if (windSpeed >= 40) { windIcon = SVG_ICONS.windStorm; hub.classList.add('wind-danger'); }
     document.getElementById('w-wind-icon-container').innerHTML = windIcon;
-    document.getElementById('w-wind-speed').innerText = `${windSpeed.toFixed(1)} km/h`;
+    document.getElementById('w-wind-speed').textContent = `${windSpeed.toFixed(1)} km/h`;
     document.getElementById('w-arrow').style.transform = `rotate(${windDir}deg)`;
 }
 
 async function fetchRealtimeWeather() {
     try {
         const lat = 16.0544, lon = 108.2022;
-        const response = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code,wind_speed_10m,wind_direction_10m`);
+        const response = await fetchWithTimeout(
+            `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code,wind_speed_10m,wind_direction_10m`,
+            {},
+            6000
+        );
         if (!response.ok) return;
         const resData = await response.json();
         const current = resData.current;
@@ -368,6 +409,7 @@ async function fetchRealtimeWeather() {
 }
 
 function simulateWeatherFluctuation() {
+    if (document.hidden) return;
     const tempOffset = (Math.random() - 0.5) * 0.4;
     const windSpeedOffset = (Math.random() - 0.5) * 0.6;
     const windDirOffset = Math.floor((Math.random() - 0.5) * 4);
@@ -378,7 +420,7 @@ fetchRealtimeWeather();
 setInterval(fetchRealtimeWeather, 600000);
 setInterval(simulateWeatherFluctuation, 5000);
 
-// TICKER BTC & DẦU — card tài chính mềm: giá + % thay đổi + sparkline session.
+// TICKER BTC & DẦU
 const BTC_TICKER_ID = 'btc-ticker';
 const OIL_TICKER_ID = 'oil-ticker';
 let realBitcoinPrice = null, realOilPrice = null;
@@ -449,17 +491,16 @@ function renderTicker(elementId, kind, value, prevValue, changePct) {
 }
 
 async function fetchBitcoinPrice() {
-    // Coinbase stats cho cả giá cuối và open 24h; CoinGecko là fallback.
     const sources = [
         async () => {
-            const res = await fetch('https://api.exchange.coinbase.com/products/BTC-USD/stats', { cache: 'no-store' });
+            const res = await fetchWithTimeout('https://api.exchange.coinbase.com/products/BTC-USD/stats', { cache: 'no-store' }, 5000);
             if (!res.ok) throw new Error(`Coinbase HTTP ${res.status}`);
             const d = await res.json();
             const price = Number(d?.last), open = Number(d?.open);
             return { price, changePct: Number.isFinite(open) && open > 0 ? ((price - open) / open) * 100 : null };
         },
         async () => {
-            const res = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true', { cache: 'no-store' });
+            const res = await fetchWithTimeout('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true', { cache: 'no-store' }, 5000);
             if (!res.ok) throw new Error(`CoinGecko HTTP ${res.status}`);
             const d = await res.json();
             return { price: Number(d?.bitcoin?.usd), changePct: Number(d?.bitcoin?.usd_24h_change) };
@@ -484,14 +525,14 @@ async function fetchBitcoinPrice() {
 async function fetchOilPrice() {
     const sources = [
         async () => {
-            const res = await fetch('https://americasoilwatch.com/api/v1/wti', { cache: 'no-store' });
+            const res = await fetchWithTimeout('https://americasoilwatch.com/api/v1/wti', { cache: 'no-store' }, 4500);
             if (!res.ok) throw new Error(`AmericasOilWatch HTTP ${res.status}`);
             const d = await res.json();
             return { price: Number(d?.priceUsd), changePct: Number(d?.changePct) };
         },
         ...['https://api.allorigins.win/raw?url=', 'https://corsproxy.io/?url='].map(proxy => async () => {
             const targetUrl = 'https://query1.finance.yahoo.com/v8/finance/chart/CL=F';
-            const res = await fetch(proxy + encodeURIComponent(targetUrl), { cache: 'no-store' });
+            const res = await fetchWithTimeout(proxy + encodeURIComponent(targetUrl), { cache: 'no-store' }, 4500);
             if (!res.ok) throw new Error(`Oil fallback HTTP ${res.status}`);
             const d = await res.json();
             const meta = d?.chart?.result?.[0]?.meta || {};
@@ -520,7 +561,6 @@ fetchBitcoinPrice(); fetchOilPrice();
 setInterval(fetchBitcoinPrice, 180000);
 setInterval(fetchOilPrice, 180000);
 
-// Ticker vẫn dao động local 800ms như bản cũ cho vui mắt; sparkline chỉ lấy mẫu ~3.2s/lần.
 let tickerIntervalId = null;
 function startTickerInterval() {
     if (tickerIntervalId) return;
@@ -546,25 +586,59 @@ function stopTickerInterval() {
     clearInterval(tickerIntervalId);
     tickerIntervalId = null;
 }
-document.addEventListener('visibilitychange', () => {
-    document.hidden ? stopTickerInterval() : startTickerInterval();
-});
 startTickerInterval();
 
-// ĐỒNG HỒ LẬT
-function updateCardValue(cardId, targetVal) {
-    const card = document.getElementById(cardId);
-    if (!card) return;
-    const topHalf = card.querySelector('.card-top');
-    const bottomHalf = card.querySelector('.card-bottom');
-    const wing = card.querySelector('.card-flip-wing');
-    const wingBack = card.querySelector('.card-flip-wing-back');
-    if (topHalf.innerText === targetVal) return;
-    wing.innerText = topHalf.innerText;
-    wingBack.innerText = targetVal;
+// ─── ĐỒNG HỒ LẬT (tự dừng khi ẩn tab, dùng textContent tránh reflow) ─────
+const CLOCK_CARD_DOM = ['h1', 'h2', 'm1', 'm2', 's1', 's2'].reduce((acc, k) => {
+    const card = document.getElementById('c-' + k);
+    if (card) {
+        acc[k] = {
+            card,
+            topHalf: card.querySelector('.card-top'),
+            bottomHalf: card.querySelector('.card-bottom'),
+            wing: card.querySelector('.card-flip-wing'),
+            wingBack: card.querySelector('.card-flip-wing-back'),
+            timers: []
+        };
+    }
+    return acc;
+}, {});
+
+function updateCardValue(cardKey, targetVal) {
+    const entry = CLOCK_CARD_DOM[cardKey];
+    if (!entry) return;
+    const { card, topHalf, bottomHalf, wing, wingBack, timers } = entry;
+    if (topHalf.textContent === targetVal) return;
+
+    while (timers.length) clearTimeout(timers.pop());
+    wing.textContent = topHalf.textContent;
+    wingBack.textContent = targetVal;
     card.classList.add('animate');
-    setTimeout(() => { topHalf.innerText = targetVal; }, 160);
-    setTimeout(() => { bottomHalf.innerText = targetVal; wing.innerText = targetVal; card.classList.remove('animate'); }, 340);
+    timers.push(setTimeout(() => { topHalf.textContent = targetVal; }, 160));
+    timers.push(setTimeout(() => {
+        bottomHalf.textContent = targetVal;
+        wing.textContent = targetVal;
+        card.classList.remove('animate');
+    }, 340));
+}
+
+function syncClockInstant() {
+    const d = new Date();
+    const h = String(d.getHours()).padStart(2, '0');
+    const m = String(d.getMinutes()).padStart(2, '0');
+    const s = String(d.getSeconds()).padStart(2, '0');
+    const digits = [h[0], h[1], m[0], m[1], s[0], s[1]];
+    ['h1', 'h2', 'm1', 'm2', 's1', 's2'].forEach((k, idx) => {
+        const entry = CLOCK_CARD_DOM[k];
+        if (!entry) return;
+        while (entry.timers.length) clearTimeout(entry.timers.pop());
+        entry.card.classList.remove('animate');
+        const v = digits[idx];
+        entry.topHalf.textContent = v;
+        entry.bottomHalf.textContent = v;
+        entry.wing.textContent = v;
+        entry.wingBack.textContent = v;
+    });
 }
 
 function runClock() {
@@ -572,31 +646,45 @@ function runClock() {
     const hStr = String(d.getHours()).padStart(2, '0');
     const mStr = String(d.getMinutes()).padStart(2, '0');
     const sStr = String(d.getSeconds()).padStart(2, '0');
-    updateCardValue('c-h1', hStr[0]); updateCardValue('c-h2', hStr[1]);
-    updateCardValue('c-m1', mStr[0]); updateCardValue('c-m2', mStr[1]);
-    updateCardValue('c-s1', sStr[0]); updateCardValue('c-s2', sStr[1]);
+    updateCardValue('h1', hStr[0]); updateCardValue('h2', hStr[1]);
+    updateCardValue('m1', mStr[0]); updateCardValue('m2', mStr[1]);
+    updateCardValue('s1', sStr[0]); updateCardValue('s2', sStr[1]);
 }
 
-const currentInit = new Date();
-const ih = String(currentInit.getHours()).padStart(2, '0'), im = String(currentInit.getMinutes()).padStart(2, '0'), is = String(currentInit.getSeconds()).padStart(2, '0');
-['h1','h2','m1','m2','s1','s2'].forEach((k, idx) => {
-    let v = (idx < 2) ? ih[idx] : (idx < 4 ? im[idx-2] : is[idx-4]);
-    const c = document.getElementById('c-' + k);
-    if(c) c.querySelectorAll('.card-half, .card-flip-wing, .card-flip-wing-back').forEach(el => el.innerText = v);
+let clockIntervalId = null;
+function startClockInterval() {
+    if (clockIntervalId) return;
+    syncClockInstant();
+    clockIntervalId = setInterval(runClock, 1000);
+}
+function stopClockInterval() {
+    clearInterval(clockIntervalId);
+    clockIntervalId = null;
+}
+
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+        stopTickerInterval();
+        stopClockInterval();
+    } else {
+        startTickerInterval();
+        startClockInterval();
+        refreshPresenceHeartbeat();
+    }
 });
-setInterval(runClock, 1000);
+startClockInterval();
 
 // HAPTIC
 function triggerHaptic(type) {
     if (window.navigator && window.navigator.vibrate) window.navigator.vibrate([18, 25, 18]);
 }
 
-// ─── FIX #5: animateNumber với cancel flag để tránh race condition ───
+// ─── animateNumber với cancel flag ────────────────────────────────────
 const animatingFlags = {};
 function animateNumber(elementId, newValue) {
     const el = document.getElementById(elementId);
     if (!el) return;
-    const startValue = parseInt(el.innerText.replace(/\D/g, '')) || 0;
+    const startValue = parseInt(el.textContent.replace(/\D/g, '')) || 0;
     if (startValue === newValue) return;
     const diff = newValue - startValue;
     const duration = 750, startTime = performance.now();
@@ -608,8 +696,8 @@ function animateNumber(elementId, newValue) {
         const p = (t - 0.7) / 0.3;
         return 0.92 + (1 - Math.pow(1 - p, 2)) * 0.08;
     }
-    function update(currentTime) {
-        if (animatingFlags[elementId] !== token) return; // bị cancel
+    function updateAnim(currentTime) {
+        if (animatingFlags[elementId] !== token) return;
         const elapsed = currentTime - startTime;
         const progress = Math.min(elapsed / duration, 1);
         const eased = easeCountMoney(progress);
@@ -617,22 +705,17 @@ function animateNumber(elementId, newValue) {
         if (progress > 0.85) { const step = 1000; val = Math.round(val / step) * step; }
         val = Math.round(val);
         val = diff >= 0 ? Math.min(val, newValue) : Math.max(val, newValue);
-        el.innerText = val.toLocaleString();
-        if (progress < 1) requestAnimationFrame(update);
-        else { el.innerText = newValue.toLocaleString(); delete animatingFlags[elementId]; }
+        el.textContent = val.toLocaleString();
+        if (progress < 1) requestAnimationFrame(updateAnim);
+        else { el.textContent = newValue.toLocaleString(); delete animatingFlags[elementId]; }
     }
-    requestAnimationFrame(update);
+    requestAnimationFrame(updateAnim);
 }
 
-// PRESENCE
-// ─── FIX #12: Tách presence/cursors/focus ra khỏi cây combetram_v6_data ───
-// Trước đây 3 node này nằm chung cây với orders/locked/times, nên onValue(dbRef)
-// (listener đơn hàng) bị refire MỖI LẦN có người di chuột (broadcast cursor 200ms/lần),
-// kéo theo JSON.stringify(orders) deep-compare + refresh() toàn bộ dù đơn hàng không đổi.
-// Giải pháp: đặt presence/cursors/focus ở path riêng (combetram_v6_rt), tách biệt hoàn toàn
-// khỏi path dữ liệu đơn hàng (combetram_v6_data) — listener đơn hàng giờ chỉ fire khi
-// orders/locked/times thật sự thay đổi.
+// ─── PRESENCE & TRẠNG THÁI MẠNG ────────────────────────────────────────
 const RT_ROOT = 'combetram_v6_rt';
+const STALE_PRESENCE_MS = 120000;
+const STALE_CURSOR_MS = 45000;
 const USER_COLORS = ['#e53935', '#1e88e5', '#43a047', '#fb8c00', '#8e24aa', '#00acc1', '#d81b60', '#6d4c41', '#3949ab', '#c0ca33'];
 const myColor = USER_COLORS[Math.floor(Math.random() * USER_COLORS.length)];
 const onlineRef = ref(database, '.info/connected');
@@ -644,30 +727,70 @@ const myCursorRef = child(cursorsRef, myPresenceId);
 const focusRef = ref(database, `${RT_ROOT}/focus`);
 const myFocusRef = child(focusRef, myPresenceId);
 
-// ─── FIX #12: Listener riêng cho số người online, không còn ăn ké listener đơn hàng ───
-onValue(presenceListRef, (snap) => {
-    const presenceCount = Object.keys(snap.val() || {}).length;
+let isFirebaseConnected = false;
+let hasEverConnected = false;
+let lastPresenceSnap = null;
+
+function updateNetworkStatusBadge() {
+    const badge = document.getElementById('offline-badge');
+    if (!badge) return;
+    const isOffline = navigator.onLine === false || (hasEverConnected && !isFirebaseConnected);
+    badge.classList.toggle('hidden', !isOffline);
+}
+window.addEventListener('online', updateNetworkStatusBadge);
+window.addEventListener('offline', updateNetworkStatusBadge);
+
+function renderPresenceCount(snapVal) {
+    const now = getServerNow();
+    const entries = Object.entries(snapVal || {}).filter(([id, info]) => {
+        if (id === myPresenceId) return true;
+        const ts = Number(info?.ts);
+        return !Number.isFinite(ts) || (now - ts) < STALE_PRESENCE_MS;
+    });
     const el = document.getElementById('online-val');
-    if (el) el.innerText = presenceCount || 1;
+    if (el) el.textContent = Math.max(1, entries.length);
+}
+
+onValue(presenceListRef, (snap) => {
+    lastPresenceSnap = snap.val();
+    renderPresenceCount(lastPresenceSnap);
 });
 
+function refreshPresenceHeartbeat() {
+    if (!isFirebaseConnected) return;
+    update(myPresenceRef, { ts: getServerNow() }).catch(() => {});
+    if (currentTab) {
+        set(myCursorRef, { table: currentTab, color: myColor, ts: getServerNow() }).catch(() => {});
+    }
+}
+setInterval(() => {
+    if (!document.hidden) refreshPresenceHeartbeat();
+    renderPresenceCount(lastPresenceSnap);
+    if (lastCursorSnap) renderRemoteCursors(lastCursorSnap);
+}, 30000);
+
 onValue(onlineRef, (snap) => {
-    if (snap.val() === true) {
+    isFirebaseConnected = snap.val() === true;
+    if (isFirebaseConnected) {
+        hasEverConnected = true;
+        updateNetworkStatusBadge();
         onDisconnect(myPresenceRef).remove().catch(() => {});
         onDisconnect(myCursorRef).remove().catch(() => {});
         onDisconnect(myFocusRef).remove().catch(() => {});
-        set(myPresenceRef, { color: myColor, ts: Date.now() })
-            .then(() => console.log('[presence] ghi presence thành công'))
+        set(myPresenceRef, { color: myColor, ts: getServerNow() })
             .catch(e => console.error('[presence] LỖI GHI PRESENCE:', e.message));
-        console.log('[presence] đã kết nối, id =', myPresenceId, 'color =', myColor);
+        if (currentTab) {
+            set(myCursorRef, { table: currentTab, color: myColor, ts: getServerNow() }).catch(() => {});
+        }
     } else {
-        console.log('[presence] mất kết nối tới Firebase');
+        updateNetworkStatusBadge();
     }
 });
 
-// ─── FIX #10: Object pool cho cursor trail ───
+// ─── Object pool cho cursor trail dùng Web Animations API (0 reflow) ───
 const TRAIL_POOL_SIZE = 20;
 const trailPool = [];
+const trailAnimations = new WeakMap();
 for (let i = 0; i < TRAIL_POOL_SIZE; i++) {
     const el = document.createElement('div');
     el.className = 'cursor-trail';
@@ -680,24 +803,37 @@ let trailPoolIdx = 0;
 function spawnTrail(x, y, color) {
     const trail = trailPool[trailPoolIdx % TRAIL_POOL_SIZE];
     trailPoolIdx++;
+    const prevAnim = trailAnimations.get(trail);
+    if (prevAnim) prevAnim.cancel();
+
     trail.style.left = x + 'px';
     trail.style.top = y + 'px';
     trail.style.background = color || '#999';
-    trail.style.display = '';
-    trail.style.animation = 'none';
-    void trail.offsetWidth; // reflow để restart animation
-    trail.style.animation = '';
-    setTimeout(() => { trail.style.display = 'none'; }, 500);
+    trail.style.display = 'block';
+
+    if (trail.animate) {
+        const anim = trail.animate([
+            { opacity: 0.55, transform: 'translate(-50%, -50%) scale(1)' },
+            { opacity: 0, transform: 'translate(-50%, -50%) scale(0.3)' }
+        ], { duration: 500, easing: 'ease-out' });
+        trailAnimations.set(trail, anim);
+        anim.onfinish = anim.oncancel = () => {
+            if (trailAnimations.get(trail) === anim) {
+                trailAnimations.delete(trail);
+                trail.style.display = 'none';
+            }
+        };
+    } else {
+        setTimeout(() => { trail.style.display = 'none'; }, 500);
+    }
 }
 
-// CURSOR ĐỒNG NGHIỆP
+// ─── CURSOR ĐỒNG NGHIỆP (gom nhóm getBoundingClientRect theo bàn) ───────
 const remoteCursorEls = {};
 const lastCursorPos = {};
 
-function positionCursorOnTable(id, el, tableNum, offsetIndex, color) {
-    const card = TABLE_DOM[Number(tableNum) - 1]?.card;
-    if (!card) { el.classList.remove('visible'); return; }
-    const rect = card.getBoundingClientRect();
+function positionCursorOnTable(id, el, rect, offsetIndex, color) {
+    if (!rect) { el.classList.remove('visible'); return; }
     const x = rect.left + 12 + (offsetIndex * 16);
     const y = rect.top + 12;
     const prev = lastCursorPos[id];
@@ -714,25 +850,55 @@ function positionCursorOnTable(id, el, tableNum, offsetIndex, color) {
 }
 
 function renderRemoteCursors(snapVal) {
-    const entries = Object.entries(snapVal || {}).filter(([id, c]) => id !== myPresenceId && c && c.table);
-    Object.keys(remoteCursorEls).forEach(id => {
-        if (!entries.find(([eid]) => eid === id)) { remoteCursorEls[id].remove(); delete remoteCursorEls[id]; delete lastCursorPos[id]; }
+    const now = getServerNow();
+    const entries = Object.entries(snapVal || {}).filter(([id, c]) => {
+        if (id === myPresenceId || !c || !c.table) return false;
+        const ts = Number(c.ts);
+        return !Number.isFinite(ts) || (now - ts) < STALE_CURSOR_MS;
     });
+
+    const activeIds = new Set(entries.map(([id]) => id));
+    Object.keys(remoteCursorEls).forEach(id => {
+        if (!activeIds.has(id)) {
+            remoteCursorEls[id].remove();
+            delete remoteCursorEls[id];
+            delete lastCursorPos[id];
+        }
+    });
+
+    // Đo tọa độ mỗi thẻ bàn tối đa 1 lần cho toàn bộ khung hình
+    const tableRects = new Map();
     const countPerTable = {}, tableViewerColor = {};
     entries.forEach(([id, c]) => {
-        const idx = countPerTable[c.table] || 0;
-        countPerTable[c.table] = idx + 1;
-        if (!tableViewerColor[c.table]) tableViewerColor[c.table] = c.color || '#999';
+        const tableNum = Number(c.table);
+        if (!tableRects.has(tableNum)) {
+            const card = TABLE_DOM[tableNum - 1]?.card;
+            tableRects.set(tableNum, card ? card.getBoundingClientRect() : null);
+        }
+        const idx = countPerTable[tableNum] || 0;
+        countPerTable[tableNum] = idx + 1;
+        if (!tableViewerColor[tableNum]) tableViewerColor[tableNum] = c.color || '#999';
         let el = remoteCursorEls[id];
-        if (!el) { el = document.createElement('div'); el.className = 'remote-cursor'; document.body.appendChild(el); remoteCursorEls[id] = el; }
+        if (!el) {
+            el = document.createElement('div');
+            el.className = 'remote-cursor';
+            document.body.appendChild(el);
+            remoteCursorEls[id] = el;
+        }
         el.style.background = c.color || '#999';
-        positionCursorOnTable(id, el, c.table, idx, c.color);
+        positionCursorOnTable(id, el, tableRects.get(tableNum), idx, c.color);
     });
+
     for (let t = 1; t <= 9; t++) {
         const card = TABLE_DOM[t - 1]?.card;
         if (!card) continue;
-        if (tableViewerColor[t]) { card.classList.add('has-viewer'); card.style.setProperty('--viewer-color', tableViewerColor[t]); }
-        else { card.classList.remove('has-viewer'); card.style.removeProperty('--viewer-color'); }
+        if (tableViewerColor[t]) {
+            card.classList.add('has-viewer');
+            card.style.setProperty('--viewer-color', tableViewerColor[t]);
+        } else {
+            card.classList.remove('has-viewer');
+            card.style.removeProperty('--viewer-color');
+        }
     }
 }
 
@@ -748,33 +914,53 @@ function scheduleRenderRemoteCursors() {
 window.addEventListener('resize', scheduleRenderRemoteCursors);
 window.addEventListener('scroll', scheduleRenderRemoteCursors, { passive: true });
 
-// ─── FIX #7: Throttle cursor broadcast 200ms ───
+// ─── Throttle cursor broadcast 200ms ───────────────────────────────────
 let lastCursorBroadcastTs = 0;
 function broadcastCursor(tableNum) {
     const now = Date.now();
     if (tableNum && now - lastCursorBroadcastTs < 200) return;
     lastCursorBroadcastTs = now;
-    if (tableNum) set(myCursorRef, { table: tableNum, color: myColor, ts: now }).catch(() => {});
+    if (tableNum) set(myCursorRef, { table: tableNum, color: myColor, ts: getServerNow() }).catch(() => {});
     else remove(myCursorRef).catch(() => {});
     broadcastFocus(null);
 }
 
-// CLICK-TO-FOCUS
-let lastFocusBroadcast = 0, focusClearTimer = null;
+// ─── CLICK-TO-FOCUS (chỉ gửi remove khi thật sự có focus đang bật) ────
+let lastFocusBroadcast = 0, focusClearTimer = null, hasActiveFocus = false;
 function broadcastFocus(itemId) {
-    if (itemId === null) { clearTimeout(focusClearTimer); remove(myFocusRef).catch(() => {}); return; }
+    if (itemId === null) {
+        clearTimeout(focusClearTimer);
+        focusClearTimer = null;
+        if (hasActiveFocus) {
+            hasActiveFocus = false;
+            remove(myFocusRef).catch(() => {});
+        }
+        return;
+    }
     const now = Date.now();
     if (now - lastFocusBroadcast > 120) {
         lastFocusBroadcast = now;
-        set(myFocusRef, { table: currentTab, itemId, color: myColor, ts: now }).catch(() => {});
+        hasActiveFocus = true;
+        set(myFocusRef, { table: currentTab, itemId, color: myColor, ts: getServerNow() }).catch(() => {});
     }
     clearTimeout(focusClearTimer);
-    focusClearTimer = setTimeout(() => remove(myFocusRef).catch(() => {}), 1500);
+    focusClearTimer = setTimeout(() => {
+        focusClearTimer = null;
+        if (hasActiveFocus) {
+            hasActiveFocus = false;
+            remove(myFocusRef).catch(() => {});
+        }
+    }, 1500);
 }
 
 const remoteFocusRows = {};
 function renderRemoteFocus(snapVal) {
-    const entries = Object.entries(snapVal || {}).filter(([id, f]) => id !== myPresenceId && f);
+    const now = getServerNow();
+    const entries = Object.entries(snapVal || {}).filter(([id, f]) => {
+        if (id === myPresenceId || !f) return false;
+        const ts = Number(f.ts);
+        return !Number.isFinite(ts) || (now - ts) < STALE_CURSOR_MS;
+    });
     Object.keys(remoteFocusRows).forEach(id => {
         const stillActive = entries.find(([eid, f]) => eid === id && f.table === currentTab);
         if (!stillActive) {
@@ -794,7 +980,7 @@ function renderRemoteFocus(snapVal) {
         row.classList.add('remote-focus');
         row.style.setProperty('--focus-color', f.color || '#999');
         let tag = (prev && prev.rowEl === row) ? prev.tagEl : null;
-        if (!tag) { tag = document.createElement('span'); tag.className = 'remote-focus-tag'; tag.innerText = '✏️'; row.appendChild(tag); requestAnimationFrame(() => tag.classList.add('visible')); }
+        if (!tag) { tag = document.createElement('span'); tag.className = 'remote-focus-tag'; tag.textContent = '✏️'; row.appendChild(tag); requestAnimationFrame(() => tag.classList.add('visible')); }
         tag.style.background = f.color || '#999';
         remoteFocusRows[id] = { rowEl: row, tagEl: tag };
     });
@@ -803,11 +989,16 @@ function renderRemoteFocus(snapVal) {
 let lastFocusSnap = null;
 onValue(focusRef, (snap) => { lastFocusSnap = snap.val(); renderRemoteFocus(lastFocusSnap); });
 
-// MENU — FIX #6: dùng array join thay concatenation
+// ─── MENU + THANH NHẢY NHANH THEO NHÓM MÓN ─────────────────────────────
+const SHORT_CAT_LABELS = ['Cơm / Mỳ', 'Hấp / Cháo', 'Món thêm', 'Nước uống', 'Bia'];
+
 function renderMenu() {
+    const navParts = [];
     const parts = [];
-    menu.forEach(g => {
-        parts.push(`<div class="category-title">${g.cat}</div>`);
+    menu.forEach((g, idx) => {
+        const shortLabel = SHORT_CAT_LABELS[idx] || g.cat.split('/')[0].trim();
+        navParts.push(`<button type="button" class="cat-pill${idx === 0 ? ' active' : ''}" data-cat-idx="${idx}">${shortLabel}</button>`);
+        parts.push(`<div class="category-title" id="cat-sec-${idx}" data-cat-idx="${idx}">${g.cat}</div>`);
         g.items.forEach(i => {
             parts.push(`<div class="menu-item" id="row-${i.id}">
                 <div class="item-info"><b>${i.name}</b><small>${i.price.toLocaleString()}đ</small></div>
@@ -819,6 +1010,8 @@ function renderMenu() {
             </div>`);
         });
     });
+    const catNav = document.getElementById('menu-cat-nav');
+    if (catNav) catNav.innerHTML = navParts.join('');
     document.getElementById('menu-list').innerHTML = parts.join('');
 }
 renderMenu();
@@ -829,7 +1022,35 @@ ALL_ITEMS.forEach(item => {
     });
 });
 
-// Không tải audio ở initial load; bắt đầu preload sau tương tác đầu tiên để tiếng báo vẫn phản hồi nhanh.
+document.getElementById('menu-cat-nav')?.addEventListener('click', (e) => {
+    const pill = e.target.closest('.cat-pill');
+    if (!pill) return;
+    triggerHaptic('nav');
+    const idx = pill.dataset.catIdx;
+    document.querySelectorAll('#menu-cat-nav .cat-pill').forEach(p => p.classList.toggle('active', p === pill));
+    document.getElementById(`cat-sec-${idx}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
+
+// Highlight active category pill khi cuộn thực đơn
+let catScrollTicking = false;
+window.addEventListener('scroll', () => {
+    if (!currentTab || data.locked?.[currentTab] || catScrollTicking) return;
+    catScrollTicking = true;
+    requestAnimationFrame(() => {
+        catScrollTicking = false;
+        const nav = document.getElementById('menu-cat-nav');
+        if (!nav) return;
+        const threshold = nav.getBoundingClientRect().bottom + 14;
+        let activeIdx = 0;
+        for (let i = 0; i < menu.length; i++) {
+            const sec = document.getElementById(`cat-sec-${i}`);
+            if (sec && sec.getBoundingClientRect().top <= threshold) activeIdx = i;
+        }
+        nav.querySelectorAll('.cat-pill').forEach((p, idx) => p.classList.toggle('active', idx === activeIdx));
+    });
+}, { passive: true });
+
+// Preload audio sau tương tác đầu tiên
 document.addEventListener('pointerdown', () => {
     const ting = document.getElementById('tingSound');
     if (ting) { ting.preload = 'auto'; ting.load(); }
@@ -841,16 +1062,29 @@ document.getElementById('menu-list').addEventListener('click', (e) => {
     change(itemId, btn.classList.contains('btn-add') ? 1 : -1);
 });
 
-// Dữ liệu chính: tách listener theo nhánh + chỉ đánh dấu các bàn thực sự thay đổi.
-// pendingUpdates đặt trước listener để phân biệt echo local với thay đổi remote.
+// ─── TỰ ẨN NÚT CUỘN XUỐNG KHI NÚT CHỐT ĐƠN ĐÃ HIỆN RA ─────────────────
+let checkoutBtnVisible = false;
+function updateScrollCheckoutButton() {
+    const scrollBtn = document.getElementById('scroll-to-checkout');
+    if (!scrollBtn) return;
+    const shouldShow = Boolean(currentTab && !data.locked?.[currentTab] && !checkoutBtnVisible);
+    scrollBtn.classList.toggle('hidden', !shouldShow);
+}
+
+const checkoutBtnEl = document.getElementById('btn-checkout');
+if (checkoutBtnEl && 'IntersectionObserver' in window) {
+    const checkoutObserver = new IntersectionObserver((entries) => {
+        checkoutBtnVisible = entries.some(entry => entry.isIntersecting);
+        updateScrollCheckoutButton();
+    }, { threshold: 0.15 });
+    checkoutObserver.observe(checkoutBtnEl);
+}
+
+// ─── DỮ LIỆU CHÍNH FIREBASE ────────────────────────────────────────────
 const pendingUpdates = {};
 let firstOrdersLoad = true;
 const initialBranchesLoaded = new Set();
 let initialDataReady = false;
-
-// Flash thay đổi từ thiết bị khác. Queue tới sau refresh để renderCurrentOrder/renderTable
-// không ghi đè class flash vừa thêm. Echo của chính thiết bị này được bỏ qua nếu
-// snapshot Firebase đúng bằng optimistic quantity đang chờ ghi.
 const pendingRemoteOrderFlashes = [];
 
 function queueRemoteOrderFlashes(prevOrders, nextOrders, ignoredTables = null) {
@@ -867,8 +1101,6 @@ function queueRemoteOrderFlashes(prevOrders, nextOrders, ignoredTables = null) {
             const newQty = Number(nextTable?.[rawId] || 0);
             if (oldQty === newQty) continue;
 
-            // update() của chính máy này cũng phát onValue local. Nếu snapshot đã đúng
-            // với quantity optimistic đang pending thì local UI đã flash rồi, không flash lần 2.
             const localPendingQty = pendingUpdates[tableId]?.[itemId];
             if (localPendingQty !== undefined && Number(localPendingQty) === newQty) continue;
 
@@ -916,7 +1148,6 @@ onValue(ordersRef, snap => {
     const nextOrders = snap.val() || {};
     const changed = changedTableIds(data.orders, nextOrders);
     if (!firstOrdersLoad && changed.size) {
-        // Không coi snapshot xóa bill của chính lần thanh toán trên máy này là remote remove.
         const ignoredTables = localPaymentEchoTables.size ? new Set(localPaymentEchoTables) : null;
         const remoteChanges = queueRemoteOrderFlashes(data.orders, nextOrders, ignoredTables);
         if (remoteChanges > 0) document.getElementById('tingSound').play().catch(() => {});
@@ -957,7 +1188,9 @@ function selectTable(n, options = {}) {
     resetBillQrView(true);
     const previousTab = currentTab;
     const wasOpenForSameTable = (currentTab === n);
-    currentTab = wasOpenForSameTable ? null : n; currentBillLang = 'vi';
+    currentTab = wasOpenForSameTable ? null : n;
+    currentBillLang = 'vi';
+    syncActiveLangButton('vi');
     billWasShown = false;
     broadcastCursor(currentTab);
     renderRemoteFocus(lastFocusSnap);
@@ -965,17 +1198,20 @@ function selectTable(n, options = {}) {
     if (currentTab) {
         let title = "BÀN " + n;
         if (n === 7) title = "BÀN TRONG HIÊN"; if (n === 8) title = "NGOÀI ĐƯỜNG (TRÁI)"; if (n === 9) title = "NGOÀI ĐƯỜNG (PHẢI)";
-        document.getElementById('table-title').innerText = title;
+        document.getElementById('table-title').textContent = title;
         section.style.display = 'block';
         requestAnimationFrame(() => requestAnimationFrame(() => section.classList.add('section-visible')));
         refresh(new Set([previousTab, currentTab].filter(Boolean)));
         const isLockedTable = (data.locked && data.locked[n]) || false;
-        if (isLockedTable) setTimeout(scrollBillIntoView, 350);
+        if (isLockedTable) {
+            preloadBillAssets();
+            setTimeout(scrollBillIntoView, 350);
+        }
     } else {
         section.classList.remove('section-visible');
-        document.getElementById('scroll-to-checkout')?.classList.add('hidden');
+        checkoutBtnVisible = false;
+        updateScrollCheckoutButton();
         if (options.instantClose) {
-            // Thanh toán cần phản hồi tức thì: bỏ riêng transition đóng 320ms.
             section.style.display = 'none';
         } else {
             setTimeout(() => { if (!currentTab) section.style.display = 'none'; }, 320);
@@ -984,20 +1220,30 @@ function selectTable(n, options = {}) {
     }
 }
 
-// ─── FIX #1: Debounce Firebase write 250ms ───
+// ─── Debounce Firebase write 250ms ─────────────────────────────────────
 const debounceTimers = {};
 const debounceVersions = {};
 const pendingStartTimes = new Set();
 
-// Mỗi ô số chỉ có tối đa 1 animation đang chạy. Bấm mới sẽ hủy animation cũ,
-// tránh nhiều requestAnimationFrame/class bump chồng lên nhau khi multi-touch.
+function clearPendingForTable(tab) {
+    delete pendingUpdates[tab];
+    pendingStartTimes.delete(tab);
+    const prefix = `${tab}_`;
+    for (const key of Object.keys(debounceTimers)) {
+        if (key.startsWith(prefix)) {
+            clearTimeout(debounceTimers[key]);
+            delete debounceTimers[key];
+            delete debounceVersions[key];
+        }
+    }
+}
+
 const qtyBumpAnimations = new WeakMap();
 function playQtyBump(el) {
     if (!el) return;
     const previous = qtyBumpAnimations.get(el);
     if (previous) previous.cancel();
 
-    // Web Animations API tách animation của từng số và không cần ép reflow.
     const animation = el.animate(
         [
             { transform: 'scale(1)' },
@@ -1050,12 +1296,12 @@ function change(id, delta) {
     triggerHaptic(delta > 0 ? 'add' : 'sub');
     broadcastFocus(id);
 
-    const tab = currentTab; // capture bàn ngay lúc bấm, không đọc currentTab sau 250ms
+    const tab = currentTab;
     const order = data.orders[tab] || {};
     const currentQty = (pendingUpdates[tab]?.[id] ?? order[id]) || 0;
     if (delta < 0 && currentQty <= 0) return;
 
-    // Cập nhật UI ngay lập tức (optimistic update)
+    // Optimistic update ngay lập tức cho cả dòng món lẫn thẻ bàn phía trên
     const newQty = Math.max(0, currentQty + delta);
     if (!pendingUpdates[tab]) pendingUpdates[tab] = {};
     pendingUpdates[tab][id] = newQty;
@@ -1064,10 +1310,12 @@ function change(id, delta) {
     const qSpan = itemDom?.qty;
     const row = itemDom?.row;
     if (qSpan) {
-        qSpan.innerText = newQty;
+        qSpan.textContent = newQty;
         applyMenuRowQtyClasses(row, newQty);
         playQtyBump(qSpan);
     }
+    renderTable(tab, getServerNow());
+    renderCrowdAndReset();
     flashRow(id, delta);
 
     // Debounce ghi Firebase
@@ -1076,7 +1324,6 @@ function change(id, delta) {
     debounceVersions[key] = version;
     clearTimeout(debounceTimers[key]);
     debounceTimers[key] = setTimeout(() => {
-        // Nếu timer này đã bị một lần bấm mới hơn thay thế thì bỏ qua hoàn toàn.
         if (debounceVersions[key] !== version) return;
         const finalQty = pendingUpdates[tab]?.[id];
         if (finalQty === undefined) {
@@ -1088,28 +1335,24 @@ function change(id, delta) {
         }
         if (!data.times?.[tab] && !pendingStartTimes.has(tab) && finalQty > 0) {
             pendingStartTimes.add(tab);
-            set(child(timesRef, String(tab)), Date.now())
+            const startTs = getServerNow();
+            set(child(timesRef, String(tab)), startTs)
                 .catch(err => console.error('[times] Lỗi ghi mốc giờ Firebase:', err))
                 .finally(() => pendingStartTimes.delete(tab));
         }
         const sentQty = finalQty;
-        // Qty = 0 thì xóa key khỏi RTDB, tránh tích tụ các node 0 theo thời gian.
         update(child(ordersRef, String(tab)), { [id]: sentQty > 0 ? sentQty : null })
             .then(() => {
-                // Chỉ xóa pending khi request này vẫn là lần bấm mới nhất của món/bàn đó.
                 if (debounceVersions[key] === version && pendingUpdates[tab]?.[id] === sentQty) {
                     delete pendingUpdates[tab][id];
                     if (Object.keys(pendingUpdates[tab]).length === 0) delete pendingUpdates[tab];
                 }
-                // Nếu bàn đã thật sự không còn món, xóa mốc giờ. Nếu nhân viên vừa thêm
-                // món khác trong lúc request đang chạy, effectiveTableHasItems() sẽ giữ lại giờ.
                 queueMicrotask(() => {
                     if (!effectiveTableHasItems(tab)) remove(child(timesRef, String(tab))).catch(() => {});
                 });
             })
             .catch(err => console.error('[orders] Lỗi ghi Firebase:', err))
             .finally(() => {
-                // Request cũ không được xóa timer/version của lần bấm mới hơn.
                 if (debounceVersions[key] === version) {
                     delete debounceTimers[key];
                     delete debounceVersions[key];
@@ -1119,22 +1362,54 @@ function change(id, delta) {
 }
 
 function flashRow(id, delta) {
-    const itemDom = ITEM_DOM.get(id), row = itemDom?.row, tabBtn = currentTab ? TABLE_DOM[currentTab - 1]?.card : null, qSpan = itemDom?.qty, cls = delta > 0 ? 'flash-add' : 'flash-sub';
+    const itemDom = ITEM_DOM.get(id), row = itemDom?.row, tabBtn = currentTab ? TABLE_DOM[currentTab - 1]?.card : null, cls = delta > 0 ? 'flash-add' : 'flash-sub';
     if (row) row.classList.add(cls); if (tabBtn) tabBtn.classList.add(cls);
     setTimeout(() => { if (row) row.classList.remove(cls); if (tabBtn) tabBtn.classList.remove(cls); }, 400);
 }
 
-function changeBillLang(l) { if (paymentInProgress) return; triggerHaptic('nav'); currentBillLang = l; renderCurrentOrder(); scrollBillIntoView(); }
+function changeBillLang(l) {
+    if (paymentInProgress) return;
+    triggerHaptic('nav');
+    currentBillLang = l;
+    syncActiveLangButton(l);
+    renderCurrentOrder();
+    scrollBillIntoView();
+}
 
-// ─── FIX #3: Bỏ setInterval(refresh, 30000) — Firebase onValue() đã đủ ───
-// ─── FIX #2: Dùng ITEM_MAP O(1) thay vì all.find() O(n) ───
+// ─── Tính tổng tiền + số món ăn / nước uống (gộp cả pendingUpdates) ─────
 function calculateTableStats(tableId) {
     let total = 0, foodQty = 0, drinkQty = 0;
-    const order = data.orders[tableId] || {};
-    for (const id in order) {
+    const serverOrder = data.orders?.[tableId] || {};
+    const pendingOrder = pendingUpdates[tableId];
+    if (!pendingOrder) {
+        for (const id in serverOrder) {
+            const itemId = Number(id);
+            const item = ITEM_MAP.get(itemId);
+            const qty = Math.max(0, Number(serverOrder[id]) || 0);
+            if (!item || qty <= 0) continue;
+            total += item.price * qty;
+            if (DRINK_ITEM_IDS.has(itemId)) drinkQty += qty;
+            else foodQty += qty;
+        }
+        return { total, foodQty, drinkQty };
+    }
+
+    const seen = new Set();
+    for (const id in pendingOrder) {
+        seen.add(id);
         const itemId = Number(id);
         const item = ITEM_MAP.get(itemId);
-        const qty = Math.max(0, Number(order[id]) || 0);
+        const qty = Math.max(0, Number(pendingOrder[id]) || 0);
+        if (!item || qty <= 0) continue;
+        total += item.price * qty;
+        if (DRINK_ITEM_IDS.has(itemId)) drinkQty += qty;
+        else foodQty += qty;
+    }
+    for (const id in serverOrder) {
+        if (seen.has(id)) continue;
+        const itemId = Number(id);
+        const item = ITEM_MAP.get(itemId);
+        const qty = Math.max(0, Number(serverOrder[id]) || 0);
         if (!item || qty <= 0) continue;
         total += item.price * qty;
         if (DRINK_ITEM_IDS.has(itemId)) drinkQty += qty;
@@ -1151,6 +1426,7 @@ function renderCurrentOrder() {
     document.getElementById('menu-area').style.display = isLock ? 'none' : 'block';
     billArea.style.display = isLock ? 'block' : 'none';
     if (isLock && !billWasShown) {
+        preloadBillAssets();
         billArea.classList.remove('printing-out');
         requestAnimationFrame(() => requestAnimationFrame(() => billArea.classList.add('printing-out')));
         billWasShown = true;
@@ -1159,15 +1435,14 @@ function renderCurrentOrder() {
         billArea.classList.remove('printing-out');
         if (billViewMode !== 'bill') resetBillQrView(true);
     }
-    document.getElementById('scroll-to-checkout')?.classList.toggle('hidden', isLock);
+    updateScrollCheckoutButton();
 
     ALL_ITEMS.forEach(item => {
-        // Nếu món đang chờ debounce của bàn hiện tại, giữ optimistic UI thay vì ghi đè bằng snapshot cũ.
         const q = Math.max(0, pendingUpdates[currentTab]?.[item.id] ?? data.orders[currentTab]?.[item.id] ?? 0);
         const itemDom = ITEM_DOM.get(item.id);
         const row = itemDom?.row, qSpan = itemDom?.qty;
-        if (row && qSpan && qSpan.innerText !== String(q)) {
-            qSpan.innerText = q;
+        if (row && qSpan && qSpan.textContent !== String(q)) {
+            qSpan.textContent = q;
             applyMenuRowQtyClasses(row, q);
         }
     });
@@ -1175,19 +1450,19 @@ function renderCurrentOrder() {
     if (isLock) renderBillAsync(currentTab);
 }
 
-function renderTableTime(tableId, now = Date.now()) {
+function renderTableTime(tableId, now = getServerNow()) {
     const dom = TABLE_DOM[tableId - 1];
     if (!dom?.time) return;
     dom.time.classList.remove('skeleton');
     let txt = '';
     if (tableTotals[tableId] > 0 && data.times?.[tableId]) {
-        const diff = Math.floor((now - data.times[tableId]) / 60000);
+        const diff = Math.max(0, Math.floor((now - data.times[tableId]) / 60000));
         txt = diff > 0 ? `⏱ ${diff} phút` : '⏱ Mới vào';
     }
-    if (dom.time.innerText !== txt) dom.time.innerText = txt;
+    if (dom.time.textContent !== txt) dom.time.textContent = txt;
 }
 
-function renderTable(tableId, now = Date.now()) {
+function renderTable(tableId, now = getServerNow()) {
     const dom = TABLE_DOM[tableId - 1];
     if (!dom) return;
     const { total, foodQty, drinkQty } = calculateTableStats(tableId);
@@ -1196,7 +1471,7 @@ function renderTable(tableId, now = Date.now()) {
 
     if (dom.sum) {
         dom.sum.classList.remove('skeleton');
-        if (parseInt(dom.sum.innerText.replace(/\D/g, '')) !== total) animateNumber(`sum-${tableId}`, total);
+        if (parseInt(dom.sum.textContent.replace(/\D/g, '')) !== total) animateNumber(`sum-${tableId}`, total);
     }
     if (dom.meta) {
         dom.meta.classList.remove('skeleton');
@@ -1222,10 +1497,8 @@ function renderTable(tableId, now = Date.now()) {
     }
 }
 
-// Thời gian trôi qua không tạo Firebase event. Chỉ cập nhật 9 text thời gian,
-// không render lại bill/menu/toàn app như timer refresh cũ.
 setInterval(() => {
-    const now = Date.now();
+    const now = getServerNow();
     for (let i = 1; i <= 9; i++) renderTableTime(i, now);
 }, 30000);
 
@@ -1240,40 +1513,38 @@ function renderCrowdAndReset() {
     const crowdIcon = document.getElementById('crowd-icon');
     if (crowdEl && crowdTxt && crowdIcon) {
         if (activeTablesCount <= 3) {
-            crowdEl.className = 'status-badge status-empty'; crowdTxt.innerText = 'Vắng khách'; crowdIcon.innerText = '🟢';
+            crowdEl.className = 'status-badge status-empty'; crowdTxt.textContent = 'Vắng khách'; crowdIcon.textContent = '🟢';
         } else if (activeTablesCount <= 6) {
-            crowdEl.className = 'status-badge status-normal'; crowdTxt.innerText = 'Bình thường'; crowdIcon.innerText = '🟡';
+            crowdEl.className = 'status-badge status-normal'; crowdTxt.textContent = 'Bình thường'; crowdIcon.textContent = '🟡';
         } else {
-            crowdEl.className = 'status-badge status-crowded'; crowdTxt.innerText = 'ĐÔNG KHÁCH'; crowdIcon.innerText = '🚨';
+            crowdEl.className = 'status-badge status-crowded'; crowdTxt.textContent = 'ĐÔNG KHÁCH'; crowdIcon.textContent = '🚨';
         }
     }
     document.getElementById('reset-area').style.display = anyGuest ? 'none' : 'block';
 }
 
-// tableIds = null => render đầy đủ; Set => chỉ render các bàn đã thay đổi.
 function refresh(tableIds = null, updateCurrentOrder = true) {
     const ids = tableIds === null ? new Set(Array.from({ length: 9 }, (_, i) => i + 1)) : tableIds;
     const currentAffected = currentTab && (tableIds === null || ids.has(currentTab));
     if (updateCurrentOrder && currentAffected) renderCurrentOrder();
-    const now = Date.now();
+    const now = getServerNow();
     for (const id of ids) renderTable(Number(id), now);
     renderCrowdAndReset();
     flushRemoteOrderFlashes();
 }
 
-// ─── FIX #9: Async bill render với lazy-load dict (tra cứu theo item.id) ───
+// ─── Async bill render với kiểm tra trạng thái khóa sau await ──────────
 async function renderBillAsync(tab) {
     const targetLang = currentBillLang;
     const langData = await getLangData(targetLang);
-    // Kiểm tra tab và ngôn ngữ vẫn khớp sau khi await (tránh race condition khi bấm đổi cờ liên tục)
-    if (currentTab !== tab || currentBillLang !== targetLang) return;
+    if (currentTab !== tab || currentBillLang !== targetLang || !data.locked?.[tab]) return;
 
     let h = "", t = 0, my = data.orders[tab] || {};
-    document.getElementById('txt-total-label').innerText = langData.total;
-    document.getElementById('txt-lang-flag').innerText = langData.flag;
+    document.getElementById('txt-total-label').textContent = langData.total;
+    document.getElementById('txt-lang-flag').textContent = langData.flag;
     let idx = 0;
     for (let id in my) {
-        const itm = ITEM_MAP.get(Number(id)); // FIX #11
+        const itm = ITEM_MAP.get(Number(id));
         if (itm && my[id] > 0) {
             let p = itm.price * my[id]; t += p;
             let nameShow = (targetLang !== 'vi' && langData.items?.[itm.id]) ? langData.items[itm.id] : itm.name;
@@ -1287,46 +1558,63 @@ async function renderBillAsync(tab) {
     }
     document.getElementById('bill-list').innerHTML = h || "Trống";
     const bTotal = document.getElementById('bill-total'), tBox = document.getElementById('total-container');
-    if (parseInt(bTotal.innerText.replace(/\D/g, '')) !== t) { animateNumber('bill-total', t); tBox.classList.add('total-pop'); setTimeout(() => tBox.classList.remove('total-pop'), 400); }
+    if (parseInt(bTotal.textContent.replace(/\D/g, '')) !== t) { animateNumber('bill-total', t); tBox.classList.add('total-pop'); setTimeout(() => tBox.classList.remove('total-pop'), 400); }
     requestAnimationFrame(() => syncBillFlipHeight(false));
 }
 
 function setLock(v) {
     if (!currentTab || paymentInProgress) return;
     triggerHaptic(v ? 'lock' : 'nav');
-    if (v) resetBillQrView(true);
+    if (v) {
+        preloadBillAssets();
+        resetBillQrView(true);
+    }
     set(child(lockedRef, String(currentTab)), v)
         .catch(err => console.error('[lock] Lỗi ghi trạng thái khóa Firebase:', err));
-    if (!v) { currentBillLang = 'vi'; resetBillQrView(true); }
+    if (!v) {
+        currentBillLang = 'vi';
+        syncActiveLangButton('vi');
+        resetBillQrView(true);
+    }
     if (v) setTimeout(scrollBillIntoView, 100);
 }
 
 function doPay() {
     if (!currentTab || paymentInProgress) return;
-    if (!confirm("Xác nhận thanh toán?")) return;
 
     const tab = currentTab;
+    const lockedBeforeConfirm = !!data.locked?.[tab];
+    const orderSnapshotBeforeConfirm = JSON.stringify(data.orders?.[tab] || {});
+
+    if (!confirm("Xác nhận thanh toán?")) return;
+
+    // Kiểm tra xem máy khác có vừa mở khóa hoặc sửa đơn trong lúc hộp thoại xác nhận đang mở không
+    const lockedAfterConfirm = !!data.locked?.[tab];
+    const orderSnapshotAfterConfirm = JSON.stringify(data.orders?.[tab] || {});
+    if ((lockedBeforeConfirm && !lockedAfterConfirm) || orderSnapshotBeforeConfirm !== orderSnapshotAfterConfirm) {
+        alert("Đơn bàn này vừa được cập nhật hoặc mở khóa từ thiết bị khác. Vui lòng kiểm tra lại bill trước khi thanh toán!");
+        scheduleRefresh(new Set([tab]), true);
+        return;
+    }
+
     paymentInProgress = true;
     localPaymentEchoTables.add(tab);
+    clearPendingForTable(tab);
     stopBillScrollAnimation();
     triggerHaptic('success');
 
-    // Atomic multi-path update: xóa cả order/lock/time trong một commit.
-    // Không chờ animation hay network trước khi đóng UI, nên cảm giác thanh toán là tức thì.
     const paymentWrite = update(dbRef, {
         [`orders/${tab}`]: null,
         [`locked/${tab}`]: null,
         [`times/${tab}`]: null
     });
 
-    // Optimistic clear để card bàn phản hồi ngay cả trước callback Firebase local.
     if (data.orders) delete data.orders[tab];
     if (data.locked) delete data.locked[tab];
     if (data.times) delete data.times[tab];
     tableTotals[tab] = 0;
     scheduleRefresh(new Set([tab]), true);
 
-    // Đóng khu order ngay; không còn 650ms payment-success delay.
     selectTable(null, { haptic: false, allowDuringPayment: true, instantClose: true });
     paymentInProgress = false;
 
@@ -1364,9 +1652,6 @@ document.addEventListener('click', (e) => {
 });
 
 // ─── SINGLE-SHEET ORIGAMI INTRO V7 ────────────────────────────────────
-// Performance-first version: every widget is its own paper sheet.
-// No cloned DOM, no tiled masks, no per-fragment 3D layers.  Only the real
-// widget gets transform + opacity animation, plus a few tiny decorative wisps.
 const SINGLE_FOLD_DURATION = 420;
 const singleFoldAnimations = [];
 const singleFoldTimers = [];
@@ -1380,25 +1665,25 @@ function paperFlipLater(fn, delay) {
 
 function getSingleFoldSpec(variant = 0) {
     switch (variant % 4) {
-        case 0: // left edge opens toward viewer
+        case 0:
             return {
                 origin: 'left center',
                 start: 'perspective(850px) translate3d(-16px,0,0) rotateY(84deg) scale(.96)',
                 mid:   'perspective(850px) translate3d(0,0,0) rotateY(-5deg) scale(1.01)'
             };
-        case 1: // right edge
+        case 1:
             return {
                 origin: 'right center',
                 start: 'perspective(850px) translate3d(16px,0,0) rotateY(-84deg) scale(.96)',
                 mid:   'perspective(850px) translate3d(0,0,0) rotateY(5deg) scale(1.01)'
             };
-        case 2: // top edge
+        case 2:
             return {
                 origin: 'center top',
                 start: 'perspective(850px) translate3d(0,-13px,0) rotateX(-80deg) scale(.97)',
                 mid:   'perspective(850px) translate3d(0,0,0) rotateX(4deg) scale(1.01)'
             };
-        default: // bottom edge
+        default:
             return {
                 origin: 'center bottom',
                 start: 'perspective(850px) translate3d(0,13px,0) rotateX(80deg) scale(.97)',
@@ -1448,8 +1733,6 @@ function animateSingleSheet(target, delay = 0, variant = 0, withWisp = false) {
         if (!target.isConnected) return;
         const spec = getSingleFoldSpec(variant);
 
-        // Critical startup CSS uses visibility:hidden !important; this inline
-        // handoff makes ONLY this target visible when its own fold begins.
         target.style.setProperty('visibility', 'visible', 'important');
         target.style.transformOrigin = spec.origin;
         target.classList.add('single-fold-active');
@@ -1470,7 +1753,6 @@ function animateSingleSheet(target, delay = 0, variant = 0, withWisp = false) {
 
         anim.onfinish = () => {
             if (!target.isConnected) return;
-            // Keep this widget visible while later widgets are still folded.
             target.style.setProperty('opacity', '1', 'important');
             target.style.setProperty('visibility', 'visible', 'important');
             target.classList.remove('single-fold-active');
@@ -1514,7 +1796,6 @@ function runPaperFlipIntro() {
 
     const $ = sel => document.querySelector(sel);
 
-    // ~1.6 s total. At most a few single DOM nodes animate at once.
     animateSingleSheet($('.header-title'),       0,    2, true);
     animateSingleSheet($('#weather-hub'),        110,  0, true);
     animateSingleSheet($('#presence-count'),     215,  1, false);
@@ -1532,14 +1813,13 @@ function runPaperFlipIntro() {
     paperFlipLater(finishPaperFlipIntro, 1720);
 }
 
-// APIs/Firebase/tickers initialize in parallel; the intro is purely visual.
 requestAnimationFrame(runPaperFlipIntro);
 
 // DARK MODE
 function applyDarkMode(isDark) {
     document.body.classList.toggle('dark-mode', isDark);
     const btn = document.getElementById('dark-toggle');
-    if (btn) btn.innerText = isDark ? '☀️' : '🌙';
+    if (btn) btn.textContent = isDark ? '☀️' : '🌙';
 }
 function toggleDarkMode() {
     triggerHaptic('nav');
@@ -1561,16 +1841,16 @@ function scrollToCheckout() {
     document.getElementById('btn-checkout')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
-// THỜI GIAN MỞ TRANG (bên trái)
+// THỜI GIAN MỞ TRANG
 function reportLoadSpeed() {
     const el = document.getElementById('load-speed-val');
     if (!el) return;
     try {
         const nav = performance.getEntriesByType('navigation')[0];
         const ms = nav ? Math.round(nav.duration) : Math.round(performance.now());
-        el.innerText = `${ms} ms`;
+        el.textContent = `${ms} ms`;
     } catch (e) {
-        el.innerText = `${Math.round(performance.now())} ms`;
+        el.textContent = `${Math.round(performance.now())} ms`;
     }
 }
 if (document.readyState === 'complete') {
@@ -1579,8 +1859,6 @@ if (document.readyState === 'complete') {
     window.addEventListener('load', () => setTimeout(reportLoadSpeed, 0));
 }
 
-// PAYLOAD FIREBASE (bên phải) — ước tính JSON nhận/gửi, không phải số byte vật lý trên dây
 updateNetWidget();
 
 window.selectTable = selectTable; window.setLock = setLock; window.doPay = doPay; window.doReset = doReset; window.changeBillLang = changeBillLang; window.toggleDarkMode = toggleDarkMode; window.scrollToCheckout = scrollToCheckout; window.toggleBillQr = toggleBillQr;
-// ─── FIX #3: setInterval(refresh, 30000) đã bị xóa — Firebase onValue() lo ───
