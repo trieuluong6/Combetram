@@ -691,9 +691,91 @@ document.addEventListener('visibilitychange', () => {
 });
 startClockInterval();
 
-// HAPTIC
-function triggerHaptic(type) {
-    if (window.navigator && window.navigator.vibrate) window.navigator.vibrate([18, 25, 18]);
+// ─── ÂM THANH THAO TÁC (WEB AUDIO API ZERO-LATENCY) + RUNG HAPTIC ────
+let sharedAudioCtx = null;
+function getAudioContext() {
+    if (!sharedAudioCtx) {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (AudioCtx) {
+            try { sharedAudioCtx = new AudioCtx(); } catch (e) {}
+        }
+    }
+    if (sharedAudioCtx && sharedAudioCtx.state === 'suspended') {
+        sharedAudioCtx.resume().catch(() => {});
+    }
+    return sharedAudioCtx;
+}
+
+function playToneSequence(notes) {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    const baseTime = ctx.currentTime;
+    for (const n of notes) {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        const start = baseTime + (n.delay || 0);
+        const dur = n.dur || 0.08;
+        osc.type = n.wave || 'sine';
+        osc.frequency.setValueAtTime(n.freq, start);
+        if (n.endFreq) {
+            osc.frequency.exponentialRampToValueAtTime(n.endFreq, start + dur);
+        }
+        gain.gain.setValueAtTime(0.0001, start);
+        gain.gain.linearRampToValueAtTime(n.vol || 0.16, start + 0.008);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + dur);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(start);
+        osc.stop(start + dur + 0.01);
+    }
+}
+
+function playUiSound(type = 'nav') {
+    try {
+        switch (type) {
+            case 'add':
+                playToneSequence([
+                    { freq: 523.25, endFreq: 783.99, dur: 0.075, wave: 'triangle', vol: 0.18 }
+                ]);
+                break;
+            case 'sub':
+                playToneSequence([
+                    { freq: 440, endFreq: 311.13, dur: 0.075, wave: 'triangle', vol: 0.15 }
+                ]);
+                break;
+            case 'lock':
+                playToneSequence([
+                    { freq: 659.25, dur: 0.08, wave: 'sine', vol: 0.18 },
+                    { freq: 880, dur: 0.12, delay: 0.075, wave: 'sine', vol: 0.2 }
+                ]);
+                break;
+            case 'success':
+                playToneSequence([
+                    { freq: 587.33, dur: 0.08, wave: 'triangle', vol: 0.18 },
+                    { freq: 783.99, dur: 0.08, delay: 0.07, wave: 'triangle', vol: 0.19 },
+                    { freq: 1046.5, dur: 0.18, delay: 0.14, wave: 'sine', vol: 0.22 }
+                ]);
+                break;
+            case 'ting':
+                playToneSequence([
+                    { freq: 1318.51, dur: 0.28, wave: 'sine', vol: 0.22 },
+                    { freq: 2637.02, dur: 0.22, wave: 'sine', vol: 0.09 }
+                ]);
+                break;
+            default:
+                playToneSequence([
+                    { freq: 640, endFreq: 520, dur: 0.045, wave: 'sine', vol: 0.13 }
+                ]);
+                break;
+        }
+    } catch (e) {}
+}
+
+function triggerHaptic(type = 'nav') {
+    playUiSound(type);
+    if (window.navigator && window.navigator.vibrate) {
+        try { window.navigator.vibrate([18, 25, 18]); } catch (e) {}
+    }
 }
 
 // ─── animateNumber với cancel flag ────────────────────────────────────
@@ -1126,8 +1208,9 @@ window.addEventListener('scroll', () => {
     });
 }, { passive: true });
 
-// Preload audio sau tương tác đầu tiên
+// Mở khóa AudioContext & preload audio sau tương tác đầu tiên
 document.addEventListener('pointerdown', () => {
+    getAudioContext();
     const ting = document.getElementById('tingSound');
     if (ting) { ting.preload = 'auto'; ting.load(); }
 }, { once: true, passive: true });
@@ -1226,7 +1309,10 @@ onValue(ordersRef, snap => {
     if (!firstOrdersLoad && changed.size) {
         const ignoredTables = localPaymentEchoTables.size ? new Set(localPaymentEchoTables) : null;
         const remoteChanges = queueRemoteOrderFlashes(data.orders, nextOrders, ignoredTables);
-        if (remoteChanges > 0) document.getElementById('tingSound').play().catch(() => {});
+        if (remoteChanges > 0) {
+            playUiSound('ting');
+            document.getElementById('tingSound')?.play().catch(() => {});
+        }
         if (ignoredTables) {
             for (const tableId of ignoredTables) {
                 if (!nextOrders?.[tableId] || Object.keys(nextOrders[tableId]).length === 0) {
