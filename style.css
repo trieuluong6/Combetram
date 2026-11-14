@@ -131,6 +131,7 @@ body.dark-mode #offline-badge {
 }
 .online-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #4caf50; animation: blinkOnline 1.2s infinite ease-in-out; }
 @keyframes blinkOnline { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.35; transform: scale(0.88); } }
+#sound-toggle,
 #dark-toggle {
     background: var(--glass-bg);
     backdrop-filter: blur(10px);
@@ -140,12 +141,15 @@ body.dark-mode #offline-badge {
     width: 22px; height: 22px;
     border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
-    font-size: 0.78em;
+    font-size: 0.74em;
+    padding: 0;
     cursor: pointer;
     box-shadow: 0 2px 6px rgba(0,0,0,0.06);
-    transition: background 0.4s ease, border-color 0.4s ease, transform 0.2s ease;
+    transition: background 0.4s ease, border-color 0.4s ease, transform 0.2s ease, opacity 0.25s ease;
     flex-shrink: 0;
 }
+#sound-toggle.is-muted { opacity: 0.55; }
+#sound-toggle:active,
 #dark-toggle:active { transform: scale(0.85); }
 .top-bar-right { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 
@@ -610,6 +614,7 @@ body.dark-mode .single-paper-wisp {
 
 html.paper-flip-pending #weather-hub,
 html.paper-flip-pending #presence-count,
+html.paper-flip-pending #sound-toggle,
 html.paper-flip-pending #dark-toggle,
 html.paper-flip-pending #load-speed-widget,
 html.paper-flip-pending #crowd-status,
@@ -663,7 +668,8 @@ body.tab-hidden #scroll-to-checkout {
     }
     html.paper-flip-pending #weather-hub,
     html.paper-flip-pending #presence-count,
-    html.paper-flip-pending #dark-toggle,
+    html.paper-flip-pending #sound-toggle,
+html.paper-flip-pending #dark-toggle,
     html.paper-flip-pending #load-speed-widget,
     html.paper-flip-pending #crowd-status,
     html.paper-flip-pending .header-title,

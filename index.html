@@ -10,6 +10,7 @@
     <style>
     html.paper-flip-pending #weather-hub,
     html.paper-flip-pending #presence-count,
+    html.paper-flip-pending #sound-toggle,
     html.paper-flip-pending #dark-toggle,
     html.paper-flip-pending #load-speed-widget,
     html.paper-flip-pending #crowd-status,
@@ -20,7 +21,7 @@
     html.paper-flip-pending .flip-clock-container > .flip-unit,
     html.paper-flip-pending .flip-clock-container > .flip-colon { visibility: hidden !important; }
     </style>
-    <link rel="stylesheet" href="style.css?v=fx-sound-v11">
+    <link rel="stylesheet" href="style.css?v=fx-sound-v12">
     <script>window.__paperFlipFailsafe = setTimeout(() => document.documentElement.classList.remove('paper-flip-pending'), 3000);</script>
 </head>
 <body>
@@ -47,6 +48,7 @@
             <span class="online-dot"></span>
             👥 Online: <span id="online-val">1</span>
         </div>
+        <button id="sound-toggle" onclick="toggleSoundMute()" aria-label="Bật/tắt âm thanh thông báo" title="Bật/tắt âm thanh (bấm để thử loa)">🔊</button>
         <button id="dark-toggle" onclick="toggleDarkMode()" aria-label="Chuyển giao diện sáng/tối">🌙</button>
     </div>
 </div>
@@ -193,6 +195,6 @@
 <audio id="tingSound" preload="auto" playsinline></audio>
 <button id="scroll-to-checkout" class="hidden" onclick="scrollToCheckout()" aria-label="Cuộn xuống nút chốt đơn">⌄</button>
 
-<script type="module" src="app.js?v=fx-sound-v11"></script>
+<script type="module" src="app.js?v=fx-sound-v12"></script>
 </body>
 </html>

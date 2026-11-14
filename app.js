@@ -691,8 +691,7 @@ document.addEventListener('visibilitychange', () => {
 });
 startClockInterval();
 
-// ─── ÂM THANH THAO TÁC (HYBRID HTML5 WAV POOL + WEB AUDIO API) + HAPTIC ────
-// Dùng kênh media playback để kêu rõ ngay cả khi iPhone bật cần gạt Im lặng
+// ─── ÂM THANH THAO TÁC CÔNG SUẤT CAO + ĐỒNG BỘ TẤT CẢ USER ─────────────
 if (typeof navigator !== 'undefined' && navigator.audioSession) {
     try { navigator.audioSession.type = 'playback'; } catch (e) {}
 }
@@ -702,46 +701,70 @@ const IS_IOS_DEVICE = typeof navigator !== 'undefined' && (
     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
 );
 
+let isSoundMuted = false;
+function applySoundMuteUi(muted) {
+    isSoundMuted = muted;
+    const btn = document.getElementById('sound-toggle');
+    if (btn) {
+        btn.textContent = muted ? '🔇' : '🔊';
+        btn.classList.toggle('is-muted', muted);
+    }
+}
+function initSoundMute() {
+    try {
+        applySoundMuteUi(localStorage.getItem('combetram_sound_muted') === '1');
+    } catch (e) {
+        applySoundMuteUi(false);
+    }
+}
+initSoundMute();
+
+// Tần số dải trung-cao tối ưu cho loa điện thoại + hòa âm bậc 2/3 giúp nghe cực rõ
 const SOUND_PATTERNS = {
     nav: [
-        { freq: 660, endFreq: 540, dur: 0.075, wave: 'sine', vol: 0.52 }
+        { freq: 987.77, endFreq: 880, dur: 0.085, wave: 'sine', vol: 0.95 }
     ],
     add: [
-        { freq: 587.33, endFreq: 880, dur: 0.11, wave: 'triangle', vol: 0.62 }
+        { freq: 880, endFreq: 1318.51, dur: 0.14, wave: 'triangle', vol: 1.0 }
     ],
     sub: [
-        { freq: 493.88, endFreq: 349.23, dur: 0.11, wave: 'triangle', vol: 0.56 }
+        { freq: 783.99, endFreq: 523.25, dur: 0.14, wave: 'triangle', vol: 1.0 }
     ],
     lock: [
-        { freq: 659.25, dur: 0.095, wave: 'sine', vol: 0.60 },
-        { freq: 987.77, dur: 0.15, delay: 0.085, wave: 'sine', vol: 0.64 }
+        { freq: 987.77, dur: 0.11, wave: 'sine', vol: 1.0 },
+        { freq: 1318.51, dur: 0.19, delay: 0.095, wave: 'sine', vol: 1.0 }
+    ],
+    unlock: [
+        { freq: 1174.66, dur: 0.10, wave: 'sine', vol: 0.95 },
+        { freq: 880, dur: 0.15, delay: 0.09, wave: 'sine', vol: 0.95 }
     ],
     success: [
-        { freq: 587.33, dur: 0.09, wave: 'triangle', vol: 0.58 },
-        { freq: 783.99, dur: 0.09, delay: 0.08, wave: 'triangle', vol: 0.62 },
-        { freq: 1174.66, dur: 0.20, delay: 0.16, wave: 'sine', vol: 0.68 }
+        { freq: 880, dur: 0.10, wave: 'triangle', vol: 1.0 },
+        { freq: 1174.66, dur: 0.10, delay: 0.09, wave: 'triangle', vol: 1.0 },
+        { freq: 1567.98, dur: 0.25, delay: 0.18, wave: 'sine', vol: 1.0 }
     ],
     ting: [
-        { freq: 1318.51, dur: 0.45, wave: 'sine', vol: 0.68 },
-        { freq: 2637.02, dur: 0.32, wave: 'sine', vol: 0.28 }
+        { freq: 1318.51, dur: 0.16, wave: 'sine', vol: 1.0 },
+        { freq: 1760, dur: 0.36, delay: 0.11, wave: 'sine', vol: 1.0 }
     ]
 };
 
 function buildWavBlobUrl(notes, sampleRate = 22050) {
-    const totalDur = Math.max(...notes.map(n => (n.delay || 0) + (n.dur || 0.1))) + 0.025;
+    const totalDur = Math.max(...notes.map(n => (n.delay || 0) + (n.dur || 0.12))) + 0.025;
     const numSamples = Math.max(1, Math.floor(sampleRate * totalDur));
     const mix = new Float32Array(numSamples);
 
     for (const n of notes) {
         const delay = n.delay || 0;
-        const dur = n.dur || 0.1;
+        const dur = n.dur || 0.12;
         const f0 = n.freq;
         const f1 = n.endFreq || f0;
-        const vol = n.vol || 0.55;
+        const vol = n.vol || 1.0;
         const wave = n.wave || 'sine';
         const startIdx = Math.floor(delay * sampleRate);
         const lenIdx = Math.max(1, Math.floor(dur * sampleRate));
-        const attackSamples = Math.max(1, Math.floor(0.006 * sampleRate));
+        const attackSamples = Math.max(1, Math.floor(0.004 * sampleRate));
+        const releaseSamples = Math.max(1, Math.floor(0.015 * sampleRate));
         let phase = 0;
 
         for (let i = 0; i < lenIdx && (startIdx + i) < numSamples; i++) {
@@ -751,16 +774,21 @@ function buildWavBlobUrl(notes, sampleRate = 22050) {
             let sample;
             if (wave === 'triangle') {
                 const cyc = (phase / (2 * Math.PI)) % 1;
-                sample = 2 * Math.abs(2 * cyc - 1) - 1;
+                const tri = 2 * Math.abs(2 * cyc - 1) - 1;
+                sample = tri + 0.35 * Math.sin(2 * phase);
             } else {
-                sample = Math.sin(phase) + 0.22 * Math.sin(2 * phase);
+                sample = Math.sin(phase) + 0.45 * Math.sin(2 * phase) + 0.18 * Math.sin(3 * phase);
             }
             const attack = Math.min(1, i / attackSamples);
-            const decay = Math.pow(1 - t, 1.35);
-            mix[startIdx + i] += sample * vol * attack * decay;
+            const release = Math.min(1, (lenIdx - 1 - i) / releaseSamples);
+            const sustainDecay = Math.pow(1 - t, 0.42);
+            mix[startIdx + i] += sample * vol * attack * release * sustainDecay;
         }
     }
 
+    // Soft-limiter nén RMS tăng độ to cảm nhận +8dB mà không rè vỡ tiếng
+    const drive = 2.6;
+    const norm = Math.tanh(drive);
     const dataSize = numSamples * 2;
     const buffer = new ArrayBuffer(44 + dataSize);
     const view = new DataView(buffer);
@@ -783,7 +811,8 @@ function buildWavBlobUrl(notes, sampleRate = 22050) {
     view.setUint32(40, dataSize, true);
 
     for (let i = 0; i < numSamples; i++) {
-        const clamped = Math.max(-0.98, Math.min(0.98, mix[i]));
+        const boosted = Math.tanh(mix[i] * drive) / norm;
+        const clamped = Math.max(-0.99, Math.min(0.99, boosted));
         view.setInt16(44 + i * 2, Math.round(clamped * 32767), true);
     }
 
@@ -802,7 +831,7 @@ function initSoundPools() {
             const url = buildWavBlobUrl(notes);
             wavUrlMap[type] = url;
             htmlAudioPoolIdx[type] = 0;
-            htmlAudioPools[type] = Array.from({ length: 3 }, () => {
+            htmlAudioPools[type] = Array.from({ length: 4 }, () => {
                 const a = new Audio(url);
                 a.preload = 'auto';
                 a.setAttribute('playsinline', '');
@@ -819,11 +848,27 @@ function initSoundPools() {
 initSoundPools();
 
 let sharedAudioCtx = null;
+let sharedAudioMaster = null;
 function getAudioContext() {
     if (!sharedAudioCtx) {
         const AudioCtx = window.AudioContext || window.webkitAudioContext;
         if (AudioCtx) {
-            try { sharedAudioCtx = new AudioCtx(); } catch (e) {}
+            try {
+                sharedAudioCtx = new AudioCtx();
+                const compressor = sharedAudioCtx.createDynamicsCompressor();
+                compressor.threshold.setValueAtTime(-18, sharedAudioCtx.currentTime);
+                compressor.knee.setValueAtTime(12, sharedAudioCtx.currentTime);
+                compressor.ratio.setValueAtTime(8, sharedAudioCtx.currentTime);
+                compressor.attack.setValueAtTime(0.002, sharedAudioCtx.currentTime);
+                compressor.release.setValueAtTime(0.08, sharedAudioCtx.currentTime);
+
+                const boostGain = sharedAudioCtx.createGain();
+                boostGain.gain.setValueAtTime(1.75, sharedAudioCtx.currentTime);
+
+                compressor.connect(boostGain);
+                boostGain.connect(sharedAudioCtx.destination);
+                sharedAudioMaster = compressor;
+            } catch (e) {}
         }
     }
     if (sharedAudioCtx && sharedAudioCtx.state === 'suspended') {
@@ -865,7 +910,7 @@ function unlockAllAudio() {
 }
 
 function playHtmlWav(type) {
-    const pool = htmlAudioPools[type] || htmlAudioPools.nav;
+    const pool = htmlAudioPools[type] || htmlAudioPools.ting || htmlAudioPools.nav;
     if (!pool || !pool.length) return false;
     const idx = (htmlAudioPoolIdx[type] || 0) % pool.length;
     htmlAudioPoolIdx[type] = idx + 1;
@@ -885,46 +930,61 @@ function playHtmlWav(type) {
 function playWebAudioNotes(notes) {
     const ctx = getAudioContext();
     if (!ctx || ctx.state !== 'running') return false;
+    const dest = sharedAudioMaster || ctx.destination;
     const baseTime = ctx.currentTime;
     for (const n of notes) {
         const osc = ctx.createOscillator();
-        const overtone = ctx.createOscillator();
+        const overtone2 = ctx.createOscillator();
+        const overtone3 = ctx.createOscillator();
         const gain = ctx.createGain();
         const start = baseTime + (n.delay || 0);
-        const dur = n.dur || 0.1;
+        const dur = n.dur || 0.12;
+
         osc.type = n.wave || 'sine';
         osc.frequency.setValueAtTime(n.freq, start);
-        overtone.type = 'sine';
-        overtone.frequency.setValueAtTime(n.freq * 2, start);
+        overtone2.type = 'sine';
+        overtone2.frequency.setValueAtTime(n.freq * 2, start);
+        overtone3.type = 'sine';
+        overtone3.frequency.setValueAtTime(n.freq * 3, start);
+
         if (n.endFreq) {
             osc.frequency.exponentialRampToValueAtTime(n.endFreq, start + dur);
-            overtone.frequency.exponentialRampToValueAtTime(n.endFreq * 2, start + dur);
+            overtone2.frequency.exponentialRampToValueAtTime(n.endFreq * 2, start + dur);
+            overtone3.frequency.exponentialRampToValueAtTime(n.endFreq * 3, start + dur);
         }
-        const overtoneGain = ctx.createGain();
-        overtoneGain.gain.setValueAtTime(0.22, start);
 
-        const peak = Math.min(0.85, (n.vol || 0.5) * 0.9);
+        const g2 = ctx.createGain();
+        g2.gain.setValueAtTime(0.42, start);
+        const g3 = ctx.createGain();
+        g3.gain.setValueAtTime(0.16, start);
+
+        const peak = Math.min(1.0, n.vol || 1.0);
         gain.gain.setValueAtTime(0.0001, start);
-        gain.gain.linearRampToValueAtTime(peak, start + 0.006);
+        gain.gain.linearRampToValueAtTime(peak, start + 0.004);
+        gain.gain.setValueAtTime(peak * 0.85, start + dur * 0.65);
         gain.gain.exponentialRampToValueAtTime(0.0001, start + dur);
 
         osc.connect(gain);
-        overtone.connect(overtoneGain);
-        overtoneGain.connect(gain);
-        gain.connect(ctx.destination);
+        overtone2.connect(g2);
+        g2.connect(gain);
+        overtone3.connect(g3);
+        g3.connect(gain);
+        gain.connect(dest);
 
         osc.start(start);
-        overtone.start(start);
+        overtone2.start(start);
+        overtone3.start(start);
         osc.stop(start + dur + 0.015);
-        overtone.stop(start + dur + 0.015);
+        overtone2.stop(start + dur + 0.015);
+        overtone3.stop(start + dur + 0.015);
     }
     return true;
 }
 
 function playUiSound(type = 'nav') {
+    if (isSoundMuted) return;
     try {
-        const notes = SOUND_PATTERNS[type] || SOUND_PATTERNS.nav;
-        // Trên iOS/iPadOS ưu tiên HTMLAudioElement WAV để phát qua kênh media (kêu cả khi gạt nút Im lặng)
+        const notes = SOUND_PATTERNS[type] || SOUND_PATTERNS.ting;
         if (IS_IOS_DEVICE) {
             if (playHtmlWav(type)) return;
         }
@@ -932,6 +992,20 @@ function playUiSound(type = 'nav') {
             playHtmlWav(type);
         }
     } catch (e) {}
+}
+
+function toggleSoundMute() {
+    unlockAllAudio();
+    if (!isSoundMuted && !audioUnlocked) {
+        playUiSound('ting');
+        return;
+    }
+    const nextMuted = !isSoundMuted;
+    applySoundMuteUi(nextMuted);
+    try { localStorage.setItem('combetram_sound_muted', nextMuted ? '1' : '0'); } catch (e) {}
+    if (!nextMuted) {
+        playUiSound('ting');
+    }
 }
 
 function triggerHaptic(type = 'nav') {
@@ -1005,6 +1079,7 @@ const cursorsRef = ref(database, `${RT_ROOT}/cursors`);
 const myCursorRef = child(cursorsRef, myPresenceId);
 const focusRef = ref(database, `${RT_ROOT}/focus`);
 const myFocusRef = child(focusRef, myPresenceId);
+const sfxRef = ref(database, `${RT_ROOT}/sfx`);
 
 let isFirebaseConnected = false;
 let hasEverConnected = false;
@@ -1310,6 +1385,60 @@ onValue(focusRef, (snap) => {
     cleanupStaleRealtimeNodes(focusRef, 'focus', lastFocusSnap, STALE_CURSOR_MS);
 });
 
+// ─── ĐỒNG BỘ ÂM THANH REALTIME CHO TẤT CẢ USER KHI CHỈNH SỬA ─────────────
+let localSfxSeq = 0;
+let firstSfxLoad = true;
+let lastHandledSfxKey = '';
+let lastRemoteSfxTs = 0;
+let pendingItemSfxTimer = null;
+let pendingItemSfxPayload = null;
+
+function broadcastSfx(type, tableId = currentTab, immediate = false) {
+    if (!isFirebaseConnected) return;
+    const payload = {
+        type,
+        by: myPresenceId,
+        table: Number(tableId) || 0,
+        seq: ++localSfxSeq,
+        ts: getServerNow()
+    };
+    if (immediate) {
+        clearTimeout(pendingItemSfxTimer);
+        pendingItemSfxTimer = null;
+        pendingItemSfxPayload = null;
+        set(sfxRef, payload).catch(() => {});
+        return;
+    }
+    pendingItemSfxPayload = payload;
+    if (!pendingItemSfxTimer) {
+        pendingItemSfxTimer = setTimeout(() => {
+            pendingItemSfxTimer = null;
+            const toSend = pendingItemSfxPayload;
+            pendingItemSfxPayload = null;
+            if (toSend) set(sfxRef, toSend).catch(() => {});
+        }, 70);
+    }
+}
+
+onValue(sfxRef, (snap) => {
+    const ev = snap.val();
+    if (firstSfxLoad) {
+        firstSfxLoad = false;
+        if (ev) lastHandledSfxKey = `${ev.by || ''}_${ev.seq || 0}_${ev.ts || 0}`;
+        return;
+    }
+    if (!ev || !ev.by || ev.by === myPresenceId) return;
+    const eventKey = `${ev.by}_${ev.seq || 0}_${ev.ts || 0}`;
+    if (eventKey === lastHandledSfxKey) return;
+    lastHandledSfxKey = eventKey;
+
+    const ts = Number(ev.ts);
+    if (Number.isFinite(ts) && Math.abs(getServerNow() - ts) > 10000) return;
+
+    lastRemoteSfxTs = Date.now();
+    playUiSound(ev.type || 'ting');
+});
+
 // ─── MENU + THANH NHẢY NHANH THEO NHÓM MÓN ─────────────────────────────
 const SHORT_CAT_LABELS = ['Cơm / Mỳ', 'Hấp / Cháo', 'Món thêm', 'Nước uống', 'Bia'];
 
@@ -1470,9 +1599,8 @@ onValue(ordersRef, snap => {
     if (!firstOrdersLoad && changed.size) {
         const ignoredTables = localPaymentEchoTables.size ? new Set(localPaymentEchoTables) : null;
         const remoteChanges = queueRemoteOrderFlashes(data.orders, nextOrders, ignoredTables);
-        if (remoteChanges > 0) {
+        if (remoteChanges > 0 && (Date.now() - lastRemoteSfxTs) > 1200) {
             playUiSound('ting');
-            document.getElementById('tingSound')?.play().catch(() => {});
         }
         if (ignoredTables) {
             for (const tableId of ignoredTables) {
@@ -1689,7 +1817,9 @@ function applyMenuRowQtyClasses(row, qty) {
 
 function change(id, delta) {
     if (!currentTab || (data.locked && data.locked[currentTab])) return;
-    triggerHaptic(delta > 0 ? 'add' : 'sub');
+    const sfxType = delta > 0 ? 'add' : 'sub';
+    triggerHaptic(sfxType);
+    broadcastSfx(sfxType, currentTab, false);
     broadcastFocus(id);
 
     const tab = currentTab;
@@ -1926,7 +2056,8 @@ async function renderBillAsync(tab) {
 
 function setLock(v) {
     if (!currentTab || paymentInProgress) return;
-    triggerHaptic(v ? 'lock' : 'nav');
+    triggerHaptic(v ? 'lock' : 'unlock');
+    broadcastSfx(v ? 'lock' : 'unlock', currentTab, true);
     if (v) {
         flushPendingForTable(currentTab);
         preloadBillAssets();
@@ -1965,6 +2096,7 @@ function doPay() {
     clearPendingForTable(tab);
     stopBillScrollAnimation();
     triggerHaptic('success');
+    broadcastSfx('success', tab, true);
 
     const paymentWrite = update(dbRef, {
         [`orders/${tab}`]: null,
@@ -2224,4 +2356,4 @@ if (document.readyState === 'complete') {
 
 updateNetWidget();
 
-window.selectTable = selectTable; window.setLock = setLock; window.doPay = doPay; window.doReset = doReset; window.changeBillLang = changeBillLang; window.toggleDarkMode = toggleDarkMode; window.scrollToCheckout = scrollToCheckout; window.toggleBillQr = toggleBillQr;
+window.selectTable = selectTable; window.setLock = setLock; window.doPay = doPay; window.doReset = doReset; window.changeBillLang = changeBillLang; window.toggleDarkMode = toggleDarkMode; window.toggleSoundMute = toggleSoundMute; window.scrollToCheckout = scrollToCheckout; window.toggleBillQr = toggleBillQr;
