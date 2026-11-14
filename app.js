@@ -719,16 +719,20 @@ function initSoundMute() {
 }
 initSoundMute();
 
-// Tần số dải trung-cao tối ưu cho loa điện thoại + hòa âm bậc 2/3 giúp nghe cực rõ
+// Tần số dải trung-cao tối ưu cho loa điện thoại + tiếng gõ nhạc cụ gỗ "leng keng" cho +- món
 const SOUND_PATTERNS = {
     nav: [
         { freq: 987.77, endFreq: 880, dur: 0.085, wave: 'sine', vol: 0.95 }
     ],
+    // Thêm món (+): Tiếng "Leng - Keng" đàn gõ gỗ (Marimba/Xylophone) đi lên C6 -> G6
     add: [
-        { freq: 880, endFreq: 1318.51, dur: 0.14, wave: 'triangle', vol: 1.0 }
+        { freq: 1046.50, dur: 0.16, instrument: 'wood', vol: 1.0 },
+        { freq: 1567.98, dur: 0.24, delay: 0.068, instrument: 'wood', vol: 1.0 }
     ],
+    // Bớt món (-): Tiếng "Keng - Leng" đàn gõ gỗ đi xuống D6 -> A5
     sub: [
-        { freq: 783.99, endFreq: 523.25, dur: 0.14, wave: 'triangle', vol: 1.0 }
+        { freq: 1174.66, dur: 0.15, instrument: 'wood', vol: 0.96 },
+        { freq: 880.00, dur: 0.23, delay: 0.068, instrument: 'wood', vol: 0.96 }
     ],
     lock: [
         { freq: 987.77, dur: 0.11, wave: 'sine', vol: 1.0 },
@@ -761,28 +765,58 @@ function buildWavBlobUrl(notes, sampleRate = 22050) {
         const f1 = n.endFreq || f0;
         const vol = n.vol || 1.0;
         const wave = n.wave || 'sine';
+        const isWood = n.instrument === 'wood';
         const startIdx = Math.floor(delay * sampleRate);
         const lenIdx = Math.max(1, Math.floor(dur * sampleRate));
-        const attackSamples = Math.max(1, Math.floor(0.004 * sampleRate));
+        const attackSamples = Math.max(1, Math.floor((isWood ? 0.002 : 0.004) * sampleRate));
         const releaseSamples = Math.max(1, Math.floor(0.015 * sampleRate));
         let phase = 0;
+        let malletPhase = 0;
 
         for (let i = 0; i < lenIdx && (startIdx + i) < numSamples; i++) {
             const t = lenIdx > 1 ? i / (lenIdx - 1) : 0;
+            const elapsedSec = i / sampleRate;
             const freq = f1 !== f0 ? f0 * Math.pow(f1 / f0, t) : f0;
             phase += (2 * Math.PI * freq) / sampleRate;
-            let sample;
-            if (wave === 'triangle') {
-                const cyc = (phase / (2 * Math.PI)) % 1;
-                const tri = 2 * Math.abs(2 * cyc - 1) - 1;
-                sample = tri + 0.35 * Math.sin(2 * phase);
-            } else {
-                sample = Math.sin(phase) + 0.45 * Math.sin(2 * phase) + 0.18 * Math.sin(3 * phase);
-            }
+
             const attack = Math.min(1, i / attackSamples);
             const release = Math.min(1, (lenIdx - 1 - i) / releaseSamples);
-            const sustainDecay = Math.pow(1 - t, 0.42);
-            mix[startIdx + i] += sample * vol * attack * release * sustainDecay;
+
+            if (isWood) {
+                // Mô phỏng thanh gỗ đàn Marimba / Xylophone: bội âm bậc 3 & 4 tắt nhanh + tiếng gõ dùi gỗ
+                const bodyEnv = Math.exp(-elapsedSec * 16.5);
+                const overtone2Env = Math.exp(-elapsedSec * 34);
+                const overtone3Env = Math.exp(-elapsedSec * 58);
+                const overtone4Env = Math.exp(-elapsedSec * 85);
+
+                // Tiếng gõ dùi gỗ ("cốc" siêu ngắn 10ms đầu)
+                let malletKnock = 0;
+                if (elapsedSec < 0.012) {
+                    const knockFreq = 2250 - (elapsedSec / 0.012) * 850;
+                    malletPhase += (2 * Math.PI * knockFreq) / sampleRate;
+                    malletKnock = 0.55 * Math.sin(malletPhase) * Math.exp(-elapsedSec * 340);
+                }
+
+                const woodSample =
+                    Math.sin(phase) * bodyEnv +
+                    0.38 * Math.sin(2 * phase) * overtone2Env +
+                    0.34 * Math.sin(3 * phase) * overtone3Env +
+                    0.22 * Math.sin(4 * phase) * overtone4Env +
+                    malletKnock;
+
+                mix[startIdx + i] += woodSample * vol * attack * release;
+            } else {
+                let sample;
+                if (wave === 'triangle') {
+                    const cyc = (phase / (2 * Math.PI)) % 1;
+                    const tri = 2 * Math.abs(2 * cyc - 1) - 1;
+                    sample = tri + 0.35 * Math.sin(2 * phase);
+                } else {
+                    sample = Math.sin(phase) + 0.45 * Math.sin(2 * phase) + 0.18 * Math.sin(3 * phase);
+                }
+                const sustainDecay = Math.pow(1 - t, 0.42);
+                mix[startIdx + i] += sample * vol * attack * release * sustainDecay;
+            }
         }
     }
 
@@ -933,12 +967,80 @@ function playWebAudioNotes(notes) {
     const dest = sharedAudioMaster || ctx.destination;
     const baseTime = ctx.currentTime;
     for (const n of notes) {
+        const start = baseTime + (n.delay || 0);
+        const dur = n.dur || 0.12;
+        const peak = Math.min(1.0, n.vol || 1.0);
+
+        if (n.instrument === 'wood') {
+            // Âm sắc thanh gỗ Marimba / Xylophone ("leng keng")
+            const bodyOsc = ctx.createOscillator();
+            const ot2Osc = ctx.createOscillator();
+            const ot3Osc = ctx.createOscillator();
+            const ot4Osc = ctx.createOscillator();
+            const malletOsc = ctx.createOscillator();
+
+            const bodyGain = ctx.createGain();
+            const ot2Gain = ctx.createGain();
+            const ot3Gain = ctx.createGain();
+            const ot4Gain = ctx.createGain();
+            const malletGain = ctx.createGain();
+
+            bodyOsc.type = 'sine';
+            bodyOsc.frequency.setValueAtTime(n.freq, start);
+
+            ot2Osc.type = 'sine';
+            ot2Osc.frequency.setValueAtTime(n.freq * 2, start);
+
+            ot3Osc.type = 'sine';
+            ot3Osc.frequency.setValueAtTime(n.freq * 3, start);
+
+            ot4Osc.type = 'sine';
+            ot4Osc.frequency.setValueAtTime(n.freq * 4, start);
+
+            // Tiếng gõ dùi gỗ ngắn ở đầu nốt
+            malletOsc.type = 'triangle';
+            malletOsc.frequency.setValueAtTime(2250, start);
+            malletOsc.frequency.exponentialRampToValueAtTime(1350, start + 0.012);
+
+            bodyGain.gain.setValueAtTime(0.0001, start);
+            bodyGain.gain.linearRampToValueAtTime(peak, start + 0.002);
+            bodyGain.gain.exponentialRampToValueAtTime(0.0001, start + dur);
+
+            ot2Gain.gain.setValueAtTime(0.0001, start);
+            ot2Gain.gain.linearRampToValueAtTime(peak * 0.38, start + 0.002);
+            ot2Gain.gain.exponentialRampToValueAtTime(0.0001, start + Math.min(dur, 0.095));
+
+            ot3Gain.gain.setValueAtTime(0.0001, start);
+            ot3Gain.gain.linearRampToValueAtTime(peak * 0.34, start + 0.0015);
+            ot3Gain.gain.exponentialRampToValueAtTime(0.0001, start + Math.min(dur, 0.055));
+
+            ot4Gain.gain.setValueAtTime(0.0001, start);
+            ot4Gain.gain.linearRampToValueAtTime(peak * 0.22, start + 0.001);
+            ot4Gain.gain.exponentialRampToValueAtTime(0.0001, start + Math.min(dur, 0.036));
+
+            malletGain.gain.setValueAtTime(0.0001, start);
+            malletGain.gain.linearRampToValueAtTime(peak * 0.45, start + 0.001);
+            malletGain.gain.exponentialRampToValueAtTime(0.0001, start + 0.012);
+
+            bodyOsc.connect(bodyGain); bodyGain.connect(dest);
+            ot2Osc.connect(ot2Gain); ot2Gain.connect(dest);
+            ot3Osc.connect(ot3Gain); ot3Gain.connect(dest);
+            ot4Osc.connect(ot4Gain); ot4Gain.connect(dest);
+            malletOsc.connect(malletGain); malletGain.connect(dest);
+
+            const stopAt = start + dur + 0.015;
+            bodyOsc.start(start); bodyOsc.stop(stopAt);
+            ot2Osc.start(start); ot2Osc.stop(stopAt);
+            ot3Osc.start(start); ot3Osc.stop(stopAt);
+            ot4Osc.start(start); ot4Osc.stop(stopAt);
+            malletOsc.start(start); malletOsc.stop(start + 0.015);
+            continue;
+        }
+
         const osc = ctx.createOscillator();
         const overtone2 = ctx.createOscillator();
         const overtone3 = ctx.createOscillator();
         const gain = ctx.createGain();
-        const start = baseTime + (n.delay || 0);
-        const dur = n.dur || 0.12;
 
         osc.type = n.wave || 'sine';
         osc.frequency.setValueAtTime(n.freq, start);
@@ -958,7 +1060,6 @@ function playWebAudioNotes(notes) {
         const g3 = ctx.createGain();
         g3.gain.setValueAtTime(0.16, start);
 
-        const peak = Math.min(1.0, n.vol || 1.0);
         gain.gain.setValueAtTime(0.0001, start);
         gain.gain.linearRampToValueAtTime(peak, start + 0.004);
         gain.gain.setValueAtTime(peak * 0.85, start + dur * 0.65);
