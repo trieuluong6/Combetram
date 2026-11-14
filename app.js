@@ -40,13 +40,21 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 5500) {
 
 // ─── ƯỚC TÍNH PAYLOAD JSON ĐẨY LÊN/XUỐNG FIREBASE (không gồm overhead WebSocket) ───
 let fbDownBytes = 0, fbUpBytes = 0;
+const textEncoder = typeof TextEncoder !== 'undefined' ? new TextEncoder() : null;
 function formatBytes(n) {
     if (n < 1024) return `${n}B`;
     if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)}KB`;
     return `${(n / 1024 / 1024).toFixed(2)}MB`;
 }
 function byteSizeOf(data) {
-    try { return new Blob([JSON.stringify(data)]).size; } catch (e) { return 0; }
+    try {
+        const json = JSON.stringify(data);
+        if (json === undefined) return 0;
+        if (textEncoder) return textEncoder.encode(json).length;
+        return new Blob([json]).size;
+    } catch (e) {
+        return 0;
+    }
 }
 const netFlashAnimations = new WeakMap();
 function flashNetValue(el, direction) {
@@ -339,6 +347,8 @@ function syncActiveLangButton(lang) {
 
 // CACHE THỜI TIẾT
 let weatherCache = { status: 'cloudy', temp: 31, windSpeed: 14.0, windDir: 135 };
+let lastWeatherIconStatus = null;
+let lastWindIconHtml = null;
 
 const SVG_ICONS = {
     sunny:              '<span class="w-icon"><span class="wi-spin">☀️</span></span>',
@@ -368,7 +378,10 @@ function renderWeather(status, temp, windSpeed, windDir) {
         if (status === 'sunny') finalStatus = moonType;
         else if (status === 'partlyCloudy') finalStatus = 'night_partlyCloudy';
     }
-    document.getElementById('w-icon-container').innerHTML = SVG_ICONS[finalStatus] || SVG_ICONS.sunny;
+    if (finalStatus !== lastWeatherIconStatus) {
+        lastWeatherIconStatus = finalStatus;
+        document.getElementById('w-icon-container').innerHTML = SVG_ICONS[finalStatus] || SVG_ICONS.sunny;
+    }
     document.getElementById('w-temp').textContent = `${temp.toFixed(1)}°C`;
     const hub = document.getElementById('weather-hub');
     let windIcon = SVG_ICONS.windNone;
@@ -376,7 +389,10 @@ function renderWeather(status, temp, windSpeed, windDir) {
     if (windSpeed > 5 && windSpeed <= 19) { windIcon = SVG_ICONS.windSlow; }
     else if (windSpeed >= 20 && windSpeed <= 39) { windIcon = SVG_ICONS.windFast; hub.classList.add('wind-warning'); }
     else if (windSpeed >= 40) { windIcon = SVG_ICONS.windStorm; hub.classList.add('wind-danger'); }
-    document.getElementById('w-wind-icon-container').innerHTML = windIcon;
+    if (windIcon !== lastWindIconHtml) {
+        lastWindIconHtml = windIcon;
+        document.getElementById('w-wind-icon-container').innerHTML = windIcon;
+    }
     document.getElementById('w-wind-speed').textContent = `${windSpeed.toFixed(1)} km/h`;
     document.getElementById('w-arrow').style.transform = `rotate(${windDir}deg)`;
 }
@@ -663,6 +679,7 @@ function stopClockInterval() {
 }
 
 document.addEventListener('visibilitychange', () => {
+    document.body.classList.toggle('tab-hidden', document.hidden);
     if (document.hidden) {
         stopTickerInterval();
         stopClockInterval();
@@ -714,13 +731,30 @@ function animateNumber(elementId, newValue) {
 
 // ─── PRESENCE & TRẠNG THÁI MẠNG ────────────────────────────────────────
 const RT_ROOT = 'combetram_v6_rt';
+const PRESENCE_STORAGE_KEY = 'combetram_presence_id';
 const STALE_PRESENCE_MS = 120000;
 const STALE_CURSOR_MS = 45000;
 const USER_COLORS = ['#e53935', '#1e88e5', '#43a047', '#fb8c00', '#8e24aa', '#00acc1', '#d81b60', '#6d4c41', '#3949ab', '#c0ca33'];
 const myColor = USER_COLORS[Math.floor(Math.random() * USER_COLORS.length)];
 const onlineRef = ref(database, '.info/connected');
 const presenceListRef = ref(database, `${RT_ROOT}/presence`);
-const myPresenceRef = push(presenceListRef);
+
+function getOrCreatePresenceRef() {
+    let storedId = null;
+    try {
+        storedId = sessionStorage.getItem(PRESENCE_STORAGE_KEY);
+    } catch (e) {}
+    if (storedId && /^[A-Za-z0-9_-]{6,64}$/.test(storedId)) {
+        return child(presenceListRef, storedId);
+    }
+    const createdRef = push(presenceListRef);
+    try {
+        if (createdRef.key) sessionStorage.setItem(PRESENCE_STORAGE_KEY, createdRef.key);
+    } catch (e) {}
+    return createdRef;
+}
+
+const myPresenceRef = getOrCreatePresenceRef();
 const myPresenceId = myPresenceRef.key;
 const cursorsRef = ref(database, `${RT_ROOT}/cursors`);
 const myCursorRef = child(cursorsRef, myPresenceId);
@@ -730,6 +764,28 @@ const myFocusRef = child(focusRef, myPresenceId);
 let isFirebaseConnected = false;
 let hasEverConnected = false;
 let lastPresenceSnap = null;
+const cleanedStaleKeys = new Set();
+
+function cleanupStaleRealtimeNodes(parentRef, prefix, snapVal, maxAgeMs) {
+    if (!isFirebaseConnected || !snapVal || typeof snapVal !== 'object') return;
+    const now = getServerNow();
+    for (const [id, entry] of Object.entries(snapVal)) {
+        if (id === myPresenceId) continue;
+        const ts = Number(entry?.ts);
+        if (Number.isFinite(ts) && (now - ts) >= maxAgeMs) {
+            const cacheKey = `${prefix}:${id}:${ts}`;
+            if (cleanedStaleKeys.has(cacheKey)) continue;
+            cleanedStaleKeys.add(cacheKey);
+            if (cleanedStaleKeys.size > 200) {
+                const oldest = cleanedStaleKeys.values().next().value;
+                cleanedStaleKeys.delete(oldest);
+            }
+            remove(child(parentRef, id)).catch(() => {
+                cleanedStaleKeys.delete(cacheKey);
+            });
+        }
+    }
+}
 
 function updateNetworkStatusBadge() {
     const badge = document.getElementById('offline-badge');
@@ -754,6 +810,7 @@ function renderPresenceCount(snapVal) {
 onValue(presenceListRef, (snap) => {
     lastPresenceSnap = snap.val();
     renderPresenceCount(lastPresenceSnap);
+    cleanupStaleRealtimeNodes(presenceListRef, 'presence', lastPresenceSnap, STALE_PRESENCE_MS);
 });
 
 function refreshPresenceHeartbeat() {
@@ -766,7 +823,15 @@ function refreshPresenceHeartbeat() {
 setInterval(() => {
     if (!document.hidden) refreshPresenceHeartbeat();
     renderPresenceCount(lastPresenceSnap);
-    if (lastCursorSnap) renderRemoteCursors(lastCursorSnap);
+    cleanupStaleRealtimeNodes(presenceListRef, 'presence', lastPresenceSnap, STALE_PRESENCE_MS);
+    if (lastCursorSnap) {
+        renderRemoteCursors(lastCursorSnap);
+        cleanupStaleRealtimeNodes(cursorsRef, 'cursors', lastCursorSnap, STALE_CURSOR_MS);
+    }
+    if (lastFocusSnap) {
+        renderRemoteFocus(lastFocusSnap);
+        cleanupStaleRealtimeNodes(focusRef, 'focus', lastFocusSnap, STALE_CURSOR_MS);
+    }
 }, 30000);
 
 onValue(onlineRef, (snap) => {
@@ -782,6 +847,9 @@ onValue(onlineRef, (snap) => {
         if (currentTab) {
             set(myCursorRef, { table: currentTab, color: myColor, ts: getServerNow() }).catch(() => {});
         }
+        cleanupStaleRealtimeNodes(presenceListRef, 'presence', lastPresenceSnap, STALE_PRESENCE_MS);
+        cleanupStaleRealtimeNodes(cursorsRef, 'cursors', lastCursorSnap, STALE_CURSOR_MS);
+        cleanupStaleRealtimeNodes(focusRef, 'focus', lastFocusSnap, STALE_CURSOR_MS);
     } else {
         updateNetworkStatusBadge();
     }
@@ -903,7 +971,11 @@ function renderRemoteCursors(snapVal) {
 }
 
 let lastCursorSnap = null;
-onValue(cursorsRef, (snap) => { lastCursorSnap = snap.val(); renderRemoteCursors(lastCursorSnap); });
+onValue(cursorsRef, (snap) => {
+    lastCursorSnap = snap.val();
+    renderRemoteCursors(lastCursorSnap);
+    cleanupStaleRealtimeNodes(cursorsRef, 'cursors', lastCursorSnap, STALE_CURSOR_MS);
+});
 
 let cursorRenderTicking = false;
 function scheduleRenderRemoteCursors() {
@@ -987,7 +1059,11 @@ function renderRemoteFocus(snapVal) {
 }
 
 let lastFocusSnap = null;
-onValue(focusRef, (snap) => { lastFocusSnap = snap.val(); renderRemoteFocus(lastFocusSnap); });
+onValue(focusRef, (snap) => {
+    lastFocusSnap = snap.val();
+    renderRemoteFocus(lastFocusSnap);
+    cleanupStaleRealtimeNodes(focusRef, 'focus', lastFocusSnap, STALE_CURSOR_MS);
+});
 
 // ─── MENU + THANH NHẢY NHANH THEO NHÓM MÓN ─────────────────────────────
 const SHORT_CAT_LABELS = ['Cơm / Mỳ', 'Hấp / Cháo', 'Món thêm', 'Nước uống', 'Bia'];
@@ -1161,8 +1237,10 @@ onValue(ordersRef, snap => {
     }
     data.orders = nextOrders;
     firstOrdersLoad = false;
-    if (initialDataReady && changed.size) cleanupStaleTimes(changed);
-    if (changed.size) scheduleRefresh(changed, true);
+    if (initialDataReady && changed.size) {
+        cleanupStaleTimes(changed);
+        scheduleRefresh(changed, true);
+    }
     markInitialBranchLoaded('orders');
 });
 
@@ -1170,7 +1248,7 @@ onValue(lockedRef, snap => {
     const nextLocked = snap.val() || {};
     const changed = changedTableIds(data.locked, nextLocked);
     data.locked = nextLocked;
-    if (changed.size) scheduleRefresh(changed, true);
+    if (initialDataReady && changed.size) scheduleRefresh(changed, true);
     markInitialBranchLoaded('locked');
 });
 
@@ -1178,7 +1256,7 @@ onValue(timesRef, snap => {
     const nextTimes = snap.val() || {};
     const changed = changedTableIds(data.times, nextTimes);
     data.times = nextTimes;
-    if (changed.size) scheduleRefresh(changed);
+    if (initialDataReady && changed.size) scheduleRefresh(changed);
     markInitialBranchLoaded('times');
 });
 
@@ -1220,7 +1298,7 @@ function selectTable(n, options = {}) {
     }
 }
 
-// ─── Debounce Firebase write 250ms ─────────────────────────────────────
+// ─── Debounce Firebase write 250ms & Flush tức thì khi chốt đơn ─────────
 const debounceTimers = {};
 const debounceVersions = {};
 const pendingStartTimes = new Set();
@@ -1236,6 +1314,77 @@ function clearPendingForTable(tab) {
             delete debounceVersions[key];
         }
     }
+}
+
+function commitPendingItem(tab, id, expectedVersion = null) {
+    const key = `${tab}_${id}`;
+    if (expectedVersion !== null && debounceVersions[key] !== expectedVersion) return;
+
+    const version = expectedVersion !== null ? expectedVersion : ((debounceVersions[key] || 0) + 1);
+    debounceVersions[key] = version;
+    clearTimeout(debounceTimers[key]);
+    delete debounceTimers[key];
+
+    const finalQty = pendingUpdates[tab]?.[id];
+    if (finalQty === undefined) {
+        if (debounceVersions[key] === version) delete debounceVersions[key];
+        return;
+    }
+
+    if (!data.times?.[tab] && !pendingStartTimes.has(tab) && finalQty > 0) {
+        pendingStartTimes.add(tab);
+        const startTs = getServerNow();
+        set(child(timesRef, String(tab)), startTs)
+            .catch(err => console.error('[times] Lỗi ghi mốc giờ Firebase:', err))
+            .finally(() => pendingStartTimes.delete(tab));
+    }
+
+    const sentQty = finalQty;
+    update(child(ordersRef, String(tab)), { [id]: sentQty > 0 ? sentQty : null })
+        .then(() => {
+            if (debounceVersions[key] === version && pendingUpdates[tab]?.[id] === sentQty) {
+                delete pendingUpdates[tab][id];
+                if (Object.keys(pendingUpdates[tab]).length === 0) delete pendingUpdates[tab];
+            }
+            queueMicrotask(() => {
+                if (!effectiveTableHasItems(tab)) remove(child(timesRef, String(tab))).catch(() => {});
+            });
+        })
+        .catch(err => {
+            console.error('[orders] Lỗi ghi Firebase:', err);
+            if (debounceVersions[key] === version && pendingUpdates[tab]?.[id] === sentQty) {
+                delete pendingUpdates[tab][id];
+                if (Object.keys(pendingUpdates[tab]).length === 0) delete pendingUpdates[tab];
+                scheduleRefresh(new Set([tab]), currentTab === tab);
+            }
+        })
+        .finally(() => {
+            if (debounceVersions[key] === version) {
+                delete debounceTimers[key];
+                delete debounceVersions[key];
+            }
+        });
+}
+
+function flushPendingForTable(tab) {
+    const pending = pendingUpdates[tab];
+    if (!pending) return;
+    for (const rawId of Object.keys(pending)) {
+        commitPendingItem(tab, Number(rawId));
+    }
+}
+
+function getMergedOrder(tab) {
+    const serverOrder = data.orders?.[tab] || {};
+    const pendingOrder = pendingUpdates[tab];
+    if (!pendingOrder) return serverOrder;
+    const merged = { ...serverOrder };
+    for (const [id, qty] of Object.entries(pendingOrder)) {
+        const cleanQty = Math.max(0, Number(qty) || 0);
+        if (cleanQty > 0) merged[id] = cleanQty;
+        else delete merged[id];
+    }
+    return merged;
 }
 
 const qtyBumpAnimations = new WeakMap();
@@ -1323,42 +1472,7 @@ function change(id, delta) {
     const version = (debounceVersions[key] || 0) + 1;
     debounceVersions[key] = version;
     clearTimeout(debounceTimers[key]);
-    debounceTimers[key] = setTimeout(() => {
-        if (debounceVersions[key] !== version) return;
-        const finalQty = pendingUpdates[tab]?.[id];
-        if (finalQty === undefined) {
-            if (debounceVersions[key] === version) {
-                delete debounceTimers[key];
-                delete debounceVersions[key];
-            }
-            return;
-        }
-        if (!data.times?.[tab] && !pendingStartTimes.has(tab) && finalQty > 0) {
-            pendingStartTimes.add(tab);
-            const startTs = getServerNow();
-            set(child(timesRef, String(tab)), startTs)
-                .catch(err => console.error('[times] Lỗi ghi mốc giờ Firebase:', err))
-                .finally(() => pendingStartTimes.delete(tab));
-        }
-        const sentQty = finalQty;
-        update(child(ordersRef, String(tab)), { [id]: sentQty > 0 ? sentQty : null })
-            .then(() => {
-                if (debounceVersions[key] === version && pendingUpdates[tab]?.[id] === sentQty) {
-                    delete pendingUpdates[tab][id];
-                    if (Object.keys(pendingUpdates[tab]).length === 0) delete pendingUpdates[tab];
-                }
-                queueMicrotask(() => {
-                    if (!effectiveTableHasItems(tab)) remove(child(timesRef, String(tab))).catch(() => {});
-                });
-            })
-            .catch(err => console.error('[orders] Lỗi ghi Firebase:', err))
-            .finally(() => {
-                if (debounceVersions[key] === version) {
-                    delete debounceTimers[key];
-                    delete debounceVersions[key];
-                }
-            });
-    }, 250);
+    debounceTimers[key] = setTimeout(() => commitPendingItem(tab, id, version), 250);
 }
 
 function flashRow(id, delta) {
@@ -1539,7 +1653,7 @@ async function renderBillAsync(tab) {
     const langData = await getLangData(targetLang);
     if (currentTab !== tab || currentBillLang !== targetLang || !data.locked?.[tab]) return;
 
-    let h = "", t = 0, my = data.orders[tab] || {};
+    let h = "", t = 0, my = getMergedOrder(tab);
     document.getElementById('txt-total-label').textContent = langData.total;
     document.getElementById('txt-lang-flag').textContent = langData.flag;
     let idx = 0;
@@ -1548,7 +1662,8 @@ async function renderBillAsync(tab) {
         if (itm && my[id] > 0) {
             let p = itm.price * my[id]; t += p;
             let nameShow = (targetLang !== 'vi' && langData.items?.[itm.id]) ? langData.items[itm.id] : itm.name;
-            h += `<div class="bill-row" style="animation-delay: ${idx * 0.08}s">
+            const delaySec = Math.min(idx * 0.05, 0.35).toFixed(2);
+            h += `<div class="bill-row" style="animation-delay: ${delaySec}s">
                     <span class="item-name">${nameShow}</span>
                     <span class="item-qty">x${my[id]}</span>
                     <div class="divider"></div>
@@ -1566,6 +1681,7 @@ function setLock(v) {
     if (!currentTab || paymentInProgress) return;
     triggerHaptic(v ? 'lock' : 'nav');
     if (v) {
+        flushPendingForTable(currentTab);
         preloadBillAssets();
         resetBillQrView(true);
     }
@@ -1584,13 +1700,13 @@ function doPay() {
 
     const tab = currentTab;
     const lockedBeforeConfirm = !!data.locked?.[tab];
-    const orderSnapshotBeforeConfirm = JSON.stringify(data.orders?.[tab] || {});
+    const orderSnapshotBeforeConfirm = JSON.stringify(getMergedOrder(tab));
 
     if (!confirm("Xác nhận thanh toán?")) return;
 
     // Kiểm tra xem máy khác có vừa mở khóa hoặc sửa đơn trong lúc hộp thoại xác nhận đang mở không
     const lockedAfterConfirm = !!data.locked?.[tab];
-    const orderSnapshotAfterConfirm = JSON.stringify(data.orders?.[tab] || {});
+    const orderSnapshotAfterConfirm = JSON.stringify(getMergedOrder(tab));
     if ((lockedBeforeConfirm && !lockedAfterConfirm) || orderSnapshotBeforeConfirm !== orderSnapshotAfterConfirm) {
         alert("Đơn bàn này vừa được cập nhật hoặc mở khóa từ thiết bị khác. Vui lòng kiểm tra lại bill trước khi thanh toán!");
         scheduleRefresh(new Set([tab]), true);

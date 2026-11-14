@@ -568,8 +568,41 @@ html.paper-flip-pending .flip-clock-container > .flip-colon {
     will-change: transform, opacity;
 }
 
+/* Tạm dừng animation nền khi ẩn tab để tiết kiệm pin */
+body.tab-hidden .status-empty,
+body.tab-hidden .status-normal,
+body.tab-hidden .status-crowded::before,
+body.tab-hidden .online-dot,
+body.tab-hidden .wi-spin,
+body.tab-hidden .wi-pulse,
+body.tab-hidden .wi-sway,
+body.tab-hidden .wi-drop,
+body.tab-hidden .wi-flash,
+body.tab-hidden .wi-blow,
+body.tab-hidden .wi-blow2,
+body.tab-hidden .wi-blow3,
+body.tab-hidden .flip-colon,
+body.tab-hidden .has-guest::after,
+body.tab-hidden .is-locked::before,
+body.tab-hidden .is-locked-special::before,
+body.tab-hidden .total-container,
+body.tab-hidden .arrow-shaft::after,
+body.tab-hidden .arrow-head::after,
+body.tab-hidden .table-card.has-viewer,
+body.tab-hidden #scroll-to-checkout {
+    animation-play-state: paused !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
     #paper-flip-overlay { display: none; }
+    .status-empty,
+    .status-normal,
+    .status-crowded::before,
+    .is-locked::before,
+    .is-locked-special::before,
+    .has-guest::after {
+        animation: none !important;
+    }
     html.paper-flip-pending #weather-hub,
     html.paper-flip-pending #presence-count,
     html.paper-flip-pending #dark-toggle,
