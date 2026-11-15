@@ -7,9 +7,11 @@ import {
     update as _fbUpdate,
     remove as _fbRemove,
     onValue as _fbOnValue,
+    onChildAdded as _fbOnChildAdded,
+    onChildChanged as _fbOnChildChanged,
+    onChildRemoved as _fbOnChildRemoved,
     push as _fbPush,
     onDisconnect,
-    increment,
     runTransaction
 } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-database.js";
 
@@ -37,6 +39,13 @@ onValue(ref(database, '.info/serverTimeOffset'), (snap) => {
 });
 function getServerNow() {
     return Date.now() + serverTimeOffset;
+}
+function formatLocalDateKey(ts = getServerNow()) {
+    const d = new Date(ts);
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
 }
 
 // ─── HELPER FETCH CÓ TIMEOUT CHỐNG TREO PROXY/API ─────────────────────
@@ -98,9 +107,39 @@ function set(refArg, value) { fbUpBytes += byteSizeOf(value); updateNetWidget('u
 function update(refArg, value) { fbUpBytes += byteSizeOf(value); updateNetWidget('up'); return _fbUpdate(refArg, value); }
 function remove(refArg) { fbUpBytes += byteSizeOf(null); updateNetWidget('up'); return _fbRemove(refArg); }
 function push(refArg, value) { if (value !== undefined) { fbUpBytes += byteSizeOf(value); updateNetWidget('up'); } return _fbPush(refArg, value); }
+function transaction(refArg, updateFn, options) {
+    return runTransaction(refArg, updateFn, options).then((res) => {
+        if (res?.committed) {
+            fbUpBytes += byteSizeOf(res.snapshot?.val());
+            updateNetWidget('up');
+        }
+        return res;
+    });
+}
 function onValue(refArg, callback, ...rest) {
     return _fbOnValue(refArg, (snap) => {
         fbDownBytes += byteSizeOf(snap.val());
+        updateNetWidget('down');
+        callback(snap);
+    }, ...rest);
+}
+function onChildAdded(refArg, callback, ...rest) {
+    return _fbOnChildAdded(refArg, (snap, prevKey) => {
+        fbDownBytes += byteSizeOf(snap.val());
+        updateNetWidget('down');
+        callback(snap, prevKey);
+    }, ...rest);
+}
+function onChildChanged(refArg, callback, ...rest) {
+    return _fbOnChildChanged(refArg, (snap, prevKey) => {
+        fbDownBytes += byteSizeOf(snap.val());
+        updateNetWidget('down');
+        callback(snap, prevKey);
+    }, ...rest);
+}
+function onChildRemoved(refArg, callback, ...rest) {
+    return _fbOnChildRemoved(refArg, (snap) => {
+        fbDownBytes += byteSizeOf(null);
         updateNetWidget('down');
         callback(snap);
     }, ...rest);
@@ -246,6 +285,14 @@ let billWasShown = false;
 let paymentInProgress = false;
 const localPaymentEchoTables = new Set();
 
+function getTableDisplayName(n) {
+    const num = Number(n);
+    if (num === 7) return 'BÀN TRONG HIÊN';
+    if (num === 8) return 'NGOÀI ĐƯỜNG (TRÁI)';
+    if (num === 9) return 'NGOÀI ĐƯỜNG (PHẢI)';
+    return `BÀN ${num}`;
+}
+
 // ─── BILL ↔ QR: lật card + co/giãn chiều cao + cuộn đồng bộ ───
 const BILL_FLIP_MS = 560;
 let billViewMode = 'bill';
@@ -388,6 +435,7 @@ const DRINK_ITEM_IDS = new Set(
 const ordersRef = child(dbRef, 'orders');
 const lockedRef = child(dbRef, 'locked');
 const timesRef = child(dbRef, 'times');
+const historyRef = child(dbRef, 'history');
 
 // Cache DOM cố định cho các đường render nóng.
 const TABLE_DOM = Array.from({ length: 9 }, (_, idx) => {
@@ -411,6 +459,20 @@ function shallowRecordEqual(a, b) {
     if (aKeys.length !== bKeys.length) return false;
     for (const key of aKeys) if (a[key] !== b[key]) return false;
     return true;
+}
+
+function normalizeOrderMap(raw) {
+    const out = {};
+    if (!raw || typeof raw !== 'object') return out;
+    for (const [k, v] of Object.entries(raw)) {
+        const qty = Math.max(0, Number(v) || 0);
+        if (qty > 0) out[String(k)] = qty;
+    }
+    return out;
+}
+
+function areOrdersEqual(a, b) {
+    return shallowRecordEqual(normalizeOrderMap(a), normalizeOrderMap(b));
 }
 
 function changedTableIds(prev, next) {
@@ -1298,11 +1360,12 @@ function animateNumber(elementId, newValue, suffix = '') {
     requestAnimationFrame(updateAnim);
 }
 
-// ─── PRESENCE & TRẠNG THÁI MẠNG ────────────────────────────────────────
+// ─── PRESENCE & TRẠNG THÁI MẠNG (TỐI ƯU CHILD LISTENERS + GỘP ACTIVITY) ──
 const RT_ROOT = 'combetram_v6_rt';
 const PRESENCE_STORAGE_KEY = 'combetram_presence_id';
 const STALE_PRESENCE_MS = 120000;
 const STALE_CURSOR_MS = 45000;
+const FOCUS_TTL_MS = 1500;
 const USER_COLORS = ['#e53935', '#1e88e5', '#43a047', '#fb8c00', '#8e24aa', '#00acc1', '#d81b60', '#6d4c41', '#3949ab', '#c0ca33'];
 const myColor = USER_COLORS[Math.floor(Math.random() * USER_COLORS.length)];
 const onlineRef = ref(database, '.info/connected');
@@ -1327,13 +1390,15 @@ const myPresenceRef = getOrCreatePresenceRef();
 const myPresenceId = myPresenceRef.key;
 const cursorsRef = ref(database, `${RT_ROOT}/cursors`);
 const myCursorRef = child(cursorsRef, myPresenceId);
-const focusRef = ref(database, `${RT_ROOT}/focus`);
-const myFocusRef = child(focusRef, myPresenceId);
-const sfxRef = ref(database, `${RT_ROOT}/sfx`);
+// Gộp focus + sfx thành 1 node ephemeral duy nhất trên mỗi user, tự hết hạn cục bộ sau FOCUS_TTL_MS (bỏ lệnh remove() thứ 2)
+const activityRef = ref(database, `${RT_ROOT}/activity`);
+const myActivityRef = child(activityRef, myPresenceId);
 
 let isFirebaseConnected = false;
 let hasEverConnected = false;
-let lastPresenceSnap = null;
+const presenceMap = {};
+const cursorsMap = {};
+const activityMap = {};
 const cleanedStaleKeys = new Set();
 
 function cleanupStaleRealtimeNodes(parentRef, prefix, snapVal, maxAgeMs) {
@@ -1377,10 +1442,27 @@ function renderPresenceCount(snapVal) {
     if (el) el.textContent = Math.max(1, entries.length);
 }
 
-onValue(presenceListRef, (snap) => {
-    lastPresenceSnap = snap.val();
-    renderPresenceCount(lastPresenceSnap);
-    cleanupStaleRealtimeNodes(presenceListRef, 'presence', lastPresenceSnap, STALE_PRESENCE_MS);
+function bindChildMap(parentRef, targetMap, onChanged) {
+    onChildAdded(parentRef, (snap) => {
+        if (!snap.key) return;
+        targetMap[snap.key] = snap.val();
+        onChanged(snap.key, targetMap[snap.key], 'added');
+    });
+    onChildChanged(parentRef, (snap) => {
+        if (!snap.key) return;
+        targetMap[snap.key] = snap.val();
+        onChanged(snap.key, targetMap[snap.key], 'changed');
+    });
+    onChildRemoved(parentRef, (snap) => {
+        if (!snap.key) return;
+        delete targetMap[snap.key];
+        onChanged(snap.key, null, 'removed');
+    });
+}
+
+bindChildMap(presenceListRef, presenceMap, () => {
+    renderPresenceCount(presenceMap);
+    cleanupStaleRealtimeNodes(presenceListRef, 'presence', presenceMap, STALE_PRESENCE_MS);
 });
 
 function refreshPresenceHeartbeat() {
@@ -1392,16 +1474,12 @@ function refreshPresenceHeartbeat() {
 }
 setInterval(() => {
     if (!document.hidden) refreshPresenceHeartbeat();
-    renderPresenceCount(lastPresenceSnap);
-    cleanupStaleRealtimeNodes(presenceListRef, 'presence', lastPresenceSnap, STALE_PRESENCE_MS);
-    if (lastCursorSnap) {
-        renderRemoteCursors(lastCursorSnap);
-        cleanupStaleRealtimeNodes(cursorsRef, 'cursors', lastCursorSnap, STALE_CURSOR_MS);
-    }
-    if (lastFocusSnap) {
-        renderRemoteFocus(lastFocusSnap);
-        cleanupStaleRealtimeNodes(focusRef, 'focus', lastFocusSnap, STALE_CURSOR_MS);
-    }
+    renderPresenceCount(presenceMap);
+    cleanupStaleRealtimeNodes(presenceListRef, 'presence', presenceMap, STALE_PRESENCE_MS);
+    renderRemoteCursors(cursorsMap);
+    cleanupStaleRealtimeNodes(cursorsRef, 'cursors', cursorsMap, STALE_CURSOR_MS);
+    renderRemoteFocus(activityMap);
+    cleanupStaleRealtimeNodes(activityRef, 'activity', activityMap, STALE_CURSOR_MS);
 }, 30000);
 
 onValue(onlineRef, (snap) => {
@@ -1411,15 +1489,15 @@ onValue(onlineRef, (snap) => {
         updateNetworkStatusBadge();
         onDisconnect(myPresenceRef).remove().catch(() => {});
         onDisconnect(myCursorRef).remove().catch(() => {});
-        onDisconnect(myFocusRef).remove().catch(() => {});
+        onDisconnect(myActivityRef).remove().catch(() => {});
         set(myPresenceRef, { color: myColor, ts: getServerNow() })
             .catch(e => console.error('[presence] LỖI GHI PRESENCE:', e.message));
         if (currentTab) {
             set(myCursorRef, { table: currentTab, color: myColor, ts: getServerNow() }).catch(() => {});
         }
-        cleanupStaleRealtimeNodes(presenceListRef, 'presence', lastPresenceSnap, STALE_PRESENCE_MS);
-        cleanupStaleRealtimeNodes(cursorsRef, 'cursors', lastCursorSnap, STALE_CURSOR_MS);
-        cleanupStaleRealtimeNodes(focusRef, 'focus', lastFocusSnap, STALE_CURSOR_MS);
+        cleanupStaleRealtimeNodes(presenceListRef, 'presence', presenceMap, STALE_PRESENCE_MS);
+        cleanupStaleRealtimeNodes(cursorsRef, 'cursors', cursorsMap, STALE_CURSOR_MS);
+        cleanupStaleRealtimeNodes(activityRef, 'activity', activityMap, STALE_CURSOR_MS);
     } else {
         updateNetworkStatusBadge();
     }
@@ -1539,18 +1617,16 @@ function renderRemoteCursors(snapVal) {
     }
 }
 
-let lastCursorSnap = null;
-onValue(cursorsRef, (snap) => {
-    lastCursorSnap = snap.val();
-    renderRemoteCursors(lastCursorSnap);
-    cleanupStaleRealtimeNodes(cursorsRef, 'cursors', lastCursorSnap, STALE_CURSOR_MS);
+bindChildMap(cursorsRef, cursorsMap, () => {
+    renderRemoteCursors(cursorsMap);
+    cleanupStaleRealtimeNodes(cursorsRef, 'cursors', cursorsMap, STALE_CURSOR_MS);
 });
 
 let cursorRenderTicking = false;
 function scheduleRenderRemoteCursors() {
     if (cursorRenderTicking) return;
     cursorRenderTicking = true;
-    requestAnimationFrame(() => { renderRemoteCursors(lastCursorSnap); cursorRenderTicking = false; });
+    requestAnimationFrame(() => { renderRemoteCursors(cursorsMap); cursorRenderTicking = false; });
 }
 window.addEventListener('resize', scheduleRenderRemoteCursors);
 window.addEventListener('scroll', scheduleRenderRemoteCursors, { passive: true });
@@ -1563,129 +1639,126 @@ function broadcastCursor(tableNum) {
     lastCursorBroadcastTs = now;
     if (tableNum) set(myCursorRef, { table: tableNum, color: myColor, ts: getServerNow() }).catch(() => {});
     else remove(myCursorRef).catch(() => {});
-    broadcastFocus(null);
 }
 
-// ─── CLICK-TO-FOCUS (chỉ gửi remove khi thật sự có focus đang bật) ────
-let lastFocusBroadcast = 0, focusClearTimer = null, hasActiveFocus = false;
-function broadcastFocus(itemId) {
-    if (itemId === null) {
-        clearTimeout(focusClearTimer);
-        focusClearTimer = null;
-        if (hasActiveFocus) {
-            hasActiveFocus = false;
-            remove(myFocusRef).catch(() => {});
-        }
+// ─── GỘP FOCUS + SFX VÀO 1 GÓI TIN EPHEMERAL DUY NHẤT (TIẾT KIỆM WRITE) ─
+let localActivitySeq = 0;
+let lastRemoteSfxTs = 0;
+let pendingActivityTimer = null;
+let pendingActivityPayload = null;
+const lastHandledActivitySeq = {};
+const remoteFocusExpireTimers = {};
+
+function broadcastActivity({ sfx = null, tableId = currentTab, itemId = null, immediate = false } = {}) {
+    if (!isFirebaseConnected) return;
+    const payload = {
+        table: Number(tableId) || 0,
+        itemId: itemId !== null && itemId !== undefined ? Number(itemId) : null,
+        color: myColor,
+        sfx: sfx || null,
+        seq: ++localActivitySeq,
+        ts: getServerNow()
+    };
+    if (immediate) {
+        clearTimeout(pendingActivityTimer);
+        pendingActivityTimer = null;
+        pendingActivityPayload = null;
+        set(myActivityRef, payload).catch(() => {});
         return;
     }
-    const now = Date.now();
-    if (now - lastFocusBroadcast > 120) {
-        lastFocusBroadcast = now;
-        hasActiveFocus = true;
-        set(myFocusRef, { table: currentTab, itemId, color: myColor, ts: getServerNow() }).catch(() => {});
+    pendingActivityPayload = payload;
+    if (!pendingActivityTimer) {
+        pendingActivityTimer = setTimeout(() => {
+            pendingActivityTimer = null;
+            const toSend = pendingActivityPayload;
+            pendingActivityPayload = null;
+            if (toSend) set(myActivityRef, toSend).catch(() => {});
+        }, 80);
     }
-    clearTimeout(focusClearTimer);
-    focusClearTimer = setTimeout(() => {
-        focusClearTimer = null;
-        if (hasActiveFocus) {
-            hasActiveFocus = false;
-            remove(myFocusRef).catch(() => {});
-        }
-    }, 1500);
 }
 
 const remoteFocusRows = {};
+function clearRemoteFocusEntry(id) {
+    clearTimeout(remoteFocusExpireTimers[id]);
+    delete remoteFocusExpireTimers[id];
+    const prev = remoteFocusRows[id];
+    if (!prev) return;
+    if (prev.rowEl) {
+        prev.rowEl.classList.remove('remote-focus');
+        prev.rowEl.style.removeProperty('--focus-color');
+    }
+    if (prev.tagEl) prev.tagEl.remove();
+    delete remoteFocusRows[id];
+}
+
 function renderRemoteFocus(snapVal) {
     const now = getServerNow();
     const entries = Object.entries(snapVal || {}).filter(([id, f]) => {
-        if (id === myPresenceId || !f) return false;
+        if (id === myPresenceId || !f || !f.itemId) return false;
         const ts = Number(f.ts);
-        return !Number.isFinite(ts) || (now - ts) < STALE_CURSOR_MS;
+        return Number.isFinite(ts) && (now - ts) < FOCUS_TTL_MS;
     });
+
+    const activeIds = new Set(entries.map(([id]) => id));
     Object.keys(remoteFocusRows).forEach(id => {
-        const stillActive = entries.find(([eid, f]) => eid === id && f.table === currentTab);
-        if (!stillActive) {
-            const prev = remoteFocusRows[id];
-            if (prev.rowEl) { prev.rowEl.classList.remove('remote-focus'); prev.rowEl.style.removeProperty('--focus-color'); }
-            if (prev.tagEl) prev.tagEl.remove();
-            delete remoteFocusRows[id];
+        const entry = entries.find(([eid]) => eid === id)?.[1];
+        if (!activeIds.has(id) || !entry || entry.table !== currentTab) {
+            clearRemoteFocusEntry(id);
         }
     });
+
     if (!currentTab) return;
     entries.forEach(([id, f]) => {
         if (f.table !== currentTab) return;
         const row = ITEM_DOM.get(Number(f.itemId))?.row;
         if (!row) return;
         const prev = remoteFocusRows[id];
-        if (prev && prev.rowEl && prev.rowEl !== row) { prev.rowEl.classList.remove('remote-focus'); prev.rowEl.style.removeProperty('--focus-color'); if (prev.tagEl) prev.tagEl.remove(); }
+        if (prev && prev.rowEl && prev.rowEl !== row) {
+            prev.rowEl.classList.remove('remote-focus');
+            prev.rowEl.style.removeProperty('--focus-color');
+            if (prev.tagEl) prev.tagEl.remove();
+        }
         row.classList.add('remote-focus');
         row.style.setProperty('--focus-color', f.color || '#999');
         let tag = (prev && prev.rowEl === row) ? prev.tagEl : null;
-        if (!tag) { tag = document.createElement('span'); tag.className = 'remote-focus-tag'; tag.textContent = '✏️'; row.appendChild(tag); requestAnimationFrame(() => tag.classList.add('visible')); }
+        if (!tag) {
+            tag = document.createElement('span');
+            tag.className = 'remote-focus-tag';
+            tag.textContent = '✏️';
+            row.appendChild(tag);
+            requestAnimationFrame(() => tag.classList.add('visible'));
+        }
         tag.style.background = f.color || '#999';
         remoteFocusRows[id] = { rowEl: row, tagEl: tag };
+
+        const remainingMs = Math.max(80, FOCUS_TTL_MS - Math.max(0, now - Number(f.ts)));
+        clearTimeout(remoteFocusExpireTimers[id]);
+        remoteFocusExpireTimers[id] = setTimeout(() => {
+            clearRemoteFocusEntry(id);
+        }, remainingMs);
     });
 }
 
-let lastFocusSnap = null;
-onValue(focusRef, (snap) => {
-    lastFocusSnap = snap.val();
-    renderRemoteFocus(lastFocusSnap);
-    cleanupStaleRealtimeNodes(focusRef, 'focus', lastFocusSnap, STALE_CURSOR_MS);
-});
-
-// ─── ĐỒNG BỘ ÂM THANH REALTIME CHO TẤT CẢ USER KHI CHỈNH SỬA ─────────────
-let localSfxSeq = 0;
-let firstSfxLoad = true;
-let lastHandledSfxKey = '';
-let lastRemoteSfxTs = 0;
-let pendingItemSfxTimer = null;
-let pendingItemSfxPayload = null;
-
-function broadcastSfx(type, tableId = currentTab, immediate = false) {
-    if (!isFirebaseConnected) return;
-    const payload = {
-        type,
-        by: myPresenceId,
-        table: Number(tableId) || 0,
-        seq: ++localSfxSeq,
-        ts: getServerNow()
-    };
-    if (immediate) {
-        clearTimeout(pendingItemSfxTimer);
-        pendingItemSfxTimer = null;
-        pendingItemSfxPayload = null;
-        set(sfxRef, payload).catch(() => {});
+bindChildMap(activityRef, activityMap, (id, ev, eventType) => {
+    if (eventType === 'removed') {
+        delete lastHandledActivitySeq[id];
+        clearRemoteFocusEntry(id);
         return;
     }
-    pendingItemSfxPayload = payload;
-    if (!pendingItemSfxTimer) {
-        pendingItemSfxTimer = setTimeout(() => {
-            pendingItemSfxTimer = null;
-            const toSend = pendingItemSfxPayload;
-            pendingItemSfxPayload = null;
-            if (toSend) set(sfxRef, toSend).catch(() => {});
-        }, 70);
+    if (!ev || id === myPresenceId) return;
+
+    const seqKey = `${ev.seq || 0}_${ev.ts || 0}`;
+    if (seqKey !== lastHandledActivitySeq[id]) {
+        lastHandledActivitySeq[id] = seqKey;
+        const ts = Number(ev.ts);
+        if (ev.sfx && Number.isFinite(ts) && Math.abs(getServerNow() - ts) <= 10000) {
+            lastRemoteSfxTs = Date.now();
+            playUiSound(ev.sfx);
+        }
     }
-}
 
-onValue(sfxRef, (snap) => {
-    const ev = snap.val();
-    if (firstSfxLoad) {
-        firstSfxLoad = false;
-        if (ev) lastHandledSfxKey = `${ev.by || ''}_${ev.seq || 0}_${ev.ts || 0}`;
-        return;
-    }
-    if (!ev || !ev.by || ev.by === myPresenceId) return;
-    const eventKey = `${ev.by}_${ev.seq || 0}_${ev.ts || 0}`;
-    if (eventKey === lastHandledSfxKey) return;
-    lastHandledSfxKey = eventKey;
-
-    const ts = Number(ev.ts);
-    if (Number.isFinite(ts) && Math.abs(getServerNow() - ts) > 10000) return;
-
-    lastRemoteSfxTs = Date.now();
-    playUiSound(ev.type || 'ting');
+    renderRemoteFocus(activityMap);
+    cleanupStaleRealtimeNodes(activityRef, 'activity', activityMap, STALE_CURSOR_MS);
 });
 
 // ─── MENU + THANH NHẢY NHANH THEO NHÓM MÓN ─────────────────────────────
@@ -1777,9 +1850,10 @@ if (checkoutBtnEl && 'IntersectionObserver' in window) {
     checkoutObserver.observe(checkoutBtnEl);
 }
 
-// ─── DỮ LIỆU CHÍNH FIREBASE (ATOMIC INCREMENT + DELTA TRACKING) ────────
+// ─── DỮ LIỆU CHÍNH FIREBASE (GRANULAR CHILD LISTENERS + ATOMIC TRANSACTION) ──
 const pendingDeltas = {};
 const localEchoDeltas = {};
+const tableEpoch = Array(10).fill(0);
 let firstOrdersLoad = true;
 const initialBranchesLoaded = new Set();
 let initialDataReady = false;
@@ -1874,31 +1948,54 @@ function markInitialBranchLoaded(branch) {
     }
 }
 
-onValue(ordersRef, snap => {
-    const nextOrders = snap.val() || {};
-    if (localPaymentEchoTables.size) {
-        for (const tableId of Array.from(localPaymentEchoTables)) {
-            if (!nextOrders?.[tableId] || Object.keys(nextOrders[tableId]).length === 0) {
-                localPaymentEchoTables.delete(tableId);
-            }
-        }
+function handleSingleTableOrderSnapshot(rawKey, tableVal) {
+    const tableId = Number(rawKey);
+    if (!Number.isInteger(tableId) || tableId < 1 || tableId > 9) return;
+
+    const nextTableOrder = tableVal && typeof tableVal === 'object' ? tableVal : {};
+    const prevTableOrder = data.orders?.[tableId] || {};
+    if (shallowRecordEqual(prevTableOrder, nextTableOrder)) return;
+
+    if (localPaymentEchoTables.has(tableId) && Object.keys(nextTableOrder).length === 0) {
+        localPaymentEchoTables.delete(tableId);
     }
-    const changed = changedTableIds(data.orders, nextOrders);
-    if (!firstOrdersLoad && changed.size) {
-        const ignoredTables = localPaymentEchoTables.size ? new Set(localPaymentEchoTables) : null;
-        const remoteChanges = queueRemoteOrderFlashes(data.orders, nextOrders, ignoredTables);
+
+    const changed = new Set([tableId]);
+    if (!firstOrdersLoad) {
+        const ignoredTables = localPaymentEchoTables.has(tableId) ? new Set([tableId]) : null;
+        const remoteChanges = queueRemoteOrderFlashes(
+            { [tableId]: prevTableOrder },
+            { [tableId]: nextTableOrder },
+            ignoredTables
+        );
         if (remoteChanges > 0 && (Date.now() - lastRemoteSfxTs) > 1200) {
             playUiSound('ting');
         }
     }
-    data.orders = nextOrders;
-    firstOrdersLoad = false;
-    if (initialDataReady && changed.size) {
+
+    if (Object.keys(nextTableOrder).length > 0) {
+        if (!data.orders) data.orders = {};
+        data.orders[tableId] = nextTableOrder;
+    } else if (data.orders) {
+        delete data.orders[tableId];
+    }
+
+    if (initialDataReady) {
         cleanupStaleTimes(changed);
         scheduleRefresh(changed, true);
     }
+}
+
+// Tải snapshot ban đầu 1 lần duy nhất, sau đó chỉ lắng nghe từng bàn thay đổi qua child listeners
+onValue(ordersRef, (initialSnap) => {
+    data.orders = initialSnap.val() || {};
+    firstOrdersLoad = false;
     markInitialBranchLoaded('orders');
-});
+
+    onChildAdded(ordersRef, (snap) => handleSingleTableOrderSnapshot(snap.key, snap.val()));
+    onChildChanged(ordersRef, (snap) => handleSingleTableOrderSnapshot(snap.key, snap.val()));
+    onChildRemoved(ordersRef, (snap) => handleSingleTableOrderSnapshot(snap.key, null));
+}, { onlyOnce: true });
 
 onValue(lockedRef, snap => {
     const nextLocked = snap.val() || {};
@@ -1927,12 +2024,10 @@ function selectTable(n, options = {}) {
     syncActiveLangButton('vi');
     billWasShown = false;
     broadcastCursor(currentTab);
-    renderRemoteFocus(lastFocusSnap);
+    renderRemoteFocus(activityMap);
     const section = document.getElementById('order-section');
     if (currentTab) {
-        let title = "BÀN " + n;
-        if (n === 7) title = "BÀN TRONG HIÊN"; if (n === 8) title = "NGOÀI ĐƯỜNG (TRÁI)"; if (n === 9) title = "NGOÀI ĐƯỜNG (PHẢI)";
-        document.getElementById('table-title').textContent = title;
+        document.getElementById('table-title').textContent = getTableDisplayName(n);
         section.style.display = 'block';
         requestAnimationFrame(() => requestAnimationFrame(() => section.classList.add('section-visible')));
         refresh(new Set([previousTab, currentTab].filter(Boolean)));
@@ -1954,7 +2049,7 @@ function selectTable(n, options = {}) {
     }
 }
 
-// ─── Debounce Firebase write 250ms với Atomic Increment & Flush tức thì ───
+// ─── Debounce Firebase write 250ms với Atomic Transaction chặn cận dưới 0 ───
 const debounceTimers = {};
 const debounceVersions = {};
 const pendingStartTimes = new Set();
@@ -1966,6 +2061,7 @@ function getEffectiveItemQty(tab, itemId) {
 }
 
 function clearPendingForTable(tab) {
+    tableEpoch[tab] = (tableEpoch[tab] || 0) + 1;
     delete pendingDeltas[tab];
     delete localEchoDeltas[tab];
     pendingStartTimes.delete(tab);
@@ -1998,7 +2094,9 @@ function commitPendingItem(tab, id, expectedVersion = null) {
         return;
     }
 
-    // Trừ delta khỏi pendingDeltas trước khi gọi update() vì Firebase SDK tự áp dụng latency compensation cục bộ ngay lập tức
+    const startEpoch = tableEpoch[tab] || 0;
+
+    // Trừ delta khỏi pendingDeltas trước khi gọi transaction() vì Firebase SDK áp dụng latency compensation cục bộ ngay lập tức
     delete pendingDeltas[tab][id];
     if (Object.keys(pendingDeltas[tab]).length === 0) delete pendingDeltas[tab];
     recordLocalEchoDelta(tab, id, deltaToSend);
@@ -2012,23 +2110,31 @@ function commitPendingItem(tab, id, expectedVersion = null) {
     }
 
     const itemRef = child(ordersRef, `${tab}/${id}`);
-    update(child(ordersRef, String(tab)), { [id]: increment(deltaToSend) })
-        .then(() => {
-            // Dọn node về null an toàn bằng transaction nếu số lượng <= 0 mà không ghi đè thao tác tăng đồng thời
-            const currentServerQty = Number(data.orders?.[tab]?.[id] || 0);
-            const currentUncommitted = Number(pendingDeltas[tab]?.[id] || 0);
-            if (currentServerQty <= 0 && currentUncommitted <= 0) {
-                runTransaction(itemRef, (cur) => (cur !== null && Number(cur) <= 0 ? null : cur)).catch(() => {});
+    transaction(itemRef, (cur) => {
+        if ((tableEpoch[tab] || 0) !== startEpoch) return undefined;
+        const current = Math.max(0, Number(cur) || 0);
+        // Nếu server đã về 0 mà máy này gửi lệnh giảm thì hủy transaction, không bao giờ ghi số âm
+        if (current === 0 && deltaToSend < 0) return undefined;
+        const next = current + deltaToSend;
+        return next > 0 ? next : null;
+    })
+        .then(({ committed }) => {
+            if (!committed && localEchoDeltas[tab]?.[id]) {
+                delete localEchoDeltas[tab][id];
+                if (Object.keys(localEchoDeltas[tab]).length === 0) delete localEchoDeltas[tab];
+                scheduleRefresh(new Set([tab]), currentTab === tab);
             }
             queueMicrotask(() => {
                 if (!effectiveTableHasItems(tab)) remove(child(timesRef, String(tab))).catch(() => {});
             });
         })
         .catch(err => {
-            console.error('[orders] Lỗi ghi Firebase:', err);
+            console.error('[orders] Lỗi transaction Firebase:', err);
             recordLocalEchoDelta(tab, id, -deltaToSend);
-            if (!pendingDeltas[tab]) pendingDeltas[tab] = {};
-            pendingDeltas[tab][id] = (pendingDeltas[tab][id] || 0) + deltaToSend;
+            if ((tableEpoch[tab] || 0) === startEpoch) {
+                if (!pendingDeltas[tab]) pendingDeltas[tab] = {};
+                pendingDeltas[tab][id] = (pendingDeltas[tab][id] || 0) + deltaToSend;
+            }
             scheduleRefresh(new Set([tab]), currentTab === tab);
         })
         .finally(() => {
@@ -2116,8 +2222,7 @@ function change(id, delta) {
     if (!currentTab || (data.locked && data.locked[currentTab])) return;
     const sfxType = delta > 0 ? 'add' : 'sub';
     triggerHaptic(sfxType);
-    broadcastSfx(sfxType, currentTab, false);
-    broadcastFocus(id);
+    broadcastActivity({ sfx: sfxType, tableId: currentTab, itemId: id, immediate: false });
 
     const tab = currentTab;
     const currentQty = getEffectiveItemQty(tab, id);
@@ -2331,7 +2436,7 @@ async function renderBillAsync(tab) {
 function setLock(v) {
     if (!currentTab || paymentInProgress) return;
     triggerHaptic(v ? 'lock' : 'unlock');
-    broadcastSfx(v ? 'lock' : 'unlock', currentTab, true);
+    broadcastActivity({ sfx: v ? 'lock' : 'unlock', tableId: currentTab, itemId: null, immediate: true });
     if (v) {
         flushPendingForTable(currentTab);
         preloadBillAssets();
@@ -2352,11 +2457,12 @@ async function doPay() {
 
     const tab = currentTab;
     const lockedBeforeConfirm = !!data.locked?.[tab];
-    const orderSnapshotBeforeConfirm = JSON.stringify(getMergedOrder(tab));
+    const orderBeforeConfirm = getMergedOrder(tab);
+    const orderSnapshotBeforeConfirm = JSON.stringify(orderBeforeConfirm);
 
     const confirmed = await showAppModal({
         title: 'Xác nhận thanh toán',
-        message: `Xác nhận thanh toán và đóng bill cho Bàn ${tab}?`,
+        message: `Xác nhận thanh toán và đóng bill cho ${getTableDisplayName(tab)}?`,
         type: 'confirm',
         confirmText: 'Thanh toán',
         cancelText: 'Quay lại'
@@ -2373,26 +2479,37 @@ async function doPay() {
         return;
     }
 
-    // Sao lưu trạng thái bàn để hoàn tác (rollback) nếu ghi Firebase thất bại
+    const expectedOrder = normalizeOrderMap(currentMergedOrder);
+
+    // Sao lưu trạng thái bàn để hoàn tác (rollback) nếu transaction bị hủy hoặc ghi Firebase thất bại
     const backupOrder = data.orders?.[tab] ? { ...data.orders[tab] } : null;
     const backupLocked = data.locked?.[tab] !== undefined ? data.locked[tab] : null;
     const backupTime = data.times?.[tab] !== undefined ? data.times[tab] : null;
     const backupTotal = tableTotals[tab];
+
+    const restoreTableState = () => {
+        if (backupOrder && !data.orders?.[tab]) {
+            if (!data.orders) data.orders = {};
+            data.orders[tab] = backupOrder;
+        }
+        if (backupLocked !== null && data.locked?.[tab] === undefined) {
+            if (!data.locked) data.locked = {};
+            data.locked[tab] = backupLocked;
+        }
+        if (backupTime !== null && data.times?.[tab] === undefined) {
+            if (!data.times) data.times = {};
+            data.times[tab] = backupTime;
+        }
+        if (backupTotal) tableTotals[tab] = backupTotal;
+        scheduleRefresh(new Set([tab]), true);
+    };
 
     paymentInProgress = true;
     localPaymentEchoTables.add(tab);
     clearPendingForTable(tab);
     stopBillScrollAnimation();
     triggerHaptic('success');
-    broadcastSfx('success', tab, true);
-
-    const payload = {
-        [`orders/${tab}`]: null,
-        [`locked/${tab}`]: null,
-        [`times/${tab}`]: null
-    };
-
-    const paymentWrite = update(dbRef, payload);
+    broadcastActivity({ sfx: 'success', tableId: tab, itemId: null, immediate: true });
 
     if (data.orders) delete data.orders[tab];
     if (data.locked) delete data.locked[tab];
@@ -2403,19 +2520,19 @@ async function doPay() {
     selectTable(null, { haptic: false, allowDuringPayment: true, instantClose: true });
     paymentInProgress = false;
 
-    paymentWrite
-        .then(() => {
-            localPaymentEchoTables.delete(tab);
-        })
-        .catch(err => {
-            localPaymentEchoTables.delete(tab);
-            console.error('[payment] Lỗi ghi Firebase:', err);
+    const tableOrderRef = child(ordersRef, String(tab));
 
-            // Rollback trạng thái bàn về trước lúc bấm thanh toán
-            if (backupOrder && !data.orders?.[tab]) {
-                if (!data.orders) data.orders = {};
-                data.orders[tab] = backupOrder;
+    try {
+        // 1. Kiểm tra và xóa orders/${tab} nguyên tử: nếu máy khác vừa thêm món mới, transaction sẽ tự hủy
+        const txResult = await transaction(tableOrderRef, (serverOrder) => {
+            if (!areOrdersEqual(serverOrder, expectedOrder)) {
+                return undefined;
             }
+            return null;
+        });
+
+        if (!txResult.committed) {
+            localPaymentEchoTables.delete(tab);
             if (backupLocked !== null && data.locked?.[tab] === undefined) {
                 if (!data.locked) data.locked = {};
                 data.locked[tab] = backupLocked;
@@ -2424,11 +2541,63 @@ async function doPay() {
                 if (!data.times) data.times = {};
                 data.times[tab] = backupTime;
             }
-            tableTotals[tab] = backupTotal;
             scheduleRefresh(new Set([tab]), true);
+            showToast('Đơn bàn này vừa có thay đổi từ máy khác. Đã hủy thanh toán để kiểm tra lại!', 'warning', 4500);
+            return;
+        }
 
-            showToast('Mất kết nối! Thanh toán chưa lưu được, dữ liệu bàn đã được khôi phục.', 'error', 4500);
-        });
+        // 2. Xóa trạng thái khóa, giờ vào và lưu hóa đơn vào lịch sử trong ngày
+        const paidAt = getServerNow();
+        const dateKey = formatLocalDateKey(paidAt);
+        const historyKey = push(child(historyRef, dateKey)).key;
+        const receiptItems = [];
+        let totalAmount = 0;
+
+        for (const [rawId, rawQty] of Object.entries(expectedOrder)) {
+            const itemId = Number(rawId);
+            const qty = Number(rawQty) || 0;
+            const item = ITEM_MAP.get(itemId);
+            if (!item || qty <= 0) continue;
+            const subtotal = item.price * qty;
+            totalAmount += subtotal;
+            receiptItems.push({
+                id: itemId,
+                name: item.name,
+                price: item.price,
+                qty,
+                subtotal
+            });
+        }
+
+        const postPayUpdates = {
+            [`locked/${tab}`]: null,
+            [`times/${tab}`]: null
+        };
+
+        if (receiptItems.length > 0 && historyKey) {
+            postPayUpdates[`history/${dateKey}/${historyKey}`] = {
+                table: tab,
+                tableName: getTableDisplayName(tab),
+                total: totalAmount,
+                items: receiptItems,
+                enteredAt: backupTime || paidAt,
+                paidAt,
+                by: myPresenceId
+            };
+        }
+
+        await update(dbRef, postPayUpdates);
+        localPaymentEchoTables.delete(tab);
+
+        if (receiptItems.length > 0) {
+            showToast(`Đã thanh toán ${getTableDisplayName(tab)} • ${totalAmount.toLocaleString()}đ`, 'info', 2800);
+        }
+    } catch (err) {
+        localPaymentEchoTables.delete(tab);
+        console.error('[payment] Lỗi thanh toán Firebase:', err);
+        restoreTableState();
+        showToast('Mất kết nối! Thanh toán chưa lưu được, dữ liệu bàn đã được khôi phục.', 'error', 4500);
+    }
 }
 
 // RIPPLE
