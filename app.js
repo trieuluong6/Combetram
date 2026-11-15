@@ -274,9 +274,18 @@ let currentTab = null;
 let data = { orders: {}, locked: {}, times: {} };
 let billWasShown = false;
 
-// Chặn double-click trong đúng khoảnh khắc xác nhận thanh toán.
+// Chặn double-click / thao tác chồng chéo khi đang gửi lệnh thanh toán lên Firebase.
 let paymentInProgress = false;
+const payingTables = new Set();
 const localPaymentEchoTables = new Set();
+
+function clearTableLockAndTimeOnServer(tab) {
+    const key = String(tab);
+    return Promise.allSettled([
+        remove(child(lockedRef, key)),
+        remove(child(timesRef, key))
+    ]);
+}
 
 function getTableDisplayName(n) {
     const num = Number(n);
@@ -2023,7 +2032,7 @@ onValue(timesRef, snap => {
 });
 
 function selectTable(n, options = {}) {
-    if (paymentInProgress && !options.allowDuringPayment) return;
+    if ((paymentInProgress || payingTables.has(Number(n))) && !options.allowDuringPayment) return;
     if (options.haptic !== false) triggerHaptic('nav');
     resetBillQrView(true);
     const previousTab = currentTab;
@@ -2263,17 +2272,14 @@ function scheduleOrphanedLockCheck(tableIds = null) {
         if (orphanedLockTimers[tab]) continue;
         orphanedLockTimers[tab] = setTimeout(() => {
             delete orphanedLockTimers[tab];
-            if (!initialDataReady || paymentInProgress || localPaymentEchoTables.has(tab)) return;
+            if (!initialDataReady || paymentInProgress || payingTables.has(tab) || localPaymentEchoTables.has(tab)) return;
             if (!data.locked?.[tab] || effectiveTableHasItems(tab)) return;
 
             delete data.locked[tab];
             if (data.times?.[tab]) delete data.times[tab];
             scheduleSaveLocalStateCache();
             scheduleRefresh(new Set([tab]), currentTab === tab);
-            update(dbRef, {
-                [`locked/${tab}`]: null,
-                [`times/${tab}`]: null
-            }).catch(() => {});
+            clearTableLockAndTimeOnServer(tab);
         }, 1200);
     }
 }
@@ -2525,7 +2531,7 @@ function setLock(v) {
 }
 
 async function doPay() {
-    if (!currentTab || paymentInProgress) return;
+    if (!currentTab || paymentInProgress || payingTables.has(currentTab)) return;
 
     const tab = currentTab;
     const lockedBeforeConfirm = !!data.locked?.[tab];
@@ -2534,7 +2540,7 @@ async function doPay() {
     if (Object.keys(orderBeforeConfirm).length === 0) {
         if (data.locked?.[tab]) {
             delete data.locked[tab];
-            update(dbRef, { [`locked/${tab}`]: null, [`times/${tab}`]: null }).catch(() => {});
+            clearTableLockAndTimeOnServer(tab);
             scheduleRefresh(new Set([tab]), true);
         }
         showToast('Bàn này đã trống (0đ)!', 'warning', 2600);
@@ -2548,7 +2554,7 @@ async function doPay() {
         confirmText: 'Thanh toán',
         cancelText: 'Quay lại'
     });
-    if (!confirmed || currentTab !== tab || paymentInProgress) return;
+    if (!confirmed || currentTab !== tab || paymentInProgress || payingTables.has(tab)) return;
 
     // Kiểm tra xem máy khác có vừa mở khóa hoặc sửa đơn trong lúc hộp thoại xác nhận đang mở không
     const lockedAfterConfirm = !!data.locked?.[tab];
@@ -2559,14 +2565,15 @@ async function doPay() {
         return;
     }
 
-    // Sao lưu trạng thái bàn để hoàn tác (rollback) nếu transaction bị hủy hoặc ghi Firebase thất bại
+    // Sao lưu trạng thái bàn để hoàn tác (rollback) nếu giao dịch Firebase gặp lỗi kết nối
     const backupOrder = data.orders?.[tab] ? { ...data.orders[tab] } : { ...expectedOrder };
     const backupLocked = data.locked?.[tab] !== undefined ? data.locked[tab] : null;
     const backupTime = data.times?.[tab] !== undefined ? data.times[tab] : null;
     const backupTotal = tableTotals[tab];
 
     const restoreTableState = () => {
-        if (backupOrder && !data.orders?.[tab]) {
+        const hasCurrentOrder = data.orders?.[tab] && Object.keys(data.orders[tab]).length > 0;
+        if (backupOrder && Object.keys(backupOrder).length > 0 && !hasCurrentOrder) {
             if (!data.orders) data.orders = {};
             data.orders[tab] = backupOrder;
         }
@@ -2596,6 +2603,7 @@ async function doPay() {
     }
 
     paymentInProgress = true;
+    payingTables.add(tab);
     localPaymentEchoTables.add(tab);
     clearPendingForTable(tab);
     stopBillScrollAnimation();
@@ -2613,12 +2621,8 @@ async function doPay() {
     paymentInProgress = false;
 
     const tableOrderRef = child(ordersRef, String(tab));
-    const postPayUpdates = {
-        [`locked/${tab}`]: null,
-        [`times/${tab}`]: null
-    };
-
     let orderDeletedOnServer = false;
+
     try {
         // 1. Kiểm tra & xóa nguyên tử orders/${tab}
         const txResult = await transaction(tableOrderRef, (serverOrder) => {
@@ -2630,15 +2634,33 @@ async function doPay() {
 
         if (!txResult.committed) {
             localPaymentEchoTables.delete(tab);
-            restoreTableState();
+            const serverOrderVal = normalizeOrderMap(txResult.snapshot?.val());
+            if (Object.keys(serverOrderVal).length > 0) {
+                if (!data.orders) data.orders = {};
+                data.orders[tab] = serverOrderVal;
+                if (backupLocked !== null) {
+                    if (!data.locked) data.locked = {};
+                    data.locked[tab] = backupLocked;
+                }
+                if (backupTime !== null) {
+                    if (!data.times) data.times = {};
+                    data.times[tab] = backupTime;
+                }
+            } else {
+                if (data.orders) delete data.orders[tab];
+                if (data.locked) delete data.locked[tab];
+                if (data.times) delete data.times[tab];
+            }
+            scheduleSaveLocalStateCache();
+            scheduleRefresh(new Set([tab]), true);
             showToast('Đơn bàn này vừa có thay đổi hoặc đã được thanh toán ở máy khác!', 'warning', 4500);
             return;
         }
 
         orderDeletedOnServer = true;
 
-        // 2. Xóa đồng thời locked/${tab} và times/${tab}
-        await update(dbRef, postPayUpdates);
+        // 2. Xóa trực tiếp từng nhánh con locked/${tab} và times/${tab} (tránh ghi ở node cha dbRef)
+        await clearTableLockAndTimeOnServer(tab);
         localPaymentEchoTables.delete(tab);
 
         if (hasItems) {
@@ -2648,13 +2670,16 @@ async function doPay() {
         localPaymentEchoTables.delete(tab);
         console.error('[payment] Lỗi thanh toán Firebase:', err);
         if (orderDeletedOnServer) {
-            // Đơn đã xóa trên server nhưng bước mở khóa bị ngắt: thử dọn locked/times ngay khi có mạng
-            update(dbRef, { [`locked/${tab}`]: null, [`times/${tab}`]: null }).catch(() => {});
-            showToast('Đã thanh toán nhưng mạng chập chờn lúc mở khóa bàn. Vui lòng kiểm tra kết nối!', 'warning', 4500);
+            clearTableLockAndTimeOnServer(tab);
+            if (hasItems) {
+                showToast(`Đã thanh toán ${getTableDisplayName(tab)} • ${totalAmount.toLocaleString()}đ`, 'info', 2800);
+            }
         } else {
             restoreTableState();
             showToast('Mất kết nối! Thanh toán chưa lưu được, dữ liệu bàn đã được khôi phục.', 'error', 4500);
         }
+    } finally {
+        payingTables.delete(tab);
     }
 }
 
