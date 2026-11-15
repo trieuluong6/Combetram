@@ -40,13 +40,6 @@ onValue(ref(database, '.info/serverTimeOffset'), (snap) => {
 function getServerNow() {
     return Date.now() + serverTimeOffset;
 }
-function formatLocalDateKey(ts = getServerNow()) {
-    const d = new Date(ts);
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth() + 1).padStart(2, '0');
-    const dd = String(d.getDate()).padStart(2, '0');
-    return `${yyyy}-${mm}-${dd}`;
-}
 
 // ─── HELPER FETCH CÓ TIMEOUT CHỐNG TREO PROXY/API ─────────────────────
 async function fetchWithTimeout(url, options = {}, timeoutMs = 5500) {
@@ -435,7 +428,6 @@ const DRINK_ITEM_IDS = new Set(
 const ordersRef = child(dbRef, 'orders');
 const lockedRef = child(dbRef, 'locked');
 const timesRef = child(dbRef, 'times');
-const historyRef = child(dbRef, 'history');
 
 // Cache DOM cố định cho các đường render nóng.
 const TABLE_DOM = Array.from({ length: 9 }, (_, idx) => {
@@ -2591,26 +2583,16 @@ async function doPay() {
         scheduleRefresh(new Set([tab]), true);
     };
 
-    const paidAt = getServerNow();
-    const dateKey = formatLocalDateKey(paidAt);
-    const historyKey = push(child(historyRef, dateKey)).key;
-    const receiptItems = [];
     let totalAmount = 0;
+    let hasItems = false;
 
     for (const [rawId, rawQty] of Object.entries(expectedOrder)) {
         const itemId = Number(rawId);
         const qty = Number(rawQty) || 0;
         const item = ITEM_MAP.get(itemId);
         if (!item || qty <= 0) continue;
-        const subtotal = item.price * qty;
-        totalAmount += subtotal;
-        receiptItems.push({
-            id: itemId,
-            name: item.name,
-            price: item.price,
-            qty,
-            subtotal
-        });
+        totalAmount += item.price * qty;
+        hasItems = true;
     }
 
     paymentInProgress = true;
@@ -2635,21 +2617,10 @@ async function doPay() {
         [`locked/${tab}`]: null,
         [`times/${tab}`]: null
     };
-    if (receiptItems.length > 0 && historyKey) {
-        postPayUpdates[`history/${dateKey}/${historyKey}`] = {
-            table: tab,
-            tableName: getTableDisplayName(tab),
-            total: totalAmount,
-            items: receiptItems,
-            enteredAt: backupTime || paidAt,
-            paidAt,
-            by: myPresenceId
-        };
-    }
 
     let orderDeletedOnServer = false;
     try {
-        // 1. Kiểm tra & xóa nguyên tử orders/${tab} (gói tin nhẹ ~40B, không tải lại lịch sử cũ)
+        // 1. Kiểm tra & xóa nguyên tử orders/${tab}
         const txResult = await transaction(tableOrderRef, (serverOrder) => {
             if (!areOrdersEqual(serverOrder, expectedOrder)) {
                 return undefined;
@@ -2666,20 +2637,20 @@ async function doPay() {
 
         orderDeletedOnServer = true;
 
-        // 2. Xóa đồng thời locked/${tab}, times/${tab} và ghi lịch sử ngay lập tức trong 1 multi-path update
+        // 2. Xóa đồng thời locked/${tab} và times/${tab}
         await update(dbRef, postPayUpdates);
         localPaymentEchoTables.delete(tab);
 
-        if (receiptItems.length > 0) {
+        if (hasItems) {
             showToast(`Đã thanh toán ${getTableDisplayName(tab)} • ${totalAmount.toLocaleString()}đ`, 'info', 2800);
         }
     } catch (err) {
         localPaymentEchoTables.delete(tab);
         console.error('[payment] Lỗi thanh toán Firebase:', err);
         if (orderDeletedOnServer) {
-            // Đơn đã xóa trên server nhưng bước mở khóa/lưu lịch sử bị ngắt: thử dọn locked/times ngay khi có mạng
+            // Đơn đã xóa trên server nhưng bước mở khóa bị ngắt: thử dọn locked/times ngay khi có mạng
             update(dbRef, { [`locked/${tab}`]: null, [`times/${tab}`]: null }).catch(() => {});
-            showToast('Đã thanh toán nhưng mạng chập chờn lúc lưu lịch sử. Vui lòng kiểm tra kết nối!', 'warning', 4500);
+            showToast('Đã thanh toán nhưng mạng chập chờn lúc mở khóa bàn. Vui lòng kiểm tra kết nối!', 'warning', 4500);
         } else {
             restoreTableState();
             showToast('Mất kết nối! Thanh toán chưa lưu được, dữ liệu bàn đã được khôi phục.', 'error', 4500);
