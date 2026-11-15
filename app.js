@@ -34,7 +34,7 @@ const dbRef = ref(database, 'combetram_v6_data');
 // ─── CẤU HÌNH & TẠO MÃ VIETQR ĐỘNG THEO TỔNG BILL ────────────────────
 const VIETQR_CONFIG = {
     bankId: 'TCB',                          // Techcombank (BIN: 970407)
-    accountNo: 'MS00P0000000449397',        // Mã QR cửa hàng Quỳnh Trâm (trích xuất từ mã QR gốc)
+    accountNo: 'MS00P00000000449397',        // Mã QR cửa hàng Quỳnh Trâm (trích xuất từ mã QR gốc)
     fallbackAccountNo: '1828591991',        // Số tài khoản Techcombank dự phòng
     accountName: 'LUONG THI QUYNH TRAM',    // Tên chủ tài khoản không dấu
     template: 'compact2'                    // 'compact2' | 'compact' | 'qr_only' | 'print'
