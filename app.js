@@ -450,6 +450,41 @@ const TABLE_DOM = Array.from({ length: 9 }, (_, idx) => {
 const ITEM_DOM = new Map();
 const tableTotals = Array(10).fill(0);
 
+// ─── LOCALSTORAGE SNAPSHOT CACHE (HIỂN THỊ TỨC THÌ KHI MỞ APP) ──────────
+const STATE_CACHE_KEY = 'combetram_state_cache_v1';
+const STATE_CACHE_MAX_AGE_MS = 30 * 60 * 1000;
+let stateCacheSaveTimer = null;
+
+function scheduleSaveLocalStateCache() {
+    clearTimeout(stateCacheSaveTimer);
+    stateCacheSaveTimer = setTimeout(() => {
+        try {
+            localStorage.setItem(STATE_CACHE_KEY, JSON.stringify({
+                orders: data.orders || {},
+                locked: data.locked || {},
+                times: data.times || {},
+                savedAt: Date.now()
+            }));
+        } catch (e) {}
+    }, 450);
+}
+
+function hydrateFromLocalStateCache() {
+    try {
+        const raw = localStorage.getItem(STATE_CACHE_KEY);
+        if (!raw) return false;
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== 'object') return false;
+        if (!Number.isFinite(parsed.savedAt) || (Date.now() - parsed.savedAt) > STATE_CACHE_MAX_AGE_MS) return false;
+        data.orders = parsed.orders && typeof parsed.orders === 'object' ? parsed.orders : {};
+        data.locked = parsed.locked && typeof parsed.locked === 'object' ? parsed.locked : {};
+        data.times = parsed.times && typeof parsed.times === 'object' ? parsed.times : {};
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
+
 function shallowRecordEqual(a, b) {
     if (a === b) return true;
     const aIsObject = a !== null && typeof a === 'object';
@@ -883,20 +918,28 @@ function stopClockInterval() {
     clockIntervalId = null;
 }
 
+function handleAppBackgrounded() {
+    flushAllPendingItems();
+    flushPendingActivity();
+}
+
 document.addEventListener('visibilitychange', () => {
     document.body.classList.toggle('tab-hidden', document.hidden);
     if (document.hidden) {
+        handleAppBackgrounded();
         stopTickerInterval();
         stopClockInterval();
     } else {
         startTickerInterval();
         startClockInterval();
         refreshPresenceHeartbeat();
+        runPeriodicMaintenance();
     }
 });
+window.addEventListener('pagehide', handleAppBackgrounded);
 startClockInterval();
 
-// ─── ÂM THANH THAO TÁC CÔNG SUẤT CAO + ĐỒNG BỘ TẤT CẢ USER ─────────────
+// ─── ÂM THANH THAO TÁC CÔNG SUẤT CAO + PRE-RENDERED AUDIOBUFFER CACHE ───
 if (typeof navigator !== 'undefined' && navigator.audioSession) {
     try { navigator.audioSession.type = 'playback'; } catch (e) {}
 }
@@ -958,7 +1001,12 @@ const SOUND_PATTERNS = {
     ]
 };
 
-function buildWavBlobUrl(notes, sampleRate = 22050) {
+const SOUND_SAMPLE_RATE = 22050;
+const pcmSamplesCache = {};
+
+function synthesizeSoundSamples(type, sampleRate = SOUND_SAMPLE_RATE) {
+    if (pcmSamplesCache[type]) return pcmSamplesCache[type];
+    const notes = SOUND_PATTERNS[type] || SOUND_PATTERNS.ting;
     const totalDur = Math.max(...notes.map(n => (n.delay || 0) + (n.dur || 0.12))) + 0.025;
     const numSamples = Math.max(1, Math.floor(sampleRate * totalDur));
     const mix = new Float32Array(numSamples);
@@ -1025,6 +1073,19 @@ function buildWavBlobUrl(notes, sampleRate = 22050) {
 
     const drive = 2.6;
     const norm = Math.tanh(drive);
+    const out = new Float32Array(numSamples);
+    for (let i = 0; i < numSamples; i++) {
+        const boosted = Math.tanh(mix[i] * drive) / norm;
+        out[i] = Math.max(-0.99, Math.min(0.99, boosted));
+    }
+
+    pcmSamplesCache[type] = out;
+    return out;
+}
+
+function buildWavBlobUrl(type, sampleRate = SOUND_SAMPLE_RATE) {
+    const samples = synthesizeSoundSamples(type, sampleRate);
+    const numSamples = samples.length;
     const dataSize = numSamples * 2;
     const buffer = new ArrayBuffer(44 + dataSize);
     const view = new DataView(buffer);
@@ -1047,9 +1108,7 @@ function buildWavBlobUrl(notes, sampleRate = 22050) {
     view.setUint32(40, dataSize, true);
 
     for (let i = 0; i < numSamples; i++) {
-        const boosted = Math.tanh(mix[i] * drive) / norm;
-        const clamped = Math.max(-0.99, Math.min(0.99, boosted));
-        view.setInt16(44 + i * 2, Math.round(clamped * 32767), true);
+        view.setInt16(44 + i * 2, Math.round(samples[i] * 32767), true);
     }
 
     return URL.createObjectURL(new Blob([buffer], { type: 'audio/wav' }));
@@ -1065,9 +1124,9 @@ function ensureSoundPools() {
     if (soundPoolsInitialized) return;
     if (typeof URL === 'undefined' || typeof Blob === 'undefined') return;
     soundPoolsInitialized = true;
-    for (const [type, notes] of Object.entries(SOUND_PATTERNS)) {
+    for (const type of Object.keys(SOUND_PATTERNS)) {
         try {
-            const url = buildWavBlobUrl(notes);
+            const url = buildWavBlobUrl(type);
             wavUrlMap[type] = url;
             htmlAudioPoolIdx[type] = 0;
             htmlAudioPools[type] = Array.from({ length: 4 }, () => {
@@ -1085,13 +1144,15 @@ function ensureSoundPools() {
     }
 }
 
-// Chỉ khởi tạo trước pool 28 thẻ <audio> trên iOS; Android/Desktop dùng Web Audio API
+// Chỉ khởi tạo trước pool 28 thẻ <audio> trên iOS; Android/Desktop dùng Web Audio Buffer cache
 if (IS_IOS_DEVICE) {
     ensureSoundPools();
 }
 
 let sharedAudioCtx = null;
 let sharedAudioMaster = null;
+const webAudioBufferCache = {};
+
 function getAudioContext() {
     if (!sharedAudioCtx) {
         const AudioCtx = window.AudioContext || window.webkitAudioContext;
@@ -1106,7 +1167,7 @@ function getAudioContext() {
                 compressor.release.setValueAtTime(0.08, sharedAudioCtx.currentTime);
 
                 const boostGain = sharedAudioCtx.createGain();
-                boostGain.gain.setValueAtTime(1.75, sharedAudioCtx.currentTime);
+                boostGain.gain.setValueAtTime(1.45, sharedAudioCtx.currentTime);
 
                 compressor.connect(boostGain);
                 boostGain.connect(sharedAudioCtx.destination);
@@ -1120,6 +1181,20 @@ function getAudioContext() {
     return sharedAudioCtx;
 }
 
+function getCachedWebAudioBuffer(ctx, type) {
+    const key = SOUND_PATTERNS[type] ? type : 'ting';
+    if (webAudioBufferCache[key]) return webAudioBufferCache[key];
+    const samples = synthesizeSoundSamples(key, SOUND_SAMPLE_RATE);
+    const audioBuf = ctx.createBuffer(1, samples.length, SOUND_SAMPLE_RATE);
+    if (audioBuf.copyToChannel) {
+        audioBuf.copyToChannel(samples, 0);
+    } else {
+        audioBuf.getChannelData(0).set(samples);
+    }
+    webAudioBufferCache[key] = audioBuf;
+    return audioBuf;
+}
+
 function unlockAllAudio() {
     if (typeof navigator !== 'undefined' && navigator.audioSession) {
         try { navigator.audioSession.type = 'playback'; } catch (e) {}
@@ -1127,11 +1202,14 @@ function unlockAllAudio() {
     const ctx = getAudioContext();
     if (ctx && !audioUnlocked) {
         try {
-            const silentBuf = ctx.createBuffer(1, 1, 22050);
+            const silentBuf = ctx.createBuffer(1, 1, SOUND_SAMPLE_RATE);
             const src = ctx.createBufferSource();
             src.buffer = silentBuf;
             src.connect(ctx.destination);
             src.start(0);
+            for (const type of Object.keys(SOUND_PATTERNS)) {
+                getCachedWebAudioBuffer(ctx, type);
+            }
         } catch (e) {}
     }
     if (!audioUnlocked) {
@@ -1173,133 +1251,28 @@ function playHtmlWav(type) {
     }
 }
 
-function playWebAudioNotes(notes) {
+function playWebAudioCached(type) {
     const ctx = getAudioContext();
     if (!ctx || ctx.state !== 'running') return false;
-    const dest = sharedAudioMaster || ctx.destination;
-    const baseTime = ctx.currentTime;
-    for (const n of notes) {
-        const start = baseTime + (n.delay || 0);
-        const dur = n.dur || 0.12;
-        const peak = Math.min(1.0, n.vol || 1.0);
-
-        if (n.instrument === 'wood') {
-            const bodyOsc = ctx.createOscillator();
-            const ot2Osc = ctx.createOscillator();
-            const ot3Osc = ctx.createOscillator();
-            const ot4Osc = ctx.createOscillator();
-            const malletOsc = ctx.createOscillator();
-
-            const bodyGain = ctx.createGain();
-            const ot2Gain = ctx.createGain();
-            const ot3Gain = ctx.createGain();
-            const ot4Gain = ctx.createGain();
-            const malletGain = ctx.createGain();
-
-            bodyOsc.type = 'sine';
-            bodyOsc.frequency.setValueAtTime(n.freq, start);
-
-            ot2Osc.type = 'sine';
-            ot2Osc.frequency.setValueAtTime(n.freq * 2, start);
-
-            ot3Osc.type = 'sine';
-            ot3Osc.frequency.setValueAtTime(n.freq * 3, start);
-
-            ot4Osc.type = 'sine';
-            ot4Osc.frequency.setValueAtTime(n.freq * 4, start);
-
-            malletOsc.type = 'triangle';
-            malletOsc.frequency.setValueAtTime(2250, start);
-            malletOsc.frequency.exponentialRampToValueAtTime(1350, start + 0.012);
-
-            bodyGain.gain.setValueAtTime(0.0001, start);
-            bodyGain.gain.linearRampToValueAtTime(peak, start + 0.002);
-            bodyGain.gain.exponentialRampToValueAtTime(0.0001, start + dur);
-
-            ot2Gain.gain.setValueAtTime(0.0001, start);
-            ot2Gain.gain.linearRampToValueAtTime(peak * 0.38, start + 0.002);
-            ot2Gain.gain.exponentialRampToValueAtTime(0.0001, start + Math.min(dur, 0.095));
-
-            ot3Gain.gain.setValueAtTime(0.0001, start);
-            ot3Gain.gain.linearRampToValueAtTime(peak * 0.34, start + 0.0015);
-            ot3Gain.gain.exponentialRampToValueAtTime(0.0001, start + Math.min(dur, 0.055));
-
-            ot4Gain.gain.setValueAtTime(0.0001, start);
-            ot4Gain.gain.linearRampToValueAtTime(peak * 0.22, start + 0.001);
-            ot4Gain.gain.exponentialRampToValueAtTime(0.0001, start + Math.min(dur, 0.036));
-
-            malletGain.gain.setValueAtTime(0.0001, start);
-            malletGain.gain.linearRampToValueAtTime(peak * 0.45, start + 0.001);
-            malletGain.gain.exponentialRampToValueAtTime(0.0001, start + 0.012);
-
-            bodyOsc.connect(bodyGain); bodyGain.connect(dest);
-            ot2Osc.connect(ot2Gain); ot2Gain.connect(dest);
-            ot3Osc.connect(ot3Gain); ot3Gain.connect(dest);
-            ot4Osc.connect(ot4Gain); ot4Gain.connect(dest);
-            malletOsc.connect(malletGain); malletGain.connect(dest);
-
-            const stopAt = start + dur + 0.015;
-            bodyOsc.start(start); bodyOsc.stop(stopAt);
-            ot2Osc.start(start); ot2Osc.stop(stopAt);
-            ot3Osc.start(start); ot3Osc.stop(stopAt);
-            ot4Osc.start(start); ot4Osc.stop(stopAt);
-            malletOsc.start(start); malletOsc.stop(start + 0.015);
-            continue;
-        }
-
-        const osc = ctx.createOscillator();
-        const overtone2 = ctx.createOscillator();
-        const overtone3 = ctx.createOscillator();
-        const gain = ctx.createGain();
-
-        osc.type = n.wave || 'sine';
-        osc.frequency.setValueAtTime(n.freq, start);
-        overtone2.type = 'sine';
-        overtone2.frequency.setValueAtTime(n.freq * 2, start);
-        overtone3.type = 'sine';
-        overtone3.frequency.setValueAtTime(n.freq * 3, start);
-
-        if (n.endFreq) {
-            osc.frequency.exponentialRampToValueAtTime(n.endFreq, start + dur);
-            overtone2.frequency.exponentialRampToValueAtTime(n.endFreq * 2, start + dur);
-            overtone3.frequency.exponentialRampToValueAtTime(n.endFreq * 3, start + dur);
-        }
-
-        const g2 = ctx.createGain();
-        g2.gain.setValueAtTime(0.42, start);
-        const g3 = ctx.createGain();
-        g3.gain.setValueAtTime(0.16, start);
-
-        gain.gain.setValueAtTime(0.0001, start);
-        gain.gain.linearRampToValueAtTime(peak, start + 0.004);
-        gain.gain.setValueAtTime(peak * 0.85, start + dur * 0.65);
-        gain.gain.exponentialRampToValueAtTime(0.0001, start + dur);
-
-        osc.connect(gain);
-        overtone2.connect(g2);
-        g2.connect(gain);
-        overtone3.connect(g3);
-        g3.connect(gain);
-        gain.connect(dest);
-
-        osc.start(start);
-        overtone2.start(start);
-        overtone3.start(start);
-        osc.stop(start + dur + 0.015);
-        overtone2.stop(start + dur + 0.015);
-        overtone3.stop(start + dur + 0.015);
+    try {
+        const audioBuf = getCachedWebAudioBuffer(ctx, type);
+        const src = ctx.createBufferSource();
+        src.buffer = audioBuf;
+        src.connect(sharedAudioMaster || ctx.destination);
+        src.start(0);
+        return true;
+    } catch (e) {
+        return false;
     }
-    return true;
 }
 
 function playUiSound(type = 'nav') {
     if (isSoundMuted) return;
     try {
-        const notes = SOUND_PATTERNS[type] || SOUND_PATTERNS.ting;
         if (IS_IOS_DEVICE) {
             if (playHtmlWav(type)) return;
         }
-        if (!playWebAudioNotes(notes)) {
+        if (!playWebAudioCached(type)) {
             playHtmlWav(type);
         }
     } catch (e) {}
@@ -1472,15 +1445,20 @@ function refreshPresenceHeartbeat() {
         set(myCursorRef, { table: currentTab, color: myColor, ts: getServerNow() }).catch(() => {});
     }
 }
-setInterval(() => {
-    if (!document.hidden) refreshPresenceHeartbeat();
+
+function runPeriodicMaintenance() {
+    if (document.hidden) return;
+    const now = getServerNow();
+    for (let i = 1; i <= 9; i++) renderTableTime(i, now);
+    refreshPresenceHeartbeat();
     renderPresenceCount(presenceMap);
     cleanupStaleRealtimeNodes(presenceListRef, 'presence', presenceMap, STALE_PRESENCE_MS);
     renderRemoteCursors(cursorsMap);
     cleanupStaleRealtimeNodes(cursorsRef, 'cursors', cursorsMap, STALE_CURSOR_MS);
     renderRemoteFocus(activityMap);
     cleanupStaleRealtimeNodes(activityRef, 'activity', activityMap, STALE_CURSOR_MS);
-}, 30000);
+}
+setInterval(runPeriodicMaintenance, 30000);
 
 onValue(onlineRef, (snap) => {
     isFirebaseConnected = snap.val() === true;
@@ -1649,6 +1627,16 @@ let pendingActivityPayload = null;
 const lastHandledActivitySeq = {};
 const remoteFocusExpireTimers = {};
 
+function flushPendingActivity() {
+    clearTimeout(pendingActivityTimer);
+    pendingActivityTimer = null;
+    const toSend = pendingActivityPayload;
+    pendingActivityPayload = null;
+    if (toSend && isFirebaseConnected) {
+        set(myActivityRef, toSend).catch(() => {});
+    }
+}
+
 function broadcastActivity({ sfx = null, tableId = currentTab, itemId = null, immediate = false } = {}) {
     if (!isFirebaseConnected) return;
     const payload = {
@@ -1668,12 +1656,7 @@ function broadcastActivity({ sfx = null, tableId = currentTab, itemId = null, im
     }
     pendingActivityPayload = payload;
     if (!pendingActivityTimer) {
-        pendingActivityTimer = setTimeout(() => {
-            pendingActivityTimer = null;
-            const toSend = pendingActivityPayload;
-            pendingActivityPayload = null;
-            if (toSend) set(myActivityRef, toSend).catch(() => {});
-        }, 80);
+        pendingActivityTimer = setTimeout(flushPendingActivity, 80);
     }
 }
 
@@ -1944,6 +1927,7 @@ function markInitialBranchLoaded(branch) {
     if (initialBranchesLoaded.size === 3) {
         initialDataReady = true;
         cleanupStaleTimes();
+        scheduleSaveLocalStateCache();
         scheduleRefresh(null);
     }
 }
@@ -1981,9 +1965,15 @@ function handleSingleTableOrderSnapshot(rawKey, tableVal) {
     }
 
     if (initialDataReady) {
+        scheduleSaveLocalStateCache();
         cleanupStaleTimes(changed);
         scheduleRefresh(changed, true);
     }
+}
+
+// Vẽ ngay từ bản nháp localStorage (nếu có) trước khi Firebase đồng bộ xong
+if (hydrateFromLocalStateCache()) {
+    refresh(null, false);
 }
 
 // Tải snapshot ban đầu 1 lần duy nhất, sau đó chỉ lắng nghe từng bàn thay đổi qua child listeners
@@ -2001,7 +1991,10 @@ onValue(lockedRef, snap => {
     const nextLocked = snap.val() || {};
     const changed = changedTableIds(data.locked, nextLocked);
     data.locked = nextLocked;
-    if (initialDataReady && changed.size) scheduleRefresh(changed, true);
+    if (initialDataReady && changed.size) {
+        scheduleSaveLocalStateCache();
+        scheduleRefresh(changed, true);
+    }
     markInitialBranchLoaded('locked');
 });
 
@@ -2009,7 +2002,10 @@ onValue(timesRef, snap => {
     const nextTimes = snap.val() || {};
     const changed = changedTableIds(data.times, nextTimes);
     data.times = nextTimes;
-    if (initialDataReady && changed.size) scheduleRefresh(changed);
+    if (initialDataReady && changed.size) {
+        scheduleSaveLocalStateCache();
+        scheduleRefresh(changed);
+    }
     markInitialBranchLoaded('times');
 });
 
@@ -2096,10 +2092,9 @@ function commitPendingItem(tab, id, expectedVersion = null) {
 
     const startEpoch = tableEpoch[tab] || 0;
 
-    // Trừ delta khỏi pendingDeltas trước khi gọi transaction() vì Firebase SDK áp dụng latency compensation cục bộ ngay lập tức
+    // Trừ delta khỏi pendingDeltas trước khi gọi transaction() vì Firebase SDK áp dụng latency compensation cục bộ
     delete pendingDeltas[tab][id];
     if (Object.keys(pendingDeltas[tab]).length === 0) delete pendingDeltas[tab];
-    recordLocalEchoDelta(tab, id, deltaToSend);
 
     if (deltaToSend > 0 && !data.times?.[tab] && !pendingStartTimes.has(tab)) {
         pendingStartTimes.add(tab);
@@ -2110,18 +2105,39 @@ function commitPendingItem(tab, id, expectedVersion = null) {
     }
 
     const itemRef = child(ordersRef, `${tab}/${id}`);
+    let passCount = 0;
+    let initialLocalCur = 0;
+    let prevOptimisticTarget = null;
+
     transaction(itemRef, (cur) => {
-        if ((tableEpoch[tab] || 0) !== startEpoch) return undefined;
+        passCount++;
         const current = Math.max(0, Number(cur) || 0);
-        // Nếu server đã về 0 mà máy này gửi lệnh giảm thì hủy transaction, không bao giờ ghi số âm
-        if (current === 0 && deltaToSend < 0) return undefined;
+        if (passCount === 1) initialLocalCur = current;
+
+        if ((tableEpoch[tab] || 0) !== startEpoch || (current === 0 && deltaToSend < 0)) {
+            // Nếu Pass 1 từng áp dụng giá trị lạc quan và Pass >= 2 hủy bỏ, bù echo rollback chính xác
+            if (prevOptimisticTarget !== null && prevOptimisticTarget !== current) {
+                recordLocalEchoDelta(tab, id, initialLocalCur - prevOptimisticTarget);
+                prevOptimisticTarget = current;
+            }
+            return undefined;
+        }
+
         const next = current + deltaToSend;
-        return next > 0 ? next : null;
+        const finalVal = next > 0 ? next : null;
+        const target = finalVal || 0;
+
+        if (passCount === 1) {
+            recordLocalEchoDelta(tab, id, target - current);
+        } else if (prevOptimisticTarget !== null) {
+            const remoteShift = current - initialLocalCur;
+            recordLocalEchoDelta(tab, id, (target - prevOptimisticTarget) - remoteShift);
+        }
+        prevOptimisticTarget = target;
+        return finalVal;
     })
         .then(({ committed }) => {
-            if (!committed && localEchoDeltas[tab]?.[id]) {
-                delete localEchoDeltas[tab][id];
-                if (Object.keys(localEchoDeltas[tab]).length === 0) delete localEchoDeltas[tab];
+            if (!committed) {
                 scheduleRefresh(new Set([tab]), currentTab === tab);
             }
             queueMicrotask(() => {
@@ -2130,7 +2146,9 @@ function commitPendingItem(tab, id, expectedVersion = null) {
         })
         .catch(err => {
             console.error('[orders] Lỗi transaction Firebase:', err);
-            recordLocalEchoDelta(tab, id, -deltaToSend);
+            if (prevOptimisticTarget !== null && prevOptimisticTarget !== initialLocalCur) {
+                recordLocalEchoDelta(tab, id, initialLocalCur - prevOptimisticTarget);
+            }
             if ((tableEpoch[tab] || 0) === startEpoch) {
                 if (!pendingDeltas[tab]) pendingDeltas[tab] = {};
                 pendingDeltas[tab][id] = (pendingDeltas[tab][id] || 0) + deltaToSend;
@@ -2150,6 +2168,12 @@ function flushPendingForTable(tab) {
     if (!pending) return;
     for (const rawId of Object.keys(pending)) {
         commitPendingItem(tab, Number(rawId));
+    }
+}
+
+function flushAllPendingItems() {
+    for (const rawTab of Object.keys(pendingDeltas)) {
+        flushPendingForTable(Number(rawTab));
     }
 }
 
@@ -2196,11 +2220,16 @@ function effectiveTableHasItems(tab) {
     return false;
 }
 
+const STALE_TIME_GRACE_MS = 15000;
 function cleanupStaleTimes(tableIds = null) {
     if (!initialDataReady) return;
+    const now = getServerNow();
     const ids = tableIds ? Array.from(tableIds) : Array.from({ length: 9 }, (_, i) => i + 1);
     for (const tab of ids) {
-        if (!data.times?.[tab] || data.locked?.[tab] || effectiveTableHasItems(tab)) continue;
+        const startTs = Number(data.times?.[tab]);
+        if (!startTs || data.locked?.[tab] || effectiveTableHasItems(tab)) continue;
+        // Chờ qua ngưỡng 15s để tránh máy khác xóa nhầm giờ vừa khởi tạo khi 2 gói tin tới lệch nhịp
+        if ((now - startTs) < STALE_TIME_GRACE_MS) continue;
         remove(child(timesRef, String(tab))).catch(() => {});
     }
 }
@@ -2369,11 +2398,6 @@ function renderTable(tableId, now = getServerNow()) {
     }
 }
 
-setInterval(() => {
-    const now = getServerNow();
-    for (let i = 1; i <= 9; i++) renderTableTime(i, now);
-}, 30000);
-
 function renderCrowdStatus() {
     let activeTablesCount = 0;
     for (let i = 1; i <= 9; i++) {
@@ -2457,8 +2481,7 @@ async function doPay() {
 
     const tab = currentTab;
     const lockedBeforeConfirm = !!data.locked?.[tab];
-    const orderBeforeConfirm = getMergedOrder(tab);
-    const orderSnapshotBeforeConfirm = JSON.stringify(orderBeforeConfirm);
+    const orderBeforeConfirm = normalizeOrderMap(getMergedOrder(tab));
 
     const confirmed = await showAppModal({
         title: 'Xác nhận thanh toán',
@@ -2471,15 +2494,12 @@ async function doPay() {
 
     // Kiểm tra xem máy khác có vừa mở khóa hoặc sửa đơn trong lúc hộp thoại xác nhận đang mở không
     const lockedAfterConfirm = !!data.locked?.[tab];
-    const currentMergedOrder = getMergedOrder(tab);
-    const orderSnapshotAfterConfirm = JSON.stringify(currentMergedOrder);
-    if ((lockedBeforeConfirm && !lockedAfterConfirm) || orderSnapshotBeforeConfirm !== orderSnapshotAfterConfirm) {
+    const expectedOrder = normalizeOrderMap(getMergedOrder(tab));
+    if ((lockedBeforeConfirm && !lockedAfterConfirm) || !areOrdersEqual(orderBeforeConfirm, expectedOrder)) {
         showToast('Đơn bàn này vừa được cập nhật từ thiết bị khác. Vui lòng kiểm tra lại bill!', 'warning', 4000);
         scheduleRefresh(new Set([tab]), true);
         return;
     }
-
-    const expectedOrder = normalizeOrderMap(currentMergedOrder);
 
     // Sao lưu trạng thái bàn để hoàn tác (rollback) nếu transaction bị hủy hoặc ghi Firebase thất bại
     const backupOrder = data.orders?.[tab] ? { ...data.orders[tab] } : null;
@@ -2501,6 +2521,7 @@ async function doPay() {
             data.times[tab] = backupTime;
         }
         if (backupTotal) tableTotals[tab] = backupTotal;
+        scheduleSaveLocalStateCache();
         scheduleRefresh(new Set([tab]), true);
     };
 
@@ -2515,6 +2536,7 @@ async function doPay() {
     if (data.locked) delete data.locked[tab];
     if (data.times) delete data.times[tab];
     tableTotals[tab] = 0;
+    scheduleSaveLocalStateCache();
     scheduleRefresh(new Set([tab]), true);
 
     selectTable(null, { haptic: false, allowDuringPayment: true, instantClose: true });
@@ -2541,6 +2563,7 @@ async function doPay() {
                 if (!data.times) data.times = {};
                 data.times[tab] = backupTime;
             }
+            scheduleSaveLocalStateCache();
             scheduleRefresh(new Set([tab]), true);
             showToast('Đơn bàn này vừa có thay đổi từ máy khác. Đã hủy thanh toán để kiểm tra lại!', 'warning', 4500);
             return;
