@@ -1,5 +1,17 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-app.js";
-import { getDatabase, ref, child, set as _fbSet, update as _fbUpdate, remove as _fbRemove, onValue as _fbOnValue, push as _fbPush, onDisconnect } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-database.js";
+import {
+    getDatabase,
+    ref,
+    child,
+    set as _fbSet,
+    update as _fbUpdate,
+    remove as _fbRemove,
+    onValue as _fbOnValue,
+    push as _fbPush,
+    onDisconnect,
+    increment,
+    runTransaction
+} from "https://www.gstatic.com/firebasejs/12.14.0/firebase-database.js";
 
 import { menu } from "./menu.js";
 
@@ -93,6 +105,137 @@ function onValue(refArg, callback, ...rest) {
         callback(snap);
     }, ...rest);
 }
+
+// ─── NON-BLOCKING MODAL & TOAST THAY THẾ ALERT/CONFIRM/PROMPT ───────────
+let activeModalResolver = null;
+let toastTimer = null;
+
+function showToast(message, variant = 'info', durationMs = 3200) {
+    const container = document.getElementById('app-toast-container');
+    if (!container) return;
+    const toast = document.createElement('div');
+    toast.className = `app-toast app-toast-${variant}`;
+    toast.textContent = message;
+    container.replaceChildren(toast);
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => {
+        toast.classList.add('is-leaving');
+        setTimeout(() => toast.remove(), 220);
+    }, durationMs);
+}
+
+function closeAppModal(result) {
+    const backdrop = document.getElementById('app-modal-backdrop');
+    if (backdrop) backdrop.classList.add('hidden');
+    const resolver = activeModalResolver;
+    activeModalResolver = null;
+    if (resolver) resolver(result);
+}
+
+function showAppModal({
+    title = 'Thông báo',
+    message = '',
+    type = 'alert',
+    inputType = 'password',
+    placeholder = 'Nhập mật khẩu...',
+    confirmText = 'Xác nhận',
+    cancelText = 'Hủy',
+    danger = false
+} = {}) {
+    const backdrop = document.getElementById('app-modal-backdrop');
+    const titleEl = document.getElementById('app-modal-title');
+    const msgEl = document.getElementById('app-modal-message');
+    const inputEl = document.getElementById('app-modal-input');
+    const cancelBtn = document.getElementById('app-modal-cancel');
+    const confirmBtn = document.getElementById('app-modal-confirm');
+
+    if (!backdrop || !titleEl || !msgEl || !inputEl || !cancelBtn || !confirmBtn) {
+        if (type === 'confirm') return Promise.resolve(window.confirm(message));
+        if (type === 'prompt') return Promise.resolve(window.prompt(message));
+        window.alert(message);
+        return Promise.resolve(true);
+    }
+
+    if (activeModalResolver) {
+        closeAppModal(type === 'prompt' ? null : false);
+    }
+
+    titleEl.textContent = title;
+    msgEl.textContent = message;
+    confirmBtn.textContent = confirmText;
+    cancelBtn.textContent = cancelText;
+    confirmBtn.classList.toggle('is-danger', Boolean(danger));
+
+    if (type === 'prompt') {
+        inputEl.classList.remove('hidden');
+        inputEl.type = inputType;
+        inputEl.placeholder = placeholder;
+        inputEl.value = '';
+    } else {
+        inputEl.classList.add('hidden');
+        inputEl.value = '';
+    }
+
+    cancelBtn.classList.toggle('hidden', type === 'alert');
+    backdrop.classList.remove('hidden');
+
+    return new Promise((resolve) => {
+        activeModalResolver = resolve;
+        requestAnimationFrame(() => {
+            if (type === 'prompt') inputEl.focus();
+            else confirmBtn.focus();
+        });
+    });
+}
+
+(function bindAppModalEvents() {
+    const backdrop = document.getElementById('app-modal-backdrop');
+    const inputEl = document.getElementById('app-modal-input');
+    const cancelBtn = document.getElementById('app-modal-cancel');
+    const confirmBtn = document.getElementById('app-modal-confirm');
+    if (!backdrop || !cancelBtn || !confirmBtn) return;
+
+    const getDismissValue = () => (!inputEl?.classList.contains('hidden') ? null : false);
+    const getSubmitValue = () => (!inputEl?.classList.contains('hidden') ? inputEl.value : true);
+
+    cancelBtn.addEventListener('click', () => closeAppModal(getDismissValue()));
+    confirmBtn.addEventListener('click', () => closeAppModal(getSubmitValue()));
+    backdrop.addEventListener('click', (e) => {
+        if (e.target === backdrop) closeAppModal(getDismissValue());
+    });
+    inputEl?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            closeAppModal(getSubmitValue());
+        }
+    });
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && activeModalResolver) {
+            e.preventDefault();
+            closeAppModal(getDismissValue());
+        }
+    });
+})();
+
+// ─── KHÓA CỨNG BILL & MÃ QR (CHẶN BÔI ĐEN, COPY, NHẤN GIỮ LƯU ẢNH) ────
+(function initBillAndQrLock() {
+    const shell = document.getElementById('bill-flip-shell');
+    const qrImg = document.getElementById('payment-qr');
+    if (qrImg) {
+        qrImg.draggable = false;
+        qrImg.setAttribute('draggable', 'false');
+    }
+    if (!shell) return;
+    const blockEvent = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        return false;
+    };
+    ['contextmenu', 'selectstart', 'copy', 'cut', 'dragstart'].forEach((evt) => {
+        shell.addEventListener(evt, blockEvent, { capture: true });
+        if (qrImg) qrImg.addEventListener(evt, blockEvent, { capture: true });
+    });
+})();
 
 let currentBillLang = 'vi';
 let currentTab = null;
@@ -783,13 +926,11 @@ function buildWavBlobUrl(notes, sampleRate = 22050) {
             const release = Math.min(1, (lenIdx - 1 - i) / releaseSamples);
 
             if (isWood) {
-                // Mô phỏng thanh gỗ đàn Marimba / Xylophone: bội âm bậc 3 & 4 tắt nhanh + tiếng gõ dùi gỗ
                 const bodyEnv = Math.exp(-elapsedSec * 16.5);
                 const overtone2Env = Math.exp(-elapsedSec * 34);
                 const overtone3Env = Math.exp(-elapsedSec * 58);
                 const overtone4Env = Math.exp(-elapsedSec * 85);
 
-                // Tiếng gõ dùi gỗ ("cốc" siêu ngắn 10ms đầu)
                 let malletKnock = 0;
                 if (elapsedSec < 0.012) {
                     const knockFreq = 2250 - (elapsedSec / 0.012) * 850;
@@ -820,7 +961,6 @@ function buildWavBlobUrl(notes, sampleRate = 22050) {
         }
     }
 
-    // Soft-limiter nén RMS tăng độ to cảm nhận +8dB mà không rè vỡ tiếng
     const drive = 2.6;
     const norm = Math.tanh(drive);
     const dataSize = numSamples * 2;
@@ -856,10 +996,13 @@ function buildWavBlobUrl(notes, sampleRate = 22050) {
 const wavUrlMap = {};
 const htmlAudioPools = {};
 const htmlAudioPoolIdx = {};
+let soundPoolsInitialized = false;
 let audioUnlocked = false;
 
-function initSoundPools() {
+function ensureSoundPools() {
+    if (soundPoolsInitialized) return;
     if (typeof URL === 'undefined' || typeof Blob === 'undefined') return;
+    soundPoolsInitialized = true;
     for (const [type, notes] of Object.entries(SOUND_PATTERNS)) {
         try {
             const url = buildWavBlobUrl(notes);
@@ -879,7 +1022,11 @@ function initSoundPools() {
         tingEl.load();
     }
 }
-initSoundPools();
+
+// Chỉ khởi tạo trước pool 28 thẻ <audio> trên iOS; Android/Desktop dùng Web Audio API
+if (IS_IOS_DEVICE) {
+    ensureSoundPools();
+}
 
 let sharedAudioCtx = null;
 let sharedAudioMaster = null;
@@ -927,23 +1074,26 @@ function unlockAllAudio() {
     }
     if (!audioUnlocked) {
         audioUnlocked = true;
-        for (const pool of Object.values(htmlAudioPools)) {
-            for (const a of pool) {
-                try {
-                    a.muted = true;
-                    const p = a.play();
-                    if (p && p.then) {
-                        p.then(() => { a.pause(); a.currentTime = 0; a.muted = false; }).catch(() => { a.muted = false; });
-                    } else {
-                        a.pause(); a.currentTime = 0; a.muted = false;
-                    }
-                } catch (e) { a.muted = false; }
+        if (soundPoolsInitialized) {
+            for (const pool of Object.values(htmlAudioPools)) {
+                for (const a of pool) {
+                    try {
+                        a.muted = true;
+                        const p = a.play();
+                        if (p && p.then) {
+                            p.then(() => { a.pause(); a.currentTime = 0; a.muted = false; }).catch(() => { a.muted = false; });
+                        } else {
+                            a.pause(); a.currentTime = 0; a.muted = false;
+                        }
+                    } catch (e) { a.muted = false; }
+                }
             }
         }
     }
 }
 
 function playHtmlWav(type) {
+    ensureSoundPools();
     const pool = htmlAudioPools[type] || htmlAudioPools.ting || htmlAudioPools.nav;
     if (!pool || !pool.length) return false;
     const idx = (htmlAudioPoolIdx[type] || 0) % pool.length;
@@ -972,7 +1122,6 @@ function playWebAudioNotes(notes) {
         const peak = Math.min(1.0, n.vol || 1.0);
 
         if (n.instrument === 'wood') {
-            // Âm sắc thanh gỗ Marimba / Xylophone ("leng keng")
             const bodyOsc = ctx.createOscillator();
             const ot2Osc = ctx.createOscillator();
             const ot3Osc = ctx.createOscillator();
@@ -997,7 +1146,6 @@ function playWebAudioNotes(notes) {
             ot4Osc.type = 'sine';
             ot4Osc.frequency.setValueAtTime(n.freq * 4, start);
 
-            // Tiếng gõ dùi gỗ ngắn ở đầu nốt
             malletOsc.type = 'triangle';
             malletOsc.frequency.setValueAtTime(2250, start);
             malletOsc.frequency.exponentialRampToValueAtTime(1350, start + 0.012);
@@ -1096,8 +1244,9 @@ function playUiSound(type = 'nav') {
 }
 
 function toggleSoundMute() {
+    const wasUnlocked = audioUnlocked;
     unlockAllAudio();
-    if (!isSoundMuted && !audioUnlocked) {
+    if (!isSoundMuted && !wasUnlocked) {
         playUiSound('ting');
         return;
     }
@@ -1355,7 +1504,6 @@ function renderRemoteCursors(snapVal) {
         }
     });
 
-    // Đo tọa độ mỗi thẻ bàn tối đa 1 lần cho toàn bộ khung hình
     const tableRects = new Map();
     const countPerTable = {}, tableViewerColor = {};
     entries.forEach(([id, c]) => {
@@ -1582,7 +1730,6 @@ document.getElementById('menu-cat-nav')?.addEventListener('click', (e) => {
     document.getElementById(`cat-sec-${idx}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 });
 
-// Highlight active category pill khi cuộn thực đơn
 let catScrollTicking = false;
 window.addEventListener('scroll', () => {
     if (!currentTab || data.locked?.[currentTab] || catScrollTicking) return;
@@ -1630,12 +1777,45 @@ if (checkoutBtnEl && 'IntersectionObserver' in window) {
     checkoutObserver.observe(checkoutBtnEl);
 }
 
-// ─── DỮ LIỆU CHÍNH FIREBASE ────────────────────────────────────────────
-const pendingUpdates = {};
+// ─── DỮ LIỆU CHÍNH FIREBASE (ATOMIC INCREMENT + DELTA TRACKING) ────────
+const pendingDeltas = {};
+const localEchoDeltas = {};
 let firstOrdersLoad = true;
 const initialBranchesLoaded = new Set();
 let initialDataReady = false;
 const pendingRemoteOrderFlashes = [];
+
+function recordLocalEchoDelta(tableId, itemId, delta) {
+    if (!delta) return;
+    if (!localEchoDeltas[tableId]) localEchoDeltas[tableId] = {};
+    localEchoDeltas[tableId][itemId] = (localEchoDeltas[tableId][itemId] || 0) + delta;
+    if (localEchoDeltas[tableId][itemId] === 0) {
+        delete localEchoDeltas[tableId][itemId];
+        if (Object.keys(localEchoDeltas[tableId]).length === 0) delete localEchoDeltas[tableId];
+    }
+}
+
+function consumeLocalEchoDelta(tableId, itemId, observedDelta) {
+    const expected = localEchoDeltas[tableId]?.[itemId] || 0;
+    if (!expected) return false;
+    if (expected === observedDelta) {
+        delete localEchoDeltas[tableId][itemId];
+        if (Object.keys(localEchoDeltas[tableId]).length === 0) delete localEchoDeltas[tableId];
+        return true;
+    }
+    // Trường hợp gộp với thay đổi từ máy khác trong cùng frame
+    if ((expected > 0 && observedDelta > 0) || (expected < 0 && observedDelta < 0)) {
+        const remaining = expected - observedDelta;
+        if (remaining === 0) {
+            delete localEchoDeltas[tableId][itemId];
+            if (Object.keys(localEchoDeltas[tableId]).length === 0) delete localEchoDeltas[tableId];
+            return true;
+        }
+        localEchoDeltas[tableId][itemId] = remaining;
+        return Math.abs(observedDelta) <= Math.abs(expected);
+    }
+    return false;
+}
 
 function queueRemoteOrderFlashes(prevOrders, nextOrders, ignoredTables = null) {
     let queued = 0;
@@ -1651,13 +1831,13 @@ function queueRemoteOrderFlashes(prevOrders, nextOrders, ignoredTables = null) {
             const newQty = Number(nextTable?.[rawId] || 0);
             if (oldQty === newQty) continue;
 
-            const localPendingQty = pendingUpdates[tableId]?.[itemId];
-            if (localPendingQty !== undefined && Number(localPendingQty) === newQty) continue;
+            const observedDelta = newQty - oldQty;
+            if (consumeLocalEchoDelta(tableId, itemId, observedDelta)) continue;
 
             pendingRemoteOrderFlashes.push({
                 tableId,
                 itemId,
-                delta: newQty - oldQty
+                delta: observedDelta
             });
             queued++;
         }
@@ -1696,19 +1876,19 @@ function markInitialBranchLoaded(branch) {
 
 onValue(ordersRef, snap => {
     const nextOrders = snap.val() || {};
+    if (localPaymentEchoTables.size) {
+        for (const tableId of Array.from(localPaymentEchoTables)) {
+            if (!nextOrders?.[tableId] || Object.keys(nextOrders[tableId]).length === 0) {
+                localPaymentEchoTables.delete(tableId);
+            }
+        }
+    }
     const changed = changedTableIds(data.orders, nextOrders);
     if (!firstOrdersLoad && changed.size) {
         const ignoredTables = localPaymentEchoTables.size ? new Set(localPaymentEchoTables) : null;
         const remoteChanges = queueRemoteOrderFlashes(data.orders, nextOrders, ignoredTables);
         if (remoteChanges > 0 && (Date.now() - lastRemoteSfxTs) > 1200) {
             playUiSound('ting');
-        }
-        if (ignoredTables) {
-            for (const tableId of ignoredTables) {
-                if (!nextOrders?.[tableId] || Object.keys(nextOrders[tableId]).length === 0) {
-                    localPaymentEchoTables.delete(tableId);
-                }
-            }
         }
     }
     data.orders = nextOrders;
@@ -1774,13 +1954,20 @@ function selectTable(n, options = {}) {
     }
 }
 
-// ─── Debounce Firebase write 250ms & Flush tức thì khi chốt đơn ─────────
+// ─── Debounce Firebase write 250ms với Atomic Increment & Flush tức thì ───
 const debounceTimers = {};
 const debounceVersions = {};
 const pendingStartTimes = new Set();
 
+function getEffectiveItemQty(tab, itemId) {
+    const serverQty = Number(data.orders?.[tab]?.[itemId] || 0);
+    const delta = Number(pendingDeltas[tab]?.[itemId] || 0);
+    return Math.max(0, serverQty + delta);
+}
+
 function clearPendingForTable(tab) {
-    delete pendingUpdates[tab];
+    delete pendingDeltas[tab];
+    delete localEchoDeltas[tab];
     pendingStartTimes.delete(tab);
     const prefix = `${tab}_`;
     for (const key of Object.keys(debounceTimers)) {
@@ -1801,13 +1988,22 @@ function commitPendingItem(tab, id, expectedVersion = null) {
     clearTimeout(debounceTimers[key]);
     delete debounceTimers[key];
 
-    const finalQty = pendingUpdates[tab]?.[id];
-    if (finalQty === undefined) {
+    const deltaToSend = Number(pendingDeltas[tab]?.[id] || 0);
+    if (deltaToSend === 0) {
+        if (pendingDeltas[tab]) {
+            delete pendingDeltas[tab][id];
+            if (Object.keys(pendingDeltas[tab]).length === 0) delete pendingDeltas[tab];
+        }
         if (debounceVersions[key] === version) delete debounceVersions[key];
         return;
     }
 
-    if (!data.times?.[tab] && !pendingStartTimes.has(tab) && finalQty > 0) {
+    // Trừ delta khỏi pendingDeltas trước khi gọi update() vì Firebase SDK tự áp dụng latency compensation cục bộ ngay lập tức
+    delete pendingDeltas[tab][id];
+    if (Object.keys(pendingDeltas[tab]).length === 0) delete pendingDeltas[tab];
+    recordLocalEchoDelta(tab, id, deltaToSend);
+
+    if (deltaToSend > 0 && !data.times?.[tab] && !pendingStartTimes.has(tab)) {
         pendingStartTimes.add(tab);
         const startTs = getServerNow();
         set(child(timesRef, String(tab)), startTs)
@@ -1815,12 +2011,14 @@ function commitPendingItem(tab, id, expectedVersion = null) {
             .finally(() => pendingStartTimes.delete(tab));
     }
 
-    const sentQty = finalQty;
-    update(child(ordersRef, String(tab)), { [id]: sentQty > 0 ? sentQty : null })
+    const itemRef = child(ordersRef, `${tab}/${id}`);
+    update(child(ordersRef, String(tab)), { [id]: increment(deltaToSend) })
         .then(() => {
-            if (debounceVersions[key] === version && pendingUpdates[tab]?.[id] === sentQty) {
-                delete pendingUpdates[tab][id];
-                if (Object.keys(pendingUpdates[tab]).length === 0) delete pendingUpdates[tab];
+            // Dọn node về null an toàn bằng transaction nếu số lượng <= 0 mà không ghi đè thao tác tăng đồng thời
+            const currentServerQty = Number(data.orders?.[tab]?.[id] || 0);
+            const currentUncommitted = Number(pendingDeltas[tab]?.[id] || 0);
+            if (currentServerQty <= 0 && currentUncommitted <= 0) {
+                runTransaction(itemRef, (cur) => (cur !== null && Number(cur) <= 0 ? null : cur)).catch(() => {});
             }
             queueMicrotask(() => {
                 if (!effectiveTableHasItems(tab)) remove(child(timesRef, String(tab))).catch(() => {});
@@ -1828,11 +2026,10 @@ function commitPendingItem(tab, id, expectedVersion = null) {
         })
         .catch(err => {
             console.error('[orders] Lỗi ghi Firebase:', err);
-            if (debounceVersions[key] === version && pendingUpdates[tab]?.[id] === sentQty) {
-                delete pendingUpdates[tab][id];
-                if (Object.keys(pendingUpdates[tab]).length === 0) delete pendingUpdates[tab];
-                scheduleRefresh(new Set([tab]), currentTab === tab);
-            }
+            recordLocalEchoDelta(tab, id, -deltaToSend);
+            if (!pendingDeltas[tab]) pendingDeltas[tab] = {};
+            pendingDeltas[tab][id] = (pendingDeltas[tab][id] || 0) + deltaToSend;
+            scheduleRefresh(new Set([tab]), currentTab === tab);
         })
         .finally(() => {
             if (debounceVersions[key] === version) {
@@ -1843,7 +2040,7 @@ function commitPendingItem(tab, id, expectedVersion = null) {
 }
 
 function flushPendingForTable(tab) {
-    const pending = pendingUpdates[tab];
+    const pending = pendingDeltas[tab];
     if (!pending) return;
     for (const rawId of Object.keys(pending)) {
         commitPendingItem(tab, Number(rawId));
@@ -1852,11 +2049,11 @@ function flushPendingForTable(tab) {
 
 function getMergedOrder(tab) {
     const serverOrder = data.orders?.[tab] || {};
-    const pendingOrder = pendingUpdates[tab];
+    const pendingOrder = pendingDeltas[tab];
     if (!pendingOrder) return serverOrder;
     const merged = { ...serverOrder };
-    for (const [id, qty] of Object.entries(pendingOrder)) {
-        const cleanQty = Math.max(0, Number(qty) || 0);
+    for (const [id, delta] of Object.entries(pendingOrder)) {
+        const cleanQty = Math.max(0, (Number(merged[id]) || 0) + (Number(delta) || 0));
         if (cleanQty > 0) merged[id] = cleanQty;
         else delete merged[id];
     }
@@ -1888,8 +2085,7 @@ function playQtyBump(el) {
 
 function effectiveTableHasItems(tab) {
     for (const item of ALL_ITEMS) {
-        const qty = pendingUpdates[tab]?.[item.id] ?? data.orders?.[tab]?.[item.id] ?? 0;
-        if (Number(qty) > 0) return true;
+        if (getEffectiveItemQty(tab, item.id) > 0) return true;
     }
     return false;
 }
@@ -1924,15 +2120,20 @@ function change(id, delta) {
     broadcastFocus(id);
 
     const tab = currentTab;
-    const order = data.orders[tab] || {};
-    const currentQty = (pendingUpdates[tab]?.[id] ?? order[id]) || 0;
+    const currentQty = getEffectiveItemQty(tab, id);
     if (delta < 0 && currentQty <= 0) return;
 
-    // Optimistic update ngay lập tức cho cả dòng món lẫn thẻ bàn phía trên
-    const newQty = Math.max(0, currentQty + delta);
-    if (!pendingUpdates[tab]) pendingUpdates[tab] = {};
-    pendingUpdates[tab][id] = newQty;
+    // Cộng dồn delta cục bộ để tránh lost-update khi nhiều thiết bị bấm cùng lúc
+    if (!pendingDeltas[tab]) pendingDeltas[tab] = {};
+    const nextDelta = (pendingDeltas[tab][id] || 0) + delta;
+    if (nextDelta === 0) {
+        delete pendingDeltas[tab][id];
+        if (Object.keys(pendingDeltas[tab]).length === 0) delete pendingDeltas[tab];
+    } else {
+        pendingDeltas[tab][id] = nextDelta;
+    }
 
+    const newQty = getEffectiveItemQty(tab, id);
     const itemDom = ITEM_DOM.get(id);
     const qSpan = itemDom?.qty;
     const row = itemDom?.row;
@@ -1942,7 +2143,7 @@ function change(id, delta) {
         playQtyBump(qSpan);
     }
     renderTable(tab, getServerNow());
-    renderCrowdAndReset();
+    renderCrowdStatus();
     flashRow(id, delta);
 
     // Debounce ghi Firebase
@@ -1968,40 +2169,14 @@ function changeBillLang(l) {
     scrollBillIntoView();
 }
 
-// ─── Tính tổng tiền + số món ăn / nước uống (gộp cả pendingUpdates) ─────
+// ─── Tính tổng tiền + số món ăn / nước uống (gộp cả pendingDeltas) ───────
 function calculateTableStats(tableId) {
     let total = 0, foodQty = 0, drinkQty = 0;
-    const serverOrder = data.orders?.[tableId] || {};
-    const pendingOrder = pendingUpdates[tableId];
-    if (!pendingOrder) {
-        for (const id in serverOrder) {
-            const itemId = Number(id);
-            const item = ITEM_MAP.get(itemId);
-            const qty = Math.max(0, Number(serverOrder[id]) || 0);
-            if (!item || qty <= 0) continue;
-            total += item.price * qty;
-            if (DRINK_ITEM_IDS.has(itemId)) drinkQty += qty;
-            else foodQty += qty;
-        }
-        return { total, foodQty, drinkQty };
-    }
-
-    const seen = new Set();
-    for (const id in pendingOrder) {
-        seen.add(id);
+    const mergedOrder = getMergedOrder(tableId);
+    for (const id in mergedOrder) {
         const itemId = Number(id);
         const item = ITEM_MAP.get(itemId);
-        const qty = Math.max(0, Number(pendingOrder[id]) || 0);
-        if (!item || qty <= 0) continue;
-        total += item.price * qty;
-        if (DRINK_ITEM_IDS.has(itemId)) drinkQty += qty;
-        else foodQty += qty;
-    }
-    for (const id in serverOrder) {
-        if (seen.has(id)) continue;
-        const itemId = Number(id);
-        const item = ITEM_MAP.get(itemId);
-        const qty = Math.max(0, Number(serverOrder[id]) || 0);
+        const qty = Math.max(0, Number(mergedOrder[id]) || 0);
         if (!item || qty <= 0) continue;
         total += item.price * qty;
         if (DRINK_ITEM_IDS.has(itemId)) drinkQty += qty;
@@ -2030,7 +2205,7 @@ function renderCurrentOrder() {
     updateScrollCheckoutButton();
 
     ALL_ITEMS.forEach(item => {
-        const q = Math.max(0, pendingUpdates[currentTab]?.[item.id] ?? data.orders[currentTab]?.[item.id] ?? 0);
+        const q = getEffectiveItemQty(currentTab, item.id);
         const itemDom = ITEM_DOM.get(item.id);
         const row = itemDom?.row, qSpan = itemDom?.qty;
         if (row && qSpan && qSpan.textContent !== String(q)) {
@@ -2094,12 +2269,11 @@ setInterval(() => {
     for (let i = 1; i <= 9; i++) renderTableTime(i, now);
 }, 30000);
 
-function renderCrowdAndReset() {
+function renderCrowdStatus() {
     let activeTablesCount = 0;
     for (let i = 1; i <= 9; i++) {
         if (tableTotals[i] > 0 || data.locked?.[i]) activeTablesCount++;
     }
-    const anyGuest = activeTablesCount > 0;
     const crowdEl = document.getElementById('crowd-status');
     const crowdTxt = document.getElementById('crowd-text');
     const crowdIcon = document.getElementById('crowd-icon');
@@ -2112,7 +2286,6 @@ function renderCrowdAndReset() {
             crowdEl.className = 'status-badge status-crowded'; crowdTxt.textContent = 'ĐÔNG KHÁCH'; crowdIcon.textContent = '🚨';
         }
     }
-    document.getElementById('reset-area').style.display = anyGuest ? 'none' : 'block';
 }
 
 function refresh(tableIds = null, updateCurrentOrder = true) {
@@ -2121,7 +2294,7 @@ function refresh(tableIds = null, updateCurrentOrder = true) {
     if (updateCurrentOrder && currentAffected) renderCurrentOrder();
     const now = getServerNow();
     for (const id of ids) renderTable(Number(id), now);
-    renderCrowdAndReset();
+    renderCrowdStatus();
     flushRemoteOrderFlashes();
 }
 
@@ -2174,23 +2347,37 @@ function setLock(v) {
     if (v) setTimeout(scrollBillIntoView, 100);
 }
 
-function doPay() {
+async function doPay() {
     if (!currentTab || paymentInProgress) return;
 
     const tab = currentTab;
     const lockedBeforeConfirm = !!data.locked?.[tab];
     const orderSnapshotBeforeConfirm = JSON.stringify(getMergedOrder(tab));
 
-    if (!confirm("Xác nhận thanh toán?")) return;
+    const confirmed = await showAppModal({
+        title: 'Xác nhận thanh toán',
+        message: `Xác nhận thanh toán và đóng bill cho Bàn ${tab}?`,
+        type: 'confirm',
+        confirmText: 'Thanh toán',
+        cancelText: 'Quay lại'
+    });
+    if (!confirmed || currentTab !== tab || paymentInProgress) return;
 
     // Kiểm tra xem máy khác có vừa mở khóa hoặc sửa đơn trong lúc hộp thoại xác nhận đang mở không
     const lockedAfterConfirm = !!data.locked?.[tab];
-    const orderSnapshotAfterConfirm = JSON.stringify(getMergedOrder(tab));
+    const currentMergedOrder = getMergedOrder(tab);
+    const orderSnapshotAfterConfirm = JSON.stringify(currentMergedOrder);
     if ((lockedBeforeConfirm && !lockedAfterConfirm) || orderSnapshotBeforeConfirm !== orderSnapshotAfterConfirm) {
-        alert("Đơn bàn này vừa được cập nhật hoặc mở khóa từ thiết bị khác. Vui lòng kiểm tra lại bill trước khi thanh toán!");
+        showToast('Đơn bàn này vừa được cập nhật từ thiết bị khác. Vui lòng kiểm tra lại bill!', 'warning', 4000);
         scheduleRefresh(new Set([tab]), true);
         return;
     }
+
+    // Sao lưu trạng thái bàn để hoàn tác (rollback) nếu ghi Firebase thất bại
+    const backupOrder = data.orders?.[tab] ? { ...data.orders[tab] } : null;
+    const backupLocked = data.locked?.[tab] !== undefined ? data.locked[tab] : null;
+    const backupTime = data.times?.[tab] !== undefined ? data.times[tab] : null;
+    const backupTotal = tableTotals[tab];
 
     paymentInProgress = true;
     localPaymentEchoTables.add(tab);
@@ -2199,11 +2386,13 @@ function doPay() {
     triggerHaptic('success');
     broadcastSfx('success', tab, true);
 
-    const paymentWrite = update(dbRef, {
+    const payload = {
         [`orders/${tab}`]: null,
         [`locked/${tab}`]: null,
         [`times/${tab}`]: null
-    });
+    };
+
+    const paymentWrite = update(dbRef, payload);
 
     if (data.orders) delete data.orders[tab];
     if (data.locked) delete data.locked[tab];
@@ -2214,23 +2403,32 @@ function doPay() {
     selectTable(null, { haptic: false, allowDuringPayment: true, instantClose: true });
     paymentInProgress = false;
 
-    paymentWrite.catch(err => {
-        localPaymentEchoTables.delete(tab);
-        console.error('[payment] Lỗi ghi Firebase:', err);
-        alert('Thanh toán chưa đồng bộ được lên hệ thống. Dữ liệu bàn sẽ được Firebase khôi phục nếu ghi thất bại.');
-    });
-}
+    paymentWrite
+        .then(() => {
+            localPaymentEchoTables.delete(tab);
+        })
+        .catch(err => {
+            localPaymentEchoTables.delete(tab);
+            console.error('[payment] Lỗi ghi Firebase:', err);
 
-async function doReset() {
-    if (prompt("Mật khẩu xóa dữ liệu:") === "123") {
-        try {
-            await update(dbRef, { orders: null, locked: null, times: null });
-            location.reload();
-        } catch (err) {
-            console.error('[reset] Lỗi xóa dữ liệu:', err);
-            alert('Không thể xóa dữ liệu. Vui lòng thử lại.');
-        }
-    }
+            // Rollback trạng thái bàn về trước lúc bấm thanh toán
+            if (backupOrder && !data.orders?.[tab]) {
+                if (!data.orders) data.orders = {};
+                data.orders[tab] = backupOrder;
+            }
+            if (backupLocked !== null && data.locked?.[tab] === undefined) {
+                if (!data.locked) data.locked = {};
+                data.locked[tab] = backupLocked;
+            }
+            if (backupTime !== null && data.times?.[tab] === undefined) {
+                if (!data.times) data.times = {};
+                data.times[tab] = backupTime;
+            }
+            tableTotals[tab] = backupTotal;
+            scheduleRefresh(new Set([tab]), true);
+
+            showToast('Mất kết nối! Thanh toán chưa lưu được, dữ liệu bàn đã được khôi phục.', 'error', 4500);
+        });
 }
 
 // RIPPLE
@@ -2395,7 +2593,8 @@ function runPaperFlipIntro() {
     animateSingleSheet($('.header-title'),       0,    2, true);
     animateSingleSheet($('#weather-hub'),        110,  0, true);
     animateSingleSheet($('#presence-count'),     215,  1, false);
-    animateSingleSheet($('#dark-toggle'),        305,  2, false);
+    animateSingleSheet($('#sound-toggle'),       260,  0, false);
+    animateSingleSheet($('#dark-toggle'),        310,  2, false);
     animateSingleSheet($('#crowd-status'),       400,  1, true);
     animateSingleSheet($('#load-speed-widget'),  505,  3, false);
     animateSingleSheet($('#net-speed-widget'),   605,  0, false);
@@ -2457,4 +2656,4 @@ if (document.readyState === 'complete') {
 
 updateNetWidget();
 
-window.selectTable = selectTable; window.setLock = setLock; window.doPay = doPay; window.doReset = doReset; window.changeBillLang = changeBillLang; window.toggleDarkMode = toggleDarkMode; window.toggleSoundMute = toggleSoundMute; window.scrollToCheckout = scrollToCheckout; window.toggleBillQr = toggleBillQr;
+window.selectTable = selectTable; window.setLock = setLock; window.doPay = doPay; window.changeBillLang = changeBillLang; window.toggleDarkMode = toggleDarkMode; window.toggleSoundMute = toggleSoundMute; window.scrollToCheckout = scrollToCheckout; window.toggleBillQr = toggleBillQr;
