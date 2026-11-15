@@ -48,8 +48,8 @@
             <span class="online-dot"></span>
             👥 Online: <span id="online-val">1</span>
         </div>
-        <button id="sound-toggle" onclick="toggleSoundMute()" aria-label="Bật/tắt âm thanh thông báo" title="Bật/tắt âm thanh (bấm để thử loa)">🔊</button>
-        <button id="dark-toggle" onclick="toggleDarkMode()" aria-label="Chuyển giao diện sáng/tối">🌙</button>
+        <button id="sound-toggle" data-action="toggle-sound" aria-label="Bật/tắt âm thanh thông báo" title="Bật/tắt âm thanh (bấm để thử loa)">🔊</button>
+        <button id="dark-toggle" data-action="toggle-dark" aria-label="Chuyển giao diện sáng/tối">🌙</button>
     </div>
 </div>
 
@@ -114,15 +114,15 @@
 </div>
 
 <div class="tables-container" id="tables-container">
-    <div class="table-card" id="tab-1" onclick="selectTable(1)"><strong>Bàn 1</strong><span class="table-price skeleton" id="sum-1">0đ</span><span class="table-meta" id="meta-1"></span><span class="table-time skeleton" id="time-1">⏱ 0 phút</span></div>
-    <div class="table-card" id="tab-2" onclick="selectTable(2)"><strong>Bàn 2</strong><span class="table-price skeleton" id="sum-2">0đ</span><span class="table-meta" id="meta-2"></span><span class="table-time skeleton" id="time-2">⏱ 0 phút</span></div>
-    <div class="table-card" id="tab-3" onclick="selectTable(3)"><strong>Bàn 3</strong><span class="table-price skeleton" id="sum-3">0đ</span><span class="table-meta" id="meta-3"></span><span class="table-time skeleton" id="time-3">⏱ 0 phút</span></div>
-    <div class="table-card" id="tab-4" onclick="selectTable(4)"><strong>Bàn 4</strong><span class="table-price skeleton" id="sum-4">0đ</span><span class="table-meta" id="meta-4"></span><span class="table-time skeleton" id="time-4">⏱ 0 phút</span></div>
-    <div class="table-card" id="tab-5" onclick="selectTable(5)"><strong>Bàn 5</strong><span class="table-price skeleton" id="sum-5">0đ</span><span class="table-meta" id="meta-5"></span><span class="table-time skeleton" id="time-5">⏱ 0 phút</span></div>
-    <div class="table-card" id="tab-6" onclick="selectTable(6)"><strong>Bàn 6</strong><span class="table-price skeleton" id="sum-6">0đ</span><span class="table-meta" id="meta-6"></span><span class="table-time skeleton" id="time-6">⏱ 0 phút</span></div>
-    <div class="table-card full-width" id="tab-7" onclick="selectTable(7)"><strong>BÀN TRONG HIÊN</strong><span class="table-price skeleton" id="sum-7">0đ</span><span class="table-meta" id="meta-7"></span><span class="table-time skeleton" id="time-7">⏱ 0 phút</span></div>
-    <div class="table-card half-width" id="tab-8" onclick="selectTable(8)"><strong>NGOÀI ĐƯỜNG (TRÁI)</strong><span class="table-price skeleton" id="sum-8">0đ</span><span class="table-meta" id="meta-8"></span><span class="table-time skeleton" id="time-8">⏱ 0 phút</span></div>
-    <div class="table-card half-width" id="tab-9" onclick="selectTable(9)"><strong>NGOÀI ĐƯỜNG (PHẢI)</strong><span class="table-price skeleton" id="sum-9">0đ</span><span class="table-meta" id="meta-9"></span><span class="table-time skeleton" id="time-9">⏱ 0 phút</span></div>
+    <div class="table-card" id="tab-1" data-table="1"><strong>Bàn 1</strong><span class="table-price skeleton" id="sum-1">0đ</span><span class="table-meta" id="meta-1"></span><span class="table-time skeleton" id="time-1">⏱ 0 phút</span></div>
+    <div class="table-card" id="tab-2" data-table="2"><strong>Bàn 2</strong><span class="table-price skeleton" id="sum-2">0đ</span><span class="table-meta" id="meta-2"></span><span class="table-time skeleton" id="time-2">⏱ 0 phút</span></div>
+    <div class="table-card" id="tab-3" data-table="3"><strong>Bàn 3</strong><span class="table-price skeleton" id="sum-3">0đ</span><span class="table-meta" id="meta-3"></span><span class="table-time skeleton" id="time-3">⏱ 0 phút</span></div>
+    <div class="table-card" id="tab-4" data-table="4"><strong>Bàn 4</strong><span class="table-price skeleton" id="sum-4">0đ</span><span class="table-meta" id="meta-4"></span><span class="table-time skeleton" id="time-4">⏱ 0 phút</span></div>
+    <div class="table-card" id="tab-5" data-table="5"><strong>Bàn 5</strong><span class="table-price skeleton" id="sum-5">0đ</span><span class="table-meta" id="meta-5"></span><span class="table-time skeleton" id="time-5">⏱ 0 phút</span></div>
+    <div class="table-card" id="tab-6" data-table="6"><strong>Bàn 6</strong><span class="table-price skeleton" id="sum-6">0đ</span><span class="table-meta" id="meta-6"></span><span class="table-time skeleton" id="time-6">⏱ 0 phút</span></div>
+    <div class="table-card full-width" id="tab-7" data-table="7"><strong>BÀN TRONG HIÊN</strong><span class="table-price skeleton" id="sum-7">0đ</span><span class="table-meta" id="meta-7"></span><span class="table-time skeleton" id="time-7">⏱ 0 phút</span></div>
+    <div class="table-card half-width" id="tab-8" data-table="8"><strong>NGOÀI ĐƯỜNG (TRÁI)</strong><span class="table-price skeleton" id="sum-8">0đ</span><span class="table-meta" id="meta-8"></span><span class="table-time skeleton" id="time-8">⏱ 0 phút</span></div>
+    <div class="table-card half-width" id="tab-9" data-table="9"><strong>NGOÀI ĐƯỜNG (PHẢI)</strong><span class="table-price skeleton" id="sum-9">0đ</span><span class="table-meta" id="meta-9"></span><span class="table-time skeleton" id="time-9">⏱ 0 phút</span></div>
 </div>
 
 <div id="order-section" class="container" style="display:none;">
@@ -130,7 +130,7 @@
     <div id="menu-area" style="position: relative;">
         <div id="menu-cat-nav" class="menu-cat-nav" aria-label="Nhảy nhanh nhóm món"></div>
         <div id="menu-list"></div>
-        <button class="btn-action" id="btn-checkout" style="background: var(--warning-orange)" onclick="setLock(true)">CHỐT ĐƠN & XEM BILL</button>
+        <button class="btn-action" id="btn-checkout" style="background: var(--warning-orange)" data-action="lock-bill">CHỐT ĐƠN & XEM BILL</button>
     </div>
     <div id="bill-area" style="display:none;">
         <div class="printer-slot"></div>
@@ -159,39 +159,39 @@
                 </div>
             </div>
         </div>
-        <button class="btn-action qr-toggle-btn" id="btn-qr-toggle" style="background: var(--blue)" onclick="toggleBillQr()">MÃ QR</button>
-        <button class="btn-action" style="background: var(--blue)" onclick="setLock(false)">GỌI THÊM MÓN</button>
-        <button class="btn-action" style="background: var(--success-green)" onclick="doPay()">XÁC NHẬN THANH TOÁN</button>
+        <button class="btn-action qr-toggle-btn" id="btn-qr-toggle" style="background: var(--blue)" data-action="toggle-qr">MÃ QR</button>
+        <button class="btn-action" style="background: var(--blue)" data-action="unlock-bill">GỌI THÊM MÓN</button>
+        <button class="btn-action" style="background: var(--success-green)" data-action="pay-bill">XÁC NHẬN THANH TOÁN</button>
         <div class="lang-grid" id="lang-grid">
-            <button class="lang-btn active-lang" data-lang="vi" onclick="changeBillLang('vi')"><span>🇻🇳</span><span>VN</span></button>
-            <button class="lang-btn" data-lang="en" onclick="changeBillLang('en')"><span>🇺🇸</span><span>EN</span></button>
-            <button class="lang-btn" data-lang="fr" onclick="changeBillLang('fr')"><span>🇫🇷</span><span>FR</span></button>
-            <button class="lang-btn" data-lang="kr" onclick="changeBillLang('kr')"><span>🇰🇷</span><span>KR</span></button>
-            <button class="lang-btn" data-lang="jp" onclick="changeBillLang('jp')"><span>🇯🇵</span><span>JP</span></button>
-            <button class="lang-btn" data-lang="th" onclick="changeBillLang('th')"><span>🇹🇭</span><span>TH</span></button>
-            <button class="lang-btn" data-lang="it" onclick="changeBillLang('it')"><span>🇮🇹</span><span>IT</span></button>
-            <button class="lang-btn" data-lang="pt" onclick="changeBillLang('pt')"><span>🇵🇹</span><span>PT</span></button>
-            <button class="lang-btn" data-lang="es" onclick="changeBillLang('es')"><span>🇪🇸</span><span>ES</span></button>
-            <button class="lang-btn" data-lang="cn" onclick="changeBillLang('cn')"><span>🇨🇳</span><span>CN</span></button>
-            <button class="lang-btn" data-lang="de" onclick="changeBillLang('de')"><span>🇩🇪</span><span>DE</span></button>
-            <button class="lang-btn" data-lang="ru" onclick="changeBillLang('ru')"><span>🇷🇺</span><span>RU</span></button>
-            <button class="lang-btn" data-lang="be" onclick="changeBillLang('be')"><span>🇧🇪</span><span>BE</span></button>
-            <button class="lang-btn" data-lang="hu" onclick="changeBillLang('hu')"><span>🇭🇺</span><span>HU</span></button>
-            <button class="lang-btn" data-lang="at" onclick="changeBillLang('at')"><span>🇦🇹</span><span>AT</span></button>
-            <button class="lang-btn" data-lang="tw" onclick="changeBillLang('tw')"><span>🇹🇼</span><span>TW</span></button>
-            <button class="lang-btn" data-lang="sg" onclick="changeBillLang('sg')"><span>🇸🇬</span><span>SG</span></button>
-            <button class="lang-btn" data-lang="id" onclick="changeBillLang('id')"><span>🇮🇩</span><span>ID</span></button>
-            <button class="lang-btn" data-lang="my" onclick="changeBillLang('my')"><span>🇲🇾</span><span>MY</span></button>
-            <button class="lang-btn" data-lang="in" onclick="changeBillLang('in')"><span>🇮🇳</span><span>IN</span></button>
-            <button class="lang-btn" data-lang="fi" onclick="changeBillLang('fi')"><span>🇫🇮</span><span>FI</span></button>
-            <button class="lang-btn" data-lang="nl" onclick="changeBillLang('nl')"><span>🇳🇱</span><span>NL</span></button>
-            <button class="lang-btn" data-lang="se" onclick="changeBillLang('se')"><span>🇸🇪</span><span>SE</span></button>
-            <button class="lang-btn" data-lang="ch" onclick="changeBillLang('ch')"><span>🇨🇭</span><span>CH</span></button>
+            <button class="lang-btn active-lang" data-lang="vi"><span>🇻🇳</span><span>VN</span></button>
+            <button class="lang-btn" data-lang="en"><span>🇺🇸</span><span>EN</span></button>
+            <button class="lang-btn" data-lang="fr"><span>🇫🇷</span><span>FR</span></button>
+            <button class="lang-btn" data-lang="kr"><span>🇰🇷</span><span>KR</span></button>
+            <button class="lang-btn" data-lang="jp"><span>🇯🇵</span><span>JP</span></button>
+            <button class="lang-btn" data-lang="th"><span>🇹🇭</span><span>TH</span></button>
+            <button class="lang-btn" data-lang="it"><span>🇮🇹</span><span>IT</span></button>
+            <button class="lang-btn" data-lang="pt"><span>🇵🇹</span><span>PT</span></button>
+            <button class="lang-btn" data-lang="es"><span>🇪🇸</span><span>ES</span></button>
+            <button class="lang-btn" data-lang="cn"><span>🇨🇳</span><span>CN</span></button>
+            <button class="lang-btn" data-lang="de"><span>🇩🇪</span><span>DE</span></button>
+            <button class="lang-btn" data-lang="ru"><span>🇷🇺</span><span>RU</span></button>
+            <button class="lang-btn" data-lang="be"><span>🇧🇪</span><span>BE</span></button>
+            <button class="lang-btn" data-lang="hu"><span>🇭🇺</span><span>HU</span></button>
+            <button class="lang-btn" data-lang="at"><span>🇦🇹</span><span>AT</span></button>
+            <button class="lang-btn" data-lang="tw"><span>🇹🇼</span><span>TW</span></button>
+            <button class="lang-btn" data-lang="sg"><span>🇸🇬</span><span>SG</span></button>
+            <button class="lang-btn" data-lang="id"><span>🇮🇩</span><span>ID</span></button>
+            <button class="lang-btn" data-lang="my"><span>🇲🇾</span><span>MY</span></button>
+            <button class="lang-btn" data-lang="in"><span>🇮🇳</span><span>IN</span></button>
+            <button class="lang-btn" data-lang="fi"><span>🇫🇮</span><span>FI</span></button>
+            <button class="lang-btn" data-lang="nl"><span>🇳🇱</span><span>NL</span></button>
+            <button class="lang-btn" data-lang="se"><span>🇸🇪</span><span>SE</span></button>
+            <button class="lang-btn" data-lang="ch"><span>🇨🇭</span><span>CH</span></button>
         </div>
     </div>
 </div>
 
-<button id="scroll-to-checkout" class="hidden" onclick="scrollToCheckout()" aria-label="Cuộn xuống nút chốt đơn">⌄</button>
+<button id="scroll-to-checkout" class="hidden" data-action="scroll-checkout" aria-label="Cuộn xuống nút chốt đơn">⌄</button>
 
 <div id="app-modal-backdrop" class="app-modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="app-modal-title">
     <div class="app-modal-card">

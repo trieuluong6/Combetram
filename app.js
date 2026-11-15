@@ -491,14 +491,6 @@ function areOrdersEqual(a, b) {
     return shallowRecordEqual(normalizeOrderMap(a), normalizeOrderMap(b));
 }
 
-function changedTableIds(prev, next) {
-    const changed = new Set();
-    for (let i = 1; i <= 9; i++) {
-        if (!shallowRecordEqual(prev?.[i], next?.[i])) changed.add(i);
-    }
-    return changed;
-}
-
 let scheduledRefresh = false;
 let scheduledFullRefresh = false;
 let scheduledCurrentOrderRefresh = false;
@@ -635,7 +627,7 @@ async function fetchRealtimeWeather() {
         else if (code === 1 || code === 2) status = 'partlyCloudy';
         else if (code === 3 || code === 45 || code === 48) status = 'cloudy';
         else if ((code >= 51 && code <= 67) || (code >= 80 && code <= 82)) status = 'rainy';
-        else if ((code >= 71 && code <= 77) || code === 85 || code === 86) status = 'cloudy';
+        else if ((code >= 71 && code <= 77) || (code === 85 || code === 86)) status = 'cloudy';
         else if (code >= 95) status = 'storm';
         weatherCache = { status, temp: current.temperature_2m, windSpeed: current.wind_speed_10m, windDir: current.wind_direction_10m };
         renderWeather(weatherCache.status, weatherCache.temp, weatherCache.windSpeed, weatherCache.windDir);
@@ -1120,11 +1112,6 @@ function ensureSoundPools() {
     }
 }
 
-// Chỉ khởi tạo trước pool 28 thẻ <audio> trên iOS; Android/Desktop dùng Web Audio Buffer cache
-if (IS_IOS_DEVICE) {
-    ensureSoundPools();
-}
-
 let sharedAudioCtx = null;
 let sharedAudioMaster = null;
 const webAudioBufferCache = {};
@@ -1190,6 +1177,9 @@ function unlockAllAudio() {
     }
     if (!audioUnlocked) {
         audioUnlocked = true;
+        if (IS_IOS_DEVICE) {
+            ensureSoundPools();
+        }
         if (soundPoolsInitialized) {
             for (const pool of Object.values(htmlAudioPools)) {
                 for (const a of pool) {
@@ -1518,9 +1508,59 @@ function spawnTrail(x, y, color) {
     }
 }
 
-// ─── CURSOR ĐỒNG NGHIỆP (gom nhóm getBoundingClientRect theo bàn) ───────
+// ─── CURSOR ĐỒNG NGHIỆP (1 vòng rAF duy nhất cho trail, 0 setTimeout) ───
 const remoteCursorEls = {};
 const lastCursorPos = {};
+const activeCursorTrails = {};
+let cursorTrailRafId = 0;
+
+function tickCursorTrails(now) {
+    cursorTrailRafId = 0;
+    let hasRemaining = false;
+
+    for (const [id, flight] of Object.entries(activeCursorTrails)) {
+        const elapsed = now - flight.startTime;
+        const progress = Math.min(1, elapsed / flight.duration);
+        const targetStep = Math.floor(progress * flight.steps);
+
+        while (flight.emitted < targetStep && flight.emitted < flight.steps) {
+            flight.emitted++;
+            const t = flight.emitted / (flight.steps + 1);
+            spawnTrail(
+                flight.startX + (flight.endX - flight.startX) * t,
+                flight.startY + (flight.endY - flight.startY) * t,
+                flight.color
+            );
+        }
+
+        if (progress >= 1) {
+            delete activeCursorTrails[id];
+        } else {
+            hasRemaining = true;
+        }
+    }
+
+    if (hasRemaining) {
+        cursorTrailRafId = requestAnimationFrame(tickCursorTrails);
+    }
+}
+
+function scheduleCursorTrail(id, startX, startY, endX, endY, color) {
+    activeCursorTrails[id] = {
+        startX,
+        startY,
+        endX,
+        endY,
+        color,
+        startTime: performance.now(),
+        duration: 140,
+        steps: 4,
+        emitted: 0
+    };
+    if (!cursorTrailRafId) {
+        cursorTrailRafId = requestAnimationFrame(tickCursorTrails);
+    }
+}
 
 function positionCursorOnTable(id, el, rect, offsetIndex, color) {
     if (!rect) { el.classList.remove('visible'); return; }
@@ -1528,11 +1568,7 @@ function positionCursorOnTable(id, el, rect, offsetIndex, color) {
     const y = rect.top + 12;
     const prev = lastCursorPos[id];
     if (prev && (Math.abs(prev.x - x) > 6 || Math.abs(prev.y - y) > 6)) {
-        const steps = 4;
-        for (let s = 1; s <= steps; s++) {
-            const t = s / (steps + 1);
-            setTimeout(() => spawnTrail(prev.x + (x - prev.x) * t, prev.y + (y - prev.y) * t, color), s * 28);
-        }
+        scheduleCursorTrail(id, prev.x, prev.y, x, y, color);
     }
     lastCursorPos[id] = { x, y };
     el.style.left = x + 'px'; el.style.top = y + 'px';
@@ -1553,6 +1589,7 @@ function renderRemoteCursors(snapVal) {
             remoteCursorEls[id].remove();
             delete remoteCursorEls[id];
             delete lastCursorPos[id];
+            delete activeCursorTrails[id];
         }
     });
 
@@ -1805,10 +1842,53 @@ window.addEventListener('scroll', () => {
     document.addEventListener(evt, unlockAllAudio, { once: true, passive: true, capture: true });
 });
 
-document.getElementById('menu-list').addEventListener('click', (e) => {
-    const btn = e.target.closest('.btn-qty'); if (!btn) return;
-    const itemId = parseInt(btn.dataset.itemId);
-    change(itemId, btn.classList.contains('btn-add') ? 1 : -1);
+// ─── EVENT DELEGATION TẬP TRUNG (THAY THẾ TOÀN BỘ INLINE ONCLICK) ──────
+document.addEventListener('click', (e) => {
+    const tableCard = e.target.closest('.table-card[data-table]');
+    if (tableCard) {
+        selectTable(Number(tableCard.dataset.table));
+        return;
+    }
+
+    const qtyBtn = e.target.closest('#menu-list .btn-qty[data-item-id]');
+    if (qtyBtn) {
+        const itemId = Number(qtyBtn.dataset.itemId);
+        change(itemId, qtyBtn.classList.contains('btn-add') ? 1 : -1);
+        return;
+    }
+
+    const langBtn = e.target.closest('#lang-grid .lang-btn[data-lang]');
+    if (langBtn) {
+        changeBillLang(langBtn.dataset.lang);
+        return;
+    }
+
+    const actionEl = e.target.closest('[data-action]');
+    if (!actionEl) return;
+
+    switch (actionEl.dataset.action) {
+        case 'toggle-sound':
+            toggleSoundMute();
+            break;
+        case 'toggle-dark':
+            toggleDarkMode();
+            break;
+        case 'lock-bill':
+            setLock(true);
+            break;
+        case 'unlock-bill':
+            setLock(false);
+            break;
+        case 'toggle-qr':
+            toggleBillQr();
+            break;
+        case 'pay-bill':
+            doPay();
+            break;
+        case 'scroll-checkout':
+            scrollToCheckout();
+            break;
+    }
 });
 
 // ─── TỰ ẨN NÚT CUỘN XUỐNG KHI NÚT CHỐT ĐƠN ĐÃ HIỆN RA ─────────────────
@@ -1829,7 +1909,7 @@ if (checkoutBtnEl && 'IntersectionObserver' in window) {
     checkoutObserver.observe(checkoutBtnEl);
 }
 
-// ─── DỮ LIỆU CHÍNH FIREBASE (GRANULAR CHILD LISTENERS + ATOMIC TRANSACTION) ──
+// ─── DỮ LIỆU CHÍNH FIREBASE (SINGLE-SHOT INIT + GRANULAR CHILD LISTENERS) ──
 const pendingDeltas = {};
 const localEchoDeltas = {};
 const tableEpoch = Array(10).fill(0);
@@ -1937,6 +2017,9 @@ function handleSingleTableOrderSnapshot(rawKey, tableVal) {
     const prevTableOrder = data.orders?.[tableId] || {};
     if (shallowRecordEqual(prevTableOrder, nextTableOrder)) return;
 
+    fbDownBytes += byteSizeOf(tableVal);
+    updateNetWidget('down');
+
     const wasLocalPay = localPaymentEchoTables.has(tableId);
     const prevHadItems = Object.values(prevTableOrder).some(q => Number(q) > 0);
     const nextHasItems = Object.values(nextTableOrder).some(q => Number(q) > 0);
@@ -1978,57 +2061,121 @@ function handleSingleTableOrderSnapshot(rawKey, tableVal) {
     }
 }
 
+function handleSingleTableLockSnapshot(rawKey, rawVal) {
+    const tableId = Number(rawKey);
+    if (!Number.isInteger(tableId) || tableId < 1 || tableId > 9) return;
+
+    const nextLocked = Boolean(rawVal);
+    const prevLocked = Boolean(data.locked?.[tableId]);
+    if (prevLocked === nextLocked) return;
+
+    fbDownBytes += byteSizeOf(rawVal);
+    updateNetWidget('down');
+
+    if (nextLocked) {
+        if (!data.locked) data.locked = {};
+        data.locked[tableId] = true;
+    } else if (data.locked) {
+        delete data.locked[tableId];
+    }
+
+    if (initialDataReady) {
+        const changed = new Set([tableId]);
+        scheduleSaveLocalStateCache();
+        scheduleOrphanedLockCheck(changed);
+        scheduleRefresh(changed, true);
+    }
+}
+
+function handleSingleTableTimeSnapshot(rawKey, rawVal) {
+    const tableId = Number(rawKey);
+    if (!Number.isInteger(tableId) || tableId < 1 || tableId > 9) return;
+
+    const parsedTs = Number(rawVal);
+    const nextTime = (rawVal !== null && rawVal !== undefined && Number.isFinite(parsedTs) && parsedTs > 0) ? parsedTs : null;
+    const prevTime = data.times?.[tableId] !== undefined ? Number(data.times[tableId]) : null;
+    if (prevTime === nextTime) return;
+
+    fbDownBytes += byteSizeOf(rawVal);
+    updateNetWidget('down');
+
+    if (nextTime !== null) {
+        if (!data.times) data.times = {};
+        data.times[tableId] = nextTime;
+    } else if (data.times) {
+        delete data.times[tableId];
+    }
+
+    if (initialDataReady) {
+        scheduleSaveLocalStateCache();
+        scheduleRefresh(new Set([tableId]));
+    }
+}
+
+function bindBranchWithInitialSync(branchRef, branchName, applyInitialVal, handleChildVal) {
+    let unsubInitial = null;
+    unsubInitial = onValue(branchRef, (initialSnap) => {
+        if (unsubInitial) {
+            unsubInitial();
+            unsubInitial = null;
+        }
+        applyInitialVal(initialSnap.val() || {});
+        markInitialBranchLoaded(branchName);
+
+        _fbOnChildAdded(branchRef, (snap) => handleChildVal(snap.key, snap.val()));
+        _fbOnChildChanged(branchRef, (snap) => handleChildVal(snap.key, snap.val()));
+        _fbOnChildRemoved(branchRef, (snap) => handleChildVal(snap.key, null));
+    });
+}
+
 // Vẽ ngay từ bản nháp localStorage (nếu có) trước khi Firebase đồng bộ xong
 if (hydrateFromLocalStateCache()) {
     refresh(null, false);
 }
 
-// Dùng chung 1 luồng đồng bộ ordersRef (onChild* đã giữ query mở, _fbOnValue một lần dùng chung cache SDK mà không nhân đôi tải mạng hay đếm trùng ↓)
-onChildAdded(ordersRef, (snap) => handleSingleTableOrderSnapshot(snap.key, snap.val()));
-onChildChanged(ordersRef, (snap) => handleSingleTableOrderSnapshot(snap.key, snap.val()));
-onChildRemoved(ordersRef, (snap) => handleSingleTableOrderSnapshot(snap.key, null));
-
-let unsubInitialOrders = null;
-unsubInitialOrders = _fbOnValue(ordersRef, (initialSnap) => {
-    if (unsubInitialOrders) {
-        unsubInitialOrders();
-        unsubInitialOrders = null;
-    }
-    const serverOrders = initialSnap.val() || {};
-    const reconciled = {};
-    for (let t = 1; t <= 9; t++) {
-        const rawOrder = serverOrders[t];
-        if (rawOrder && typeof rawOrder === 'object' && Object.values(rawOrder).some(q => Number(q) > 0)) {
-            reconciled[t] = rawOrder;
+bindBranchWithInitialSync(
+    ordersRef,
+    'orders',
+    (serverOrders) => {
+        const reconciled = {};
+        for (let t = 1; t <= 9; t++) {
+            const rawOrder = serverOrders[t];
+            if (rawOrder && typeof rawOrder === 'object' && Object.values(rawOrder).some(q => Number(q) > 0)) {
+                reconciled[t] = rawOrder;
+            }
         }
-    }
-    data.orders = reconciled;
-    firstOrdersLoad = false;
-    markInitialBranchLoaded('orders');
-});
+        data.orders = reconciled;
+        firstOrdersLoad = false;
+    },
+    handleSingleTableOrderSnapshot
+);
 
-onValue(lockedRef, snap => {
-    const nextLocked = snap.val() || {};
-    const changed = changedTableIds(data.locked, nextLocked);
-    data.locked = nextLocked;
-    if (initialDataReady && changed.size) {
-        scheduleSaveLocalStateCache();
-        scheduleOrphanedLockCheck(changed);
-        scheduleRefresh(changed, true);
-    }
-    markInitialBranchLoaded('locked');
-});
+bindBranchWithInitialSync(
+    lockedRef,
+    'locked',
+    (serverLocked) => {
+        const reconciled = {};
+        for (let t = 1; t <= 9; t++) {
+            if (serverLocked[t]) reconciled[t] = true;
+        }
+        data.locked = reconciled;
+    },
+    handleSingleTableLockSnapshot
+);
 
-onValue(timesRef, snap => {
-    const nextTimes = snap.val() || {};
-    const changed = changedTableIds(data.times, nextTimes);
-    data.times = nextTimes;
-    if (initialDataReady && changed.size) {
-        scheduleSaveLocalStateCache();
-        scheduleRefresh(changed);
-    }
-    markInitialBranchLoaded('times');
-});
+bindBranchWithInitialSync(
+    timesRef,
+    'times',
+    (serverTimes) => {
+        const reconciled = {};
+        for (let t = 1; t <= 9; t++) {
+            const ts = Number(serverTimes[t]);
+            if (Number.isFinite(ts) && ts > 0) reconciled[t] = ts;
+        }
+        data.times = reconciled;
+    },
+    handleSingleTableTimeSnapshot
+);
 
 function selectTable(n, options = {}) {
     if ((paymentInProgress || payingTables.has(Number(n))) && !options.allowDuringPayment) return;
@@ -2162,7 +2309,9 @@ function commitPendingItem(tab, id, expectedVersion = null) {
                 scheduleRefresh(new Set([tab]), currentTab === tab);
             }
             queueMicrotask(() => {
-                if (!effectiveTableHasItems(tab)) remove(child(timesRef, String(tab))).catch(() => {});
+                if (!effectiveTableHasItems(tab) && (data.times?.[tab] || pendingStartTimes.has(tab))) {
+                    remove(child(timesRef, String(tab))).catch(() => {});
+                }
             });
         })
         .catch(err => {
@@ -2926,5 +3075,3 @@ if (document.readyState === 'complete') {
 }
 
 updateNetWidget();
-
-window.selectTable = selectTable; window.setLock = setLock; window.doPay = doPay; window.changeBillLang = changeBillLang; window.toggleDarkMode = toggleDarkMode; window.toggleSoundMute = toggleSoundMute; window.scrollToCheckout = scrollToCheckout; window.toggleBillQr = toggleBillQr;
