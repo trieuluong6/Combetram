@@ -775,7 +775,64 @@ body.tab-hidden .is-locked::after,
 body.tab-hidden .total-container,
 body.tab-hidden .arrow-shaft::after,
 body.tab-hidden .arrow-head::after,
+/* TRẠNG THÁI ĐANG THU TIỀN TỪ THIẾT BỊ KHÁC */
+.table-card.is-remote-paying {
+    opacity: 0.78;
+}
+.remote-paying-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    margin-top: 4px;
+    padding: 2px 6px;
+    border-radius: 999px;
+    font-size: 0.56em;
+    font-weight: 800;
+    line-height: 1.2;
+    white-space: nowrap;
+    background: #fff8e1;
+    color: #b45309;
+    border: 1px solid #fbbf24;
+    box-shadow: 0 1px 4px rgba(180, 83, 9, 0.16);
+    animation: pulse-status-gpu 1.4s infinite ease-in-out;
+}
+body.dark-mode .remote-paying-badge {
+    background: rgba(180, 83, 9, 0.28);
+    color: #fcd34d;
+    border-color: rgba(251, 191, 36, 0.55);
+}
+.remote-paying-banner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 12px;
+    margin-bottom: 10px;
+    border-radius: 10px;
+    font-size: 0.84em;
+    font-weight: 800;
+    background: #fff8e1;
+    color: #b45309;
+    border: 1.5px solid #fbbf24;
+    animation: pulse-status-gpu 1.5s infinite ease-in-out;
+}
+.remote-paying-banner.hidden {
+    display: none;
+}
+body.dark-mode .remote-paying-banner {
+    background: rgba(180, 83, 9, 0.25);
+    color: #fcd34d;
+    border-color: rgba(251, 191, 36, 0.5);
+}
+.btn-action.is-remote-paying-disabled {
+    opacity: 0.52;
+    filter: grayscale(0.35);
+}
+
 body.tab-hidden .table-card.has-viewer,
+body.tab-hidden .remote-paying-badge,
+body.tab-hidden .remote-paying-banner,
 body.tab-hidden #scroll-to-checkout {
     animation-play-state: paused !important;
 }

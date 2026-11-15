@@ -248,6 +248,8 @@ let billWasShown = false;
 
 // Chặn double-click / thao tác chồng chéo khi đang gửi lệnh thanh toán lên Firebase.
 let paymentInProgress = false;
+let payingModalTable = null;
+let payingHeartbeatTimer = null;
 const payingTables = new Set();
 const localPaymentEchoTables = new Set();
 
@@ -1348,6 +1350,7 @@ const PRESENCE_STORAGE_KEY = 'combetram_presence_id';
 const STALE_PRESENCE_MS = 120000;
 const STALE_CURSOR_MS = 45000;
 const FOCUS_TTL_MS = 1500;
+const PAYING_TTL_MS = 45000;
 const USER_COLORS = ['#e53935', '#1e88e5', '#43a047', '#fb8c00', '#8e24aa', '#00acc1', '#d81b60', '#6d4c41', '#3949ab', '#c0ca33'];
 const myColor = USER_COLORS[Math.floor(Math.random() * USER_COLORS.length)];
 const onlineRef = ref(database, '.info/connected');
@@ -1465,6 +1468,7 @@ function runPeriodicMaintenance() {
     renderRemoteCursors(cursorsMap);
     cleanupStaleRealtimeNodes(cursorsRef, 'cursors', cursorsMap, STALE_CURSOR_MS);
     renderRemoteFocus(activityMap);
+    renderRemotePaying(activityMap);
     cleanupStaleRealtimeNodes(activityRef, 'activity', activityMap, STALE_CURSOR_MS);
 }
 setInterval(runPeriodicMaintenance, 30000);
@@ -1682,6 +1686,7 @@ let pendingActivityTimer = null;
 let pendingActivityPayload = null;
 const lastHandledActivitySeq = {};
 const remoteFocusExpireTimers = {};
+const remotePayingExpireTimers = {};
 
 function flushPendingActivity() {
     clearTimeout(pendingActivityTimer);
@@ -1693,13 +1698,14 @@ function flushPendingActivity() {
     }
 }
 
-function broadcastActivity({ sfx = null, tableId = currentTab, itemId = null, immediate = false } = {}) {
+function broadcastActivity({ sfx = null, tableId = currentTab, itemId = null, paying = Boolean(payingModalTable), immediate = false } = {}) {
     if (!isFirebaseConnected) return;
     const payload = {
         table: Number(tableId) || 0,
         itemId: itemId !== null && itemId !== undefined ? Number(itemId) : null,
         color: myColor,
         sfx: sfx || null,
+        paying: Boolean(paying),
         seq: ++localActivitySeq,
         ts: getServerNow()
     };
@@ -1713,6 +1719,32 @@ function broadcastActivity({ sfx = null, tableId = currentTab, itemId = null, im
     pendingActivityPayload = payload;
     if (!pendingActivityTimer) {
         pendingActivityTimer = setTimeout(flushPendingActivity, 80);
+    }
+}
+
+function startLocalPayingBroadcast(tab) {
+    const tableNum = Number(tab);
+    if (!tableNum) return;
+    payingModalTable = tableNum;
+    broadcastActivity({ tableId: tableNum, paying: true, immediate: true });
+    clearInterval(payingHeartbeatTimer);
+    payingHeartbeatTimer = setInterval(() => {
+        if (!payingModalTable) {
+            clearInterval(payingHeartbeatTimer);
+            payingHeartbeatTimer = null;
+            return;
+        }
+        broadcastActivity({ tableId: payingModalTable, paying: true, immediate: true });
+    }, 15000);
+}
+
+function stopLocalPayingBroadcast(sfx = null, tableId = currentTab || 0) {
+    const hadPaying = payingModalTable !== null;
+    payingModalTable = null;
+    clearInterval(payingHeartbeatTimer);
+    payingHeartbeatTimer = null;
+    if (hadPaying || sfx) {
+        broadcastActivity({ sfx, tableId, itemId: null, paying: false, immediate: true });
     }
 }
 
@@ -1778,10 +1810,106 @@ function renderRemoteFocus(snapVal) {
     });
 }
 
+function getActiveRemotePayingByTable(snapVal = activityMap) {
+    const now = getServerNow();
+    const byTable = new Map();
+    for (const [id, f] of Object.entries(snapVal || {})) {
+        if (id === myPresenceId || !f || f.paying !== true || !f.table) continue;
+        const ts = Number(f.ts);
+        if (!Number.isFinite(ts) || (now - ts) >= PAYING_TTL_MS) continue;
+        const tableNum = Number(f.table);
+        if (!Number.isInteger(tableNum) || tableNum < 1 || tableNum > 9) continue;
+        const prev = byTable.get(tableNum);
+        if (!prev || ts > prev.ts) {
+            byTable.set(tableNum, { id, table: tableNum, color: f.color || '#f59e0b', ts });
+        }
+    }
+    return byTable;
+}
+
+function isTableRemotePaying(tableId) {
+    const num = Number(tableId);
+    if (!num) return null;
+    return getActiveRemotePayingByTable(activityMap).get(num) || null;
+}
+
+function syncCurrentTableRemotePayingUi(info) {
+    const billArea = document.getElementById('bill-area');
+    if (!billArea) return;
+    let banner = document.getElementById('remote-paying-banner');
+    if (!banner && info) {
+        banner = document.createElement('div');
+        banner.id = 'remote-paying-banner';
+        banner.className = 'remote-paying-banner';
+        banner.textContent = '💰 Thiết bị khác đang thu tiền bàn này...';
+        const flipShell = document.getElementById('bill-flip-shell');
+        if (flipShell && flipShell.parentNode === billArea) {
+            billArea.insertBefore(banner, flipShell);
+        } else {
+            billArea.prepend(banner);
+        }
+    }
+    if (banner) {
+        banner.classList.toggle('hidden', !info);
+    }
+    const unlockBtn = billArea.querySelector('[data-action="unlock-bill"]');
+    const payBtn = billArea.querySelector('[data-action="pay-bill"]');
+    if (unlockBtn) unlockBtn.classList.toggle('is-remote-paying-disabled', Boolean(info));
+    if (payBtn) payBtn.classList.toggle('is-remote-paying-disabled', Boolean(info));
+}
+
+function renderRemotePaying(snapVal = activityMap) {
+    const now = getServerNow();
+    const byTable = getActiveRemotePayingByTable(snapVal);
+
+    const activeIds = new Set();
+    for (const [id, f] of Object.entries(snapVal || {})) {
+        if (id === myPresenceId || !f || f.paying !== true || !f.table) continue;
+        const ts = Number(f.ts);
+        if (!Number.isFinite(ts) || (now - ts) >= PAYING_TTL_MS) continue;
+        activeIds.add(id);
+        const remainingMs = Math.max(120, PAYING_TTL_MS - Math.max(0, now - ts));
+        clearTimeout(remotePayingExpireTimers[id]);
+        remotePayingExpireTimers[id] = setTimeout(() => {
+            delete remotePayingExpireTimers[id];
+            renderRemotePaying(activityMap);
+        }, remainingMs);
+    }
+    for (const id of Object.keys(remotePayingExpireTimers)) {
+        if (!activeIds.has(id)) {
+            clearTimeout(remotePayingExpireTimers[id]);
+            delete remotePayingExpireTimers[id];
+        }
+    }
+
+    for (let t = 1; t <= 9; t++) {
+        const card = TABLE_DOM[t - 1]?.card;
+        if (!card) continue;
+        const info = byTable.get(t) || null;
+        card.classList.toggle('is-remote-paying', Boolean(info));
+        let badge = card.querySelector('.remote-paying-badge');
+        if (info) {
+            if (!badge) {
+                badge = document.createElement('span');
+                badge.className = 'remote-paying-badge';
+                badge.textContent = '💰 Đang thu tiền...';
+                card.appendChild(badge);
+            }
+        } else if (badge) {
+            badge.remove();
+        }
+    }
+
+    syncCurrentTableRemotePayingUi(currentTab ? (byTable.get(Number(currentTab)) || null) : null);
+}
+
 bindChildMap(activityRef, activityMap, (id, ev, eventType) => {
     if (eventType === 'removed') {
         delete lastHandledActivitySeq[id];
         clearRemoteFocusEntry(id);
+        clearTimeout(remotePayingExpireTimers[id]);
+        delete remotePayingExpireTimers[id];
+        renderRemotePaying(activityMap);
         return;
     }
     if (!ev || id === myPresenceId) return;
@@ -1797,6 +1925,7 @@ bindChildMap(activityRef, activityMap, (id, ev, eventType) => {
     }
 
     renderRemoteFocus(activityMap);
+    renderRemotePaying(activityMap);
     cleanupStaleRealtimeNodes(activityRef, 'activity', activityMap, STALE_CURSOR_MS);
 });
 
@@ -2212,6 +2341,7 @@ function selectTable(n, options = {}) {
     billWasShown = false;
     broadcastCursor(currentTab);
     renderRemoteFocus(activityMap);
+    renderRemotePaying(activityMap);
     const section = document.getElementById('order-section');
     if (currentTab) {
         document.getElementById('table-title').textContent = getTableDisplayName(n);
@@ -2571,6 +2701,7 @@ function renderCurrentOrder() {
         if (billViewMode !== 'bill') resetBillQrView(true);
     }
     updateScrollCheckoutButton();
+    syncCurrentTableRemotePayingUi(isTableRemotePaying(currentTab));
 
     ALL_ITEMS.forEach(item => {
         const q = getEffectiveItemQty(currentTab, item.id);
@@ -2620,6 +2751,7 @@ function renderTable(tableId, now = getServerNow()) {
 
     if (dom.card) {
         const preserveViewer = dom.card.classList.contains('has-viewer');
+        const preserveRemotePaying = dom.card.classList.contains('is-remote-paying');
         const preserveFlashAdd = dom.card.classList.contains('flash-add');
         const preserveFlashSub = dom.card.classList.contains('flash-sub');
         let className = tableId === 7 ? 'table-card full-width' : (tableId >= 8 ? 'table-card half-width' : 'table-card');
@@ -2629,6 +2761,7 @@ function renderTable(tableId, now = getServerNow()) {
         if (dom.card.className !== className) {
             dom.card.className = className;
             if (preserveViewer) dom.card.classList.add('has-viewer');
+            if (preserveRemotePaying) dom.card.classList.add('is-remote-paying');
             if (preserveFlashAdd) dom.card.classList.add('flash-add');
             if (preserveFlashSub) dom.card.classList.add('flash-sub');
         }
@@ -2700,6 +2833,10 @@ async function renderBillAsync(tab) {
 
 function setLock(v) {
     if (!currentTab || paymentInProgress) return;
+    if (isTableRemotePaying(currentTab)) {
+        showToast('Thiết bị khác đang thu tiền bàn này, vui lòng chờ!', 'warning', 2800);
+        return;
+    }
     if (v && !effectiveTableHasItems(currentTab)) {
         showToast('Bàn chưa có món nào để chốt đơn!', 'warning', 2600);
         return;
@@ -2725,6 +2862,11 @@ async function doPay() {
     if (!currentTab || paymentInProgress || payingTables.has(currentTab)) return;
 
     const tab = currentTab;
+    if (isTableRemotePaying(tab)) {
+        showToast('Thiết bị khác đang thu tiền bàn này, vui lòng chờ!', 'warning', 2800);
+        return;
+    }
+
     const lockedBeforeConfirm = !!data.locked?.[tab];
     const orderBeforeConfirm = normalizeOrderMap(getMergedOrder(tab));
 
@@ -2738,6 +2880,7 @@ async function doPay() {
         return;
     }
 
+    startLocalPayingBroadcast(tab);
     const confirmed = await showAppModal({
         title: 'Xác nhận thanh toán',
         message: `Xác nhận thanh toán và đóng bill cho ${getTableDisplayName(tab)}?`,
@@ -2745,12 +2888,16 @@ async function doPay() {
         confirmText: 'Thanh toán',
         cancelText: 'Quay lại'
     });
-    if (!confirmed || currentTab !== tab || paymentInProgress || payingTables.has(tab)) return;
+    if (!confirmed || currentTab !== tab || paymentInProgress || payingTables.has(tab)) {
+        stopLocalPayingBroadcast(null, currentTab || 0);
+        return;
+    }
 
     // Kiểm tra xem máy khác có vừa mở khóa hoặc sửa đơn trong lúc hộp thoại xác nhận đang mở không
     const lockedAfterConfirm = !!data.locked?.[tab];
     const expectedOrder = normalizeOrderMap(getMergedOrder(tab));
     if ((lockedBeforeConfirm && !lockedAfterConfirm) || !areOrdersEqual(orderBeforeConfirm, expectedOrder)) {
+        stopLocalPayingBroadcast(null, tab);
         showToast('Đơn bàn này vừa được cập nhật từ thiết bị khác. Vui lòng kiểm tra lại bill!', 'warning', 4000);
         scheduleRefresh(new Set([tab]), true);
         return;
@@ -2799,7 +2946,7 @@ async function doPay() {
     clearPendingForTable(tab);
     stopBillScrollAnimation();
     triggerHaptic('success');
-    broadcastActivity({ sfx: 'success', tableId: tab, itemId: null, immediate: true });
+    broadcastActivity({ sfx: 'success', tableId: tab, itemId: null, paying: true, immediate: true });
 
     if (data.orders) delete data.orders[tab];
     if (data.locked) delete data.locked[tab];
@@ -2871,6 +3018,7 @@ async function doPay() {
         }
     } finally {
         payingTables.delete(tab);
+        stopLocalPayingBroadcast(null, currentTab || 0);
     }
 }
 
