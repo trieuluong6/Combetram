@@ -479,6 +479,14 @@ function hydrateFromLocalStateCache() {
         data.orders = parsed.orders && typeof parsed.orders === 'object' ? parsed.orders : {};
         data.locked = parsed.locked && typeof parsed.locked === 'object' ? parsed.locked : {};
         data.times = parsed.times && typeof parsed.times === 'object' ? parsed.times : {};
+        // Loại bỏ trạng thái khóa mồ côi nếu bàn trong cache không còn món (0đ)
+        for (let t = 1; t <= 9; t++) {
+            const ord = data.orders?.[t];
+            const hasAny = ord && typeof ord === 'object' && Object.values(ord).some(q => Number(q) > 0);
+            if (!hasAny && data.locked?.[t]) {
+                delete data.locked[t];
+            }
+        }
         return true;
     } catch (e) {
         return false;
@@ -1940,13 +1948,17 @@ function handleSingleTableOrderSnapshot(rawKey, tableVal) {
     const prevTableOrder = data.orders?.[tableId] || {};
     if (shallowRecordEqual(prevTableOrder, nextTableOrder)) return;
 
-    if (localPaymentEchoTables.has(tableId) && Object.keys(nextTableOrder).length === 0) {
+    const wasLocalPay = localPaymentEchoTables.has(tableId);
+    const prevHadItems = Object.values(prevTableOrder).some(q => Number(q) > 0);
+    const nextHasItems = Object.values(nextTableOrder).some(q => Number(q) > 0);
+
+    if (wasLocalPay && !nextHasItems) {
         localPaymentEchoTables.delete(tableId);
     }
 
     const changed = new Set([tableId]);
     if (!firstOrdersLoad) {
-        const ignoredTables = localPaymentEchoTables.has(tableId) ? new Set([tableId]) : null;
+        const ignoredTables = wasLocalPay ? new Set([tableId]) : null;
         const remoteChanges = queueRemoteOrderFlashes(
             { [tableId]: prevTableOrder },
             { [tableId]: nextTableOrder },
@@ -1955,9 +1967,14 @@ function handleSingleTableOrderSnapshot(rawKey, tableVal) {
         if (remoteChanges > 0 && (Date.now() - lastRemoteSfxTs) > 1200) {
             playUiSound('ting');
         }
+        if (!wasLocalPay && prevHadItems && !nextHasItems && currentTab === tableId) {
+            currentBillLang = 'vi';
+            syncActiveLangButton('vi');
+            showToast(`${getTableDisplayName(tableId)} vừa được thanh toán ở thiết bị khác!`, 'info', 3500);
+        }
     }
 
-    if (Object.keys(nextTableOrder).length > 0) {
+    if (nextHasItems) {
         if (!data.orders) data.orders = {};
         data.orders[tableId] = nextTableOrder;
     } else if (data.orders) {
@@ -1967,6 +1984,7 @@ function handleSingleTableOrderSnapshot(rawKey, tableVal) {
     if (initialDataReady) {
         scheduleSaveLocalStateCache();
         cleanupStaleTimes(changed);
+        scheduleOrphanedLockCheck(changed);
         scheduleRefresh(changed, true);
     }
 }
@@ -1976,15 +1994,16 @@ if (hydrateFromLocalStateCache()) {
     refresh(null, false);
 }
 
-// Tải snapshot ban đầu 1 lần duy nhất, sau đó chỉ lắng nghe từng bàn thay đổi qua child listeners
+// Gắn child listeners song song ngay từ đầu để không tạo khoảng hở mất sự kiện giữa initial snapshot và child events
+onChildAdded(ordersRef, (snap) => handleSingleTableOrderSnapshot(snap.key, snap.val()));
+onChildChanged(ordersRef, (snap) => handleSingleTableOrderSnapshot(snap.key, snap.val()));
+onChildRemoved(ordersRef, (snap) => handleSingleTableOrderSnapshot(snap.key, null));
+
 onValue(ordersRef, (initialSnap) => {
     data.orders = initialSnap.val() || {};
     firstOrdersLoad = false;
     markInitialBranchLoaded('orders');
-
-    onChildAdded(ordersRef, (snap) => handleSingleTableOrderSnapshot(snap.key, snap.val()));
-    onChildChanged(ordersRef, (snap) => handleSingleTableOrderSnapshot(snap.key, snap.val()));
-    onChildRemoved(ordersRef, (snap) => handleSingleTableOrderSnapshot(snap.key, null));
+    scheduleOrphanedLockCheck();
 }, { onlyOnce: true });
 
 onValue(lockedRef, snap => {
@@ -1993,9 +2012,11 @@ onValue(lockedRef, snap => {
     data.locked = nextLocked;
     if (initialDataReady && changed.size) {
         scheduleSaveLocalStateCache();
+        scheduleOrphanedLockCheck(changed);
         scheduleRefresh(changed, true);
     }
     markInitialBranchLoaded('locked');
+    if (initialDataReady) scheduleOrphanedLockCheck();
 });
 
 onValue(timesRef, snap => {
@@ -2234,6 +2255,37 @@ function cleanupStaleTimes(tableIds = null) {
     }
 }
 
+// Tự động giải phóng trạng thái khóa mồ côi (bàn 0đ nhưng vẫn sáng viền LED chốt đơn)
+const orphanedLockTimers = {};
+function scheduleOrphanedLockCheck(tableIds = null) {
+    if (!initialDataReady) return;
+    const ids = tableIds ? Array.from(tableIds) : Array.from({ length: 9 }, (_, i) => i + 1);
+    for (const rawTab of ids) {
+        const tab = Number(rawTab);
+        if (!Number.isInteger(tab) || tab < 1 || tab > 9) continue;
+        if (!data.locked?.[tab] || effectiveTableHasItems(tab)) {
+            clearTimeout(orphanedLockTimers[tab]);
+            delete orphanedLockTimers[tab];
+            continue;
+        }
+        if (orphanedLockTimers[tab]) continue;
+        orphanedLockTimers[tab] = setTimeout(() => {
+            delete orphanedLockTimers[tab];
+            if (!initialDataReady || paymentInProgress || localPaymentEchoTables.has(tab)) return;
+            if (!data.locked?.[tab] || effectiveTableHasItems(tab)) return;
+
+            delete data.locked[tab];
+            if (data.times?.[tab]) delete data.times[tab];
+            scheduleSaveLocalStateCache();
+            scheduleRefresh(new Set([tab]), currentTab === tab);
+            update(dbRef, {
+                [`locked/${tab}`]: null,
+                [`times/${tab}`]: null
+            }).catch(() => {});
+        }, 1200);
+    }
+}
+
 function applyMenuRowQtyClasses(row, qty) {
     if (!row) return;
     const preserveRemoteFocus = row.classList.contains('remote-focus');
@@ -2459,6 +2511,10 @@ async function renderBillAsync(tab) {
 
 function setLock(v) {
     if (!currentTab || paymentInProgress) return;
+    if (v && !effectiveTableHasItems(currentTab)) {
+        showToast('Bàn chưa có món nào để chốt đơn!', 'warning', 2600);
+        return;
+    }
     triggerHaptic(v ? 'lock' : 'unlock');
     broadcastActivity({ sfx: v ? 'lock' : 'unlock', tableId: currentTab, itemId: null, immediate: true });
     if (v) {
@@ -2466,7 +2522,7 @@ function setLock(v) {
         preloadBillAssets();
         resetBillQrView(true);
     }
-    set(child(lockedRef, String(currentTab)), v)
+    set(child(lockedRef, String(currentTab)), v ? true : null)
         .catch(err => console.error('[lock] Lỗi ghi trạng thái khóa Firebase:', err));
     if (!v) {
         currentBillLang = 'vi';
@@ -2482,6 +2538,16 @@ async function doPay() {
     const tab = currentTab;
     const lockedBeforeConfirm = !!data.locked?.[tab];
     const orderBeforeConfirm = normalizeOrderMap(getMergedOrder(tab));
+
+    if (Object.keys(orderBeforeConfirm).length === 0) {
+        if (data.locked?.[tab]) {
+            delete data.locked[tab];
+            update(dbRef, { [`locked/${tab}`]: null, [`times/${tab}`]: null }).catch(() => {});
+            scheduleRefresh(new Set([tab]), true);
+        }
+        showToast('Bàn này đã trống (0đ)!', 'warning', 2600);
+        return;
+    }
 
     const confirmed = await showAppModal({
         title: 'Xác nhận thanh toán',
@@ -2502,7 +2568,7 @@ async function doPay() {
     }
 
     // Sao lưu trạng thái bàn để hoàn tác (rollback) nếu transaction bị hủy hoặc ghi Firebase thất bại
-    const backupOrder = data.orders?.[tab] ? { ...data.orders[tab] } : null;
+    const backupOrder = data.orders?.[tab] ? { ...data.orders[tab] } : { ...expectedOrder };
     const backupLocked = data.locked?.[tab] !== undefined ? data.locked[tab] : null;
     const backupTime = data.times?.[tab] !== undefined ? data.times[tab] : null;
     const backupTotal = tableTotals[tab];
@@ -2525,6 +2591,28 @@ async function doPay() {
         scheduleRefresh(new Set([tab]), true);
     };
 
+    const paidAt = getServerNow();
+    const dateKey = formatLocalDateKey(paidAt);
+    const historyKey = push(child(historyRef, dateKey)).key;
+    const receiptItems = [];
+    let totalAmount = 0;
+
+    for (const [rawId, rawQty] of Object.entries(expectedOrder)) {
+        const itemId = Number(rawId);
+        const qty = Number(rawQty) || 0;
+        const item = ITEM_MAP.get(itemId);
+        if (!item || qty <= 0) continue;
+        const subtotal = item.price * qty;
+        totalAmount += subtotal;
+        receiptItems.push({
+            id: itemId,
+            name: item.name,
+            price: item.price,
+            qty,
+            subtotal
+        });
+    }
+
     paymentInProgress = true;
     localPaymentEchoTables.add(tab);
     clearPendingForTable(tab);
@@ -2543,9 +2631,25 @@ async function doPay() {
     paymentInProgress = false;
 
     const tableOrderRef = child(ordersRef, String(tab));
+    const postPayUpdates = {
+        [`locked/${tab}`]: null,
+        [`times/${tab}`]: null
+    };
+    if (receiptItems.length > 0 && historyKey) {
+        postPayUpdates[`history/${dateKey}/${historyKey}`] = {
+            table: tab,
+            tableName: getTableDisplayName(tab),
+            total: totalAmount,
+            items: receiptItems,
+            enteredAt: backupTime || paidAt,
+            paidAt,
+            by: myPresenceId
+        };
+    }
 
+    let orderDeletedOnServer = false;
     try {
-        // 1. Kiểm tra và xóa orders/${tab} nguyên tử: nếu máy khác vừa thêm món mới, transaction sẽ tự hủy
+        // 1. Kiểm tra & xóa nguyên tử orders/${tab} (gói tin nhẹ ~40B, không tải lại lịch sử cũ)
         const txResult = await transaction(tableOrderRef, (serverOrder) => {
             if (!areOrdersEqual(serverOrder, expectedOrder)) {
                 return undefined;
@@ -2555,60 +2659,14 @@ async function doPay() {
 
         if (!txResult.committed) {
             localPaymentEchoTables.delete(tab);
-            if (backupLocked !== null && data.locked?.[tab] === undefined) {
-                if (!data.locked) data.locked = {};
-                data.locked[tab] = backupLocked;
-            }
-            if (backupTime !== null && data.times?.[tab] === undefined) {
-                if (!data.times) data.times = {};
-                data.times[tab] = backupTime;
-            }
-            scheduleSaveLocalStateCache();
-            scheduleRefresh(new Set([tab]), true);
-            showToast('Đơn bàn này vừa có thay đổi từ máy khác. Đã hủy thanh toán để kiểm tra lại!', 'warning', 4500);
+            restoreTableState();
+            showToast('Đơn bàn này vừa có thay đổi hoặc đã được thanh toán ở máy khác!', 'warning', 4500);
             return;
         }
 
-        // 2. Xóa trạng thái khóa, giờ vào và lưu hóa đơn vào lịch sử trong ngày
-        const paidAt = getServerNow();
-        const dateKey = formatLocalDateKey(paidAt);
-        const historyKey = push(child(historyRef, dateKey)).key;
-        const receiptItems = [];
-        let totalAmount = 0;
+        orderDeletedOnServer = true;
 
-        for (const [rawId, rawQty] of Object.entries(expectedOrder)) {
-            const itemId = Number(rawId);
-            const qty = Number(rawQty) || 0;
-            const item = ITEM_MAP.get(itemId);
-            if (!item || qty <= 0) continue;
-            const subtotal = item.price * qty;
-            totalAmount += subtotal;
-            receiptItems.push({
-                id: itemId,
-                name: item.name,
-                price: item.price,
-                qty,
-                subtotal
-            });
-        }
-
-        const postPayUpdates = {
-            [`locked/${tab}`]: null,
-            [`times/${tab}`]: null
-        };
-
-        if (receiptItems.length > 0 && historyKey) {
-            postPayUpdates[`history/${dateKey}/${historyKey}`] = {
-                table: tab,
-                tableName: getTableDisplayName(tab),
-                total: totalAmount,
-                items: receiptItems,
-                enteredAt: backupTime || paidAt,
-                paidAt,
-                by: myPresenceId
-            };
-        }
-
+        // 2. Xóa đồng thời locked/${tab}, times/${tab} và ghi lịch sử ngay lập tức trong 1 multi-path update
         await update(dbRef, postPayUpdates);
         localPaymentEchoTables.delete(tab);
 
@@ -2618,8 +2676,14 @@ async function doPay() {
     } catch (err) {
         localPaymentEchoTables.delete(tab);
         console.error('[payment] Lỗi thanh toán Firebase:', err);
-        restoreTableState();
-        showToast('Mất kết nối! Thanh toán chưa lưu được, dữ liệu bàn đã được khôi phục.', 'error', 4500);
+        if (orderDeletedOnServer) {
+            // Đơn đã xóa trên server nhưng bước mở khóa/lưu lịch sử bị ngắt: thử dọn locked/times ngay khi có mạng
+            update(dbRef, { [`locked/${tab}`]: null, [`times/${tab}`]: null }).catch(() => {});
+            showToast('Đã thanh toán nhưng mạng chập chờn lúc lưu lịch sử. Vui lòng kiểm tra kết nối!', 'warning', 4500);
+        } else {
+            restoreTableState();
+            showToast('Mất kết nối! Thanh toán chưa lưu được, dữ liệu bàn đã được khôi phục.', 'error', 4500);
+        }
     }
 }
 
