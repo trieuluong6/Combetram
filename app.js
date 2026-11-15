@@ -31,6 +31,126 @@ const app = initializeApp(firebaseConfig);
 const database = getDatabase(app);
 const dbRef = ref(database, 'combetram_v6_data');
 
+// ─── CẤU HÌNH & TẠO MÃ VIETQR ĐỘNG THEO TỔNG BILL ────────────────────
+const VIETQR_CONFIG = {
+    bankId: 'TCB',                          // Techcombank (BIN: 970407)
+    accountNo: 'MS00P0000000449397',        // Mã QR cửa hàng Quỳnh Trâm (trích xuất từ mã QR gốc)
+    fallbackAccountNo: '1828591991',        // Số tài khoản Techcombank dự phòng
+    accountName: 'LUONG THI QUYNH TRAM',    // Tên chủ tài khoản không dấu
+    template: 'compact2'                    // 'compact2' | 'compact' | 'qr_only' | 'print'
+};
+
+let initialStaticQrSrc = '';
+let parsedStaticVietQr = null;
+let currentAppliedQrUrl = '';
+let latestRequestedQrUrl = '';
+
+(function captureInitialQrSource() {
+    const qrImg = document.getElementById('payment-qr');
+    if (!qrImg) return;
+    initialStaticQrSrc = qrImg.getAttribute('src') || qrImg.src || '';
+    const match = initialStaticQrSrc.match(/img\.vietqr\.io\/image\/([^-/?#]+)-([^-/?#]+)-([^.?#]+)\.(?:png|jpg|jpeg)/i);
+    if (match) {
+        let existingAccountName = '';
+        try {
+            const u = new URL(initialStaticQrSrc, window.location.href);
+            existingAccountName = u.searchParams.get('accountName') || '';
+        } catch (e) {}
+        parsedStaticVietQr = {
+            bankId: decodeURIComponent(match[1]),
+            accountNo: decodeURIComponent(match[2]),
+            template: decodeURIComponent(match[3]),
+            accountName: existingAccountName
+        };
+    }
+})();
+
+function formatVietQrAddInfo(tab) {
+    const raw = getTableDisplayName(tab)
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/đ/g, 'd')
+        .replace(/Đ/g, 'D')
+        .replace(/[^A-Za-z0-9 ]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .toUpperCase();
+    return (raw || `BAN ${tab}`).slice(0, 25);
+}
+
+function buildDynamicVietQrUrl(tab, amount, overrideAccountNo = '') {
+    const cleanAmount = Math.max(0, Math.round(Number(amount) || 0));
+    if (cleanAmount <= 0) return '';
+
+    const bankId = (VIETQR_CONFIG.bankId || parsedStaticVietQr?.bankId || '').trim();
+    const accountNo = (overrideAccountNo || VIETQR_CONFIG.accountNo || parsedStaticVietQr?.accountNo || '').trim();
+    const template = (VIETQR_CONFIG.template || parsedStaticVietQr?.template || 'compact2').trim();
+    const accountName = (VIETQR_CONFIG.accountName || parsedStaticVietQr?.accountName || '').trim();
+
+    if (!bankId || !accountNo) return '';
+
+    const params = new URLSearchParams();
+    params.set('amount', String(cleanAmount));
+    params.set('addInfo', formatVietQrAddInfo(tab));
+    if (accountName) params.set('accountName', accountName);
+
+    return `https://img.vietqr.io/image/${encodeURIComponent(bankId)}-${encodeURIComponent(accountNo)}-${encodeURIComponent(template)}.png?${params.toString()}`;
+}
+
+function loadDynamicQrCandidate(qrImg, candidates, idx = 0) {
+    if (idx >= candidates.length) {
+        latestRequestedQrUrl = '';
+        if (initialStaticQrSrc && currentAppliedQrUrl !== initialStaticQrSrc) {
+            currentAppliedQrUrl = initialStaticQrSrc;
+            qrImg.src = initialStaticQrSrc;
+        }
+        return;
+    }
+
+    const url = candidates[idx];
+    const loader = new Image();
+    loader.onload = () => {
+        if (latestRequestedQrUrl !== candidates[0]) return;
+        currentAppliedQrUrl = url;
+        qrImg.src = url;
+        if (billViewMode === 'qr') {
+            requestAnimationFrame(() => syncBillFlipHeight(true));
+        }
+    };
+    loader.onerror = () => {
+        if (latestRequestedQrUrl !== candidates[0]) return;
+        loadDynamicQrCandidate(qrImg, candidates, idx + 1);
+    };
+    loader.src = url;
+}
+
+function updateDynamicVietQr(tab, totalAmount) {
+    const qrImg = document.getElementById('payment-qr');
+    if (!qrImg) return;
+
+    const primaryUrl = buildDynamicVietQrUrl(tab, totalAmount);
+    if (!primaryUrl) {
+        latestRequestedQrUrl = '';
+        if (initialStaticQrSrc && currentAppliedQrUrl !== initialStaticQrSrc) {
+            currentAppliedQrUrl = initialStaticQrSrc;
+            qrImg.src = initialStaticQrSrc;
+        }
+        return;
+    }
+
+    const candidates = [primaryUrl];
+    const fallbackAcc = (VIETQR_CONFIG.fallbackAccountNo || '').trim();
+    if (fallbackAcc && fallbackAcc !== (VIETQR_CONFIG.accountNo || '').trim()) {
+        const fallbackUrl = buildDynamicVietQrUrl(tab, totalAmount, fallbackAcc);
+        if (fallbackUrl && fallbackUrl !== primaryUrl) candidates.push(fallbackUrl);
+    }
+
+    if (candidates.includes(currentAppliedQrUrl) || primaryUrl === latestRequestedQrUrl) return;
+    latestRequestedQrUrl = primaryUrl;
+    loadDynamicQrCandidate(qrImg, candidates, 0);
+}
+
+
 // ─── ĐỒNG BỘ GIỜ SERVER FIREBASE ──────────────────────────────────────
 let serverTimeOffset = 0;
 onValue(ref(database, '.info/serverTimeOffset'), (snap) => {
@@ -378,6 +498,9 @@ function toggleBillQr() {
     stopBillScrollAnimation();
 
     if (showQr) {
+        if (currentTab) {
+            updateDynamicVietQr(currentTab, tableTotals[currentTab] || 0);
+        }
         const currentHeight = Math.ceil(shell.getBoundingClientRect().height) || activeBillFaceHeight('bill');
         const targetHeight = activeBillFaceHeight('qr');
         if (!targetHeight) return;
@@ -2832,6 +2955,7 @@ async function renderBillAsync(tab) {
         tBox.classList.add('total-pop');
         setTimeout(() => tBox.classList.remove('total-pop'), 400);
     }
+    updateDynamicVietQr(tab, t);
     requestAnimationFrame(() => syncBillFlipHeight(false));
 }
 
