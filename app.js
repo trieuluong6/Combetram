@@ -2434,17 +2434,24 @@ async function renderBillAsync(tab) {
     if (currentTab !== tab || currentBillLang !== targetLang || !data.locked?.[tab]) return;
 
     let h = "", t = 0, my = getMergedOrder(tab);
-    document.getElementById('txt-total-label').textContent = langData.total;
+    const totalLabel = (targetLang !== 'vi' && langData.total && langData.total !== 'TỔNG')
+        ? `${langData.total} / TỔNG`
+        : (langData.total || 'TỔNG');
+    document.getElementById('txt-total-label').textContent = totalLabel;
     document.getElementById('txt-lang-flag').textContent = langData.flag;
     let idx = 0;
     for (let id in my) {
         const itm = ITEM_MAP.get(Number(id));
         if (itm && my[id] > 0) {
             let p = itm.price * my[id]; t += p;
-            let nameShow = (targetLang !== 'vi' && langData.items?.[itm.id]) ? langData.items[itm.id] : itm.name;
+            const translatedName = targetLang !== 'vi' ? langData.items?.[itm.id] : null;
+            const isBilingual = Boolean(translatedName && translatedName !== itm.name);
+            const nameHtml = isBilingual
+                ? `${translatedName}<small class="item-name-vi">${itm.name}</small>`
+                : itm.name;
             const delaySec = Math.min(idx * 0.05, 0.35).toFixed(2);
             h += `<div class="bill-row" style="animation-delay: ${delaySec}s">
-                    <span class="item-name">${nameShow}</span>
+                    <span class="item-name">${nameHtml}</span>
                     <span class="item-qty">x${my[id]}</span>
                     <div class="divider"></div>
                     <span class="item-price">${p.toLocaleString()}đ</span>
