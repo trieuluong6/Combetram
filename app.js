@@ -1067,9 +1067,10 @@ initSoundMute();
 
 // Tần số dải trung-cao tối ưu cho loa điện thoại + tiếng gõ nhạc cụ gỗ "leng keng" cho +- món
 const SOUND_PATTERNS = {
-    // Chạm bàn / chuyển tab: tiếng gõ khối gỗ đặc (solid woodblock knock) "cộc" dứt khoát, đanh và to rõ trên loa điện thoại
+    // Chạm bàn / chuyển tab: tiếng "tưng tưng" kiểu thủy tinh trong trẻo, vang và to rõ
     nav: [
-        { freq: 590, endFreq: 485, dur: 0.068, instrument: 'solid_knock', vol: 1.65 }
+        { freq: 1479.98, dur: 0.145, delay: 0, instrument: 'glass', vol: 1.50 },
+        { freq: 1975.53, dur: 0.21, delay: 0.064, instrument: 'glass', vol: 1.60 }
     ],
     // Thêm món (+): Tiếng "Leng - Keng" đàn gõ gỗ (Marimba/Xylophone) đi lên C6 -> G6
     add: [
@@ -1119,9 +1120,10 @@ function synthesizeSoundSamples(type, sampleRate = SOUND_SAMPLE_RATE) {
         const wave = n.wave || 'sine';
         const isWood = n.instrument === 'wood';
         const isSolidKnock = n.instrument === 'solid_knock';
+        const isGlass = n.instrument === 'glass';
         const startIdx = Math.floor(delay * sampleRate);
         const lenIdx = Math.max(1, Math.floor(dur * sampleRate));
-        const attackSamples = Math.max(1, Math.floor((isWood ? 0.0015 : (isSolidKnock ? 0.0012 : 0.004)) * sampleRate));
+        const attackSamples = Math.max(1, Math.floor((isWood ? 0.0015 : ((isSolidKnock || isGlass) ? 0.0012 : 0.004)) * sampleRate));
         const releaseSamples = Math.max(1, Math.floor((isSolidKnock ? 0.012 : 0.015) * sampleRate));
         let phase = 0;
         let malletPhase = 0;
@@ -1137,7 +1139,30 @@ function synthesizeSoundSamples(type, sampleRate = SOUND_SAMPLE_RATE) {
             const attack = Math.min(1, i / attackSamples);
             const release = Math.min(1, (lenIdx - 1 - i) / releaseSamples);
 
-            if (isSolidKnock) {
+            if (isGlass) {
+                // Cộng hưởng thủy tinh/pha lê: tần số gốc + quãng 8 + mode chuông thủy tinh 2.756x + ánh kim 4.15x
+                const f0Env = Math.exp(-elapsedSec * 15.5);
+                const f2Env = Math.exp(-elapsedSec * 28.0);
+                const f3Env = Math.exp(-elapsedSec * 46.0);
+                const f4Env = Math.exp(-elapsedSec * 78.0);
+
+                // Xung chạm thủy tinh sắc gọn 3.5ms đầu tạo độ "keng" trong trẻo
+                let clink = 0;
+                if (elapsedSec < 0.0035) {
+                    const clinkFreq = 4400 - (elapsedSec / 0.0035) * 900;
+                    malletPhase += (2 * Math.PI * clinkFreq) / sampleRate;
+                    clink = 0.55 * Math.sin(malletPhase) * Math.exp(-elapsedSec * 650);
+                }
+
+                const glassSample =
+                    1.20 * Math.sin(phase) * f0Env +
+                    0.52 * Math.sin(2.0 * phase) * f2Env +
+                    0.44 * Math.sin(2.756 * phase) * f3Env +
+                    0.20 * Math.sin(4.15 * phase) * f4Env +
+                    clink;
+
+                mix[startIdx + i] += glassSample * vol * attack * release;
+            } else if (isSolidKnock) {
                 // Thân khối gỗ đặc (fundamental + các bậc cộng hưởng gỗ 1.48, 2.15, 2.85 nằm đúng dải nhạy loa điện thoại)
                 const bodyEnv = Math.exp(-elapsedSec * 26);
                 const overtone1Env = Math.exp(-elapsedSec * 38);
@@ -1196,7 +1221,7 @@ function synthesizeSoundSamples(type, sampleRate = SOUND_SAMPLE_RATE) {
         }
     }
 
-    const drive = type === 'nav' ? 3.8 : 2.6;
+    const drive = type === 'nav' ? 3.5 : 2.6;
     const norm = Math.tanh(drive);
     const out = new Float32Array(numSamples);
     for (let i = 0; i < numSamples; i++) {
@@ -1376,7 +1401,14 @@ function playWebAudioCached(type) {
         const audioBuf = getCachedWebAudioBuffer(ctx, type);
         const src = ctx.createBufferSource();
         src.buffer = audioBuf;
-        src.connect(sharedAudioMaster || ctx.destination);
+        if (type === 'nav') {
+            const navGain = ctx.createGain();
+            navGain.gain.setValueAtTime(1.25, ctx.currentTime);
+            src.connect(navGain);
+            navGain.connect(sharedAudioMaster || ctx.destination);
+        } else {
+            src.connect(sharedAudioMaster || ctx.destination);
+        }
         src.start(0);
         return true;
     } catch (e) {
