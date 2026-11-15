@@ -942,8 +942,9 @@ initSoundMute();
 
 // Tần số dải trung-cao tối ưu cho loa điện thoại + tiếng gõ nhạc cụ gỗ "leng keng" cho +- món
 const SOUND_PATTERNS = {
+    // Chạm bàn / chuyển tab: tiếng gõ mõ gỗ / tre khô "cốc" gọn, trầm ấm, dứt khoát và to rõ
     nav: [
-        { freq: 987.77, endFreq: 880, dur: 0.085, wave: 'sine', vol: 0.95 }
+        { freq: 310, dur: 0.052, instrument: 'wood_tap', vol: 1.55 }
     ],
     // Thêm món (+): Tiếng "Leng - Keng" đàn gõ gỗ (Marimba/Xylophone) đi lên C6 -> G6
     add: [
@@ -992,10 +993,11 @@ function synthesizeSoundSamples(type, sampleRate = SOUND_SAMPLE_RATE) {
         const vol = n.vol || 1.0;
         const wave = n.wave || 'sine';
         const isWood = n.instrument === 'wood';
+        const isWoodTap = n.instrument === 'wood_tap';
         const startIdx = Math.floor(delay * sampleRate);
         const lenIdx = Math.max(1, Math.floor(dur * sampleRate));
-        const attackSamples = Math.max(1, Math.floor((isWood ? 0.002 : 0.004) * sampleRate));
-        const releaseSamples = Math.max(1, Math.floor(0.015 * sampleRate));
+        const attackSamples = Math.max(1, Math.floor(((isWood || isWoodTap) ? 0.0015 : 0.004) * sampleRate));
+        const releaseSamples = Math.max(1, Math.floor((isWoodTap ? 0.008 : 0.015) * sampleRate));
         let phase = 0;
         let malletPhase = 0;
 
@@ -1008,7 +1010,28 @@ function synthesizeSoundSamples(type, sampleRate = SOUND_SAMPLE_RATE) {
             const attack = Math.min(1, i / attackSamples);
             const release = Math.min(1, (lenIdx - 1 - i) / releaseSamples);
 
-            if (isWood) {
+            if (isWoodTap) {
+                // Thân khối gỗ rỗng (fundamental + bậc 1.58 và 2.32 đặc trưng của gỗ gõ) tắt cực nhanh ~45ms
+                const bodyEnv = Math.exp(-elapsedSec * 72);
+                const overtone1Env = Math.exp(-elapsedSec * 105);
+                const overtone2Env = Math.exp(-elapsedSec * 155);
+
+                // Xung dùi chạm gỗ cực ngắn 7ms đầu để tạo độ "cốc" nảy và to trên loa điện thoại
+                let knock = 0;
+                if (elapsedSec < 0.007) {
+                    const knockFreq = 1280 - (elapsedSec / 0.007) * 520;
+                    malletPhase += (2 * Math.PI * knockFreq) / sampleRate;
+                    knock = 0.85 * Math.sin(malletPhase) * Math.exp(-elapsedSec * 420);
+                }
+
+                const woodTapSample =
+                    1.15 * Math.sin(phase) * bodyEnv +
+                    0.52 * Math.sin(1.58 * phase) * overtone1Env +
+                    0.28 * Math.sin(2.32 * phase) * overtone2Env +
+                    knock;
+
+                mix[startIdx + i] += woodTapSample * vol * attack * release;
+            } else if (isWood) {
                 const bodyEnv = Math.exp(-elapsedSec * 16.5);
                 const overtone2Env = Math.exp(-elapsedSec * 34);
                 const overtone3Env = Math.exp(-elapsedSec * 58);
@@ -1044,7 +1067,7 @@ function synthesizeSoundSamples(type, sampleRate = SOUND_SAMPLE_RATE) {
         }
     }
 
-    const drive = 2.6;
+    const drive = type === 'nav' ? 3.4 : 2.6;
     const norm = Math.tanh(drive);
     const out = new Float32Array(numSamples);
     for (let i = 0; i < numSamples; i++) {
