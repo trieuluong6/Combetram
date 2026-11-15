@@ -138,7 +138,7 @@ function onChildRemoved(refArg, callback, ...rest) {
     }, ...rest);
 }
 
-// ─── NON-BLOCKING MODAL & TOAST THAY THẾ ALERT/CONFIRM/PROMPT ───────────
+// ─── NON-BLOCKING MODAL & TOAST THAY THẾ ALERT/CONFIRM ─────────────────
 let activeModalResolver = null;
 let toastTimer = null;
 
@@ -168,8 +168,6 @@ function showAppModal({
     title = 'Thông báo',
     message = '',
     type = 'alert',
-    inputType = 'password',
-    placeholder = 'Nhập mật khẩu...',
     confirmText = 'Xác nhận',
     cancelText = 'Hủy',
     danger = false
@@ -177,19 +175,17 @@ function showAppModal({
     const backdrop = document.getElementById('app-modal-backdrop');
     const titleEl = document.getElementById('app-modal-title');
     const msgEl = document.getElementById('app-modal-message');
-    const inputEl = document.getElementById('app-modal-input');
     const cancelBtn = document.getElementById('app-modal-cancel');
     const confirmBtn = document.getElementById('app-modal-confirm');
 
-    if (!backdrop || !titleEl || !msgEl || !inputEl || !cancelBtn || !confirmBtn) {
+    if (!backdrop || !titleEl || !msgEl || !cancelBtn || !confirmBtn) {
         if (type === 'confirm') return Promise.resolve(window.confirm(message));
-        if (type === 'prompt') return Promise.resolve(window.prompt(message));
         window.alert(message);
         return Promise.resolve(true);
     }
 
     if (activeModalResolver) {
-        closeAppModal(type === 'prompt' ? null : false);
+        closeAppModal(false);
     }
 
     titleEl.textContent = title;
@@ -197,54 +193,30 @@ function showAppModal({
     confirmBtn.textContent = confirmText;
     cancelBtn.textContent = cancelText;
     confirmBtn.classList.toggle('is-danger', Boolean(danger));
-
-    if (type === 'prompt') {
-        inputEl.classList.remove('hidden');
-        inputEl.type = inputType;
-        inputEl.placeholder = placeholder;
-        inputEl.value = '';
-    } else {
-        inputEl.classList.add('hidden');
-        inputEl.value = '';
-    }
-
     cancelBtn.classList.toggle('hidden', type === 'alert');
     backdrop.classList.remove('hidden');
 
     return new Promise((resolve) => {
         activeModalResolver = resolve;
-        requestAnimationFrame(() => {
-            if (type === 'prompt') inputEl.focus();
-            else confirmBtn.focus();
-        });
+        requestAnimationFrame(() => confirmBtn.focus());
     });
 }
 
 (function bindAppModalEvents() {
     const backdrop = document.getElementById('app-modal-backdrop');
-    const inputEl = document.getElementById('app-modal-input');
     const cancelBtn = document.getElementById('app-modal-cancel');
     const confirmBtn = document.getElementById('app-modal-confirm');
     if (!backdrop || !cancelBtn || !confirmBtn) return;
 
-    const getDismissValue = () => (!inputEl?.classList.contains('hidden') ? null : false);
-    const getSubmitValue = () => (!inputEl?.classList.contains('hidden') ? inputEl.value : true);
-
-    cancelBtn.addEventListener('click', () => closeAppModal(getDismissValue()));
-    confirmBtn.addEventListener('click', () => closeAppModal(getSubmitValue()));
+    cancelBtn.addEventListener('click', () => closeAppModal(false));
+    confirmBtn.addEventListener('click', () => closeAppModal(true));
     backdrop.addEventListener('click', (e) => {
-        if (e.target === backdrop) closeAppModal(getDismissValue());
-    });
-    inputEl?.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            closeAppModal(getSubmitValue());
-        }
+        if (e.target === backdrop) closeAppModal(false);
     });
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && activeModalResolver) {
             e.preventDefault();
-            closeAppModal(getDismissValue());
+            closeAppModal(false);
         }
     });
 })();
@@ -1146,11 +1118,6 @@ function ensureSoundPools() {
             });
         } catch (e) {}
     }
-    const tingEl = document.getElementById('tingSound');
-    if (tingEl && wavUrlMap.ting) {
-        tingEl.src = wavUrlMap.ting;
-        tingEl.load();
-    }
 }
 
 // Chỉ khởi tạo trước pool 28 thẻ <audio> trên iOS; Android/Desktop dùng Web Audio Buffer cache
@@ -1309,17 +1276,34 @@ function triggerHaptic(type = 'nav') {
     }
 }
 
-// ─── animateNumber với cancel flag ────────────────────────────────────
+// ─── animateNumber với cancel flag + cache giá trị số (tránh regex DOM) ──
 const animatingFlags = {};
-function animateNumber(elementId, newValue, suffix = '') {
-    const el = document.getElementById(elementId);
+const animatedValues = {};
+
+function setAnimatedDisplayValue(key, el, value, suffix = '') {
+    animatedValues[key] = value;
+    el.textContent = `${value.toLocaleString()}${suffix}`;
+}
+
+function animateNumber(target, newValue, suffix = '') {
+    const el = typeof target === 'string' ? document.getElementById(target) : target;
     if (!el) return;
-    const startValue = parseInt(el.textContent.replace(/\D/g, '')) || 0;
-    if (startValue === newValue && (!suffix || el.textContent.endsWith(suffix))) return;
+    const key = el.id || String(target);
+    const hasKnownStart = Object.prototype.hasOwnProperty.call(animatedValues, key);
+
+    if (!hasKnownStart && newValue === 0) {
+        setAnimatedDisplayValue(key, el, 0, suffix);
+        return;
+    }
+
+    const startValue = hasKnownStart ? animatedValues[key] : 0;
+    const expectedText = `${newValue.toLocaleString()}${suffix}`;
+    if (startValue === newValue && el.textContent === expectedText) return;
+
     const diff = newValue - startValue;
     const duration = 750, startTime = performance.now();
     const token = Symbol();
-    animatingFlags[elementId] = token;
+    animatingFlags[key] = token;
 
     function easeCountMoney(t) {
         if (t < 0.7) { const p = t / 0.7; return (1 - Math.pow(1 - p, 3)) * 0.92; }
@@ -1327,7 +1311,7 @@ function animateNumber(elementId, newValue, suffix = '') {
         return 0.92 + (1 - Math.pow(1 - p, 2)) * 0.08;
     }
     function updateAnim(currentTime) {
-        if (animatingFlags[elementId] !== token) return;
+        if (animatingFlags[key] !== token) return;
         const elapsed = currentTime - startTime;
         const progress = Math.min(elapsed / duration, 1);
         const eased = easeCountMoney(progress);
@@ -1335,9 +1319,12 @@ function animateNumber(elementId, newValue, suffix = '') {
         if (progress > 0.85) { const step = 1000; val = Math.round(val / step) * step; }
         val = Math.round(val);
         val = diff >= 0 ? Math.min(val, newValue) : Math.max(val, newValue);
-        el.textContent = `${val.toLocaleString()}${suffix}`;
+        setAnimatedDisplayValue(key, el, val, suffix);
         if (progress < 1) requestAnimationFrame(updateAnim);
-        else { el.textContent = `${newValue.toLocaleString()}${suffix}`; delete animatingFlags[elementId]; }
+        else {
+            setAnimatedDisplayValue(key, el, newValue, suffix);
+            delete animatingFlags[key];
+        }
     }
     requestAnimationFrame(updateAnim);
 }
@@ -1936,6 +1923,7 @@ function markInitialBranchLoaded(branch) {
     if (initialBranchesLoaded.size === 3) {
         initialDataReady = true;
         cleanupStaleTimes();
+        scheduleOrphanedLockCheck();
         scheduleSaveLocalStateCache();
         scheduleRefresh(null);
     }
@@ -1995,17 +1983,29 @@ if (hydrateFromLocalStateCache()) {
     refresh(null, false);
 }
 
-// Gắn child listeners song song ngay từ đầu để không tạo khoảng hở mất sự kiện giữa initial snapshot và child events
+// Dùng chung 1 luồng đồng bộ ordersRef (onChild* đã giữ query mở, _fbOnValue một lần dùng chung cache SDK mà không nhân đôi tải mạng hay đếm trùng ↓)
 onChildAdded(ordersRef, (snap) => handleSingleTableOrderSnapshot(snap.key, snap.val()));
 onChildChanged(ordersRef, (snap) => handleSingleTableOrderSnapshot(snap.key, snap.val()));
 onChildRemoved(ordersRef, (snap) => handleSingleTableOrderSnapshot(snap.key, null));
 
-onValue(ordersRef, (initialSnap) => {
-    data.orders = initialSnap.val() || {};
+let unsubInitialOrders = null;
+unsubInitialOrders = _fbOnValue(ordersRef, (initialSnap) => {
+    if (unsubInitialOrders) {
+        unsubInitialOrders();
+        unsubInitialOrders = null;
+    }
+    const serverOrders = initialSnap.val() || {};
+    const reconciled = {};
+    for (let t = 1; t <= 9; t++) {
+        const rawOrder = serverOrders[t];
+        if (rawOrder && typeof rawOrder === 'object' && Object.values(rawOrder).some(q => Number(q) > 0)) {
+            reconciled[t] = rawOrder;
+        }
+    }
+    data.orders = reconciled;
     firstOrdersLoad = false;
     markInitialBranchLoaded('orders');
-    scheduleOrphanedLockCheck();
-}, { onlyOnce: true });
+});
 
 onValue(lockedRef, snap => {
     const nextLocked = snap.val() || {};
@@ -2017,7 +2017,6 @@ onValue(lockedRef, snap => {
         scheduleRefresh(changed, true);
     }
     markInitialBranchLoaded('locked');
-    if (initialDataReady) scheduleOrphanedLockCheck();
 });
 
 onValue(timesRef, snap => {
@@ -2236,8 +2235,21 @@ function playQtyBump(el) {
 }
 
 function effectiveTableHasItems(tab) {
-    for (const item of ALL_ITEMS) {
-        if (getEffectiveItemQty(tab, item.id) > 0) return true;
+    const serverOrder = data.orders?.[tab];
+    const pendingOrder = pendingDeltas[tab];
+    if (serverOrder && typeof serverOrder === 'object') {
+        for (const id of Object.keys(serverOrder)) {
+            if (!ITEM_MAP.has(Number(id))) continue;
+            const qty = (Number(serverOrder[id]) || 0) + (Number(pendingOrder?.[id]) || 0);
+            if (qty > 0) return true;
+        }
+    }
+    if (pendingOrder && typeof pendingOrder === 'object') {
+        for (const id of Object.keys(pendingOrder)) {
+            if (serverOrder && Object.prototype.hasOwnProperty.call(serverOrder, id)) continue;
+            if (!ITEM_MAP.has(Number(id))) continue;
+            if ((Number(pendingOrder[id]) || 0) > 0) return true;
+        }
     }
     return false;
 }
@@ -2422,7 +2434,10 @@ function renderTable(tableId, now = getServerNow()) {
 
     if (dom.sum) {
         dom.sum.classList.remove('skeleton');
-        if (parseInt(dom.sum.textContent.replace(/\D/g, '')) !== total || !dom.sum.textContent.endsWith('đ')) animateNumber(`sum-${tableId}`, total, 'đ');
+        const sumKey = `sum-${tableId}`;
+        if (animatedValues[sumKey] !== total || !dom.sum.textContent.endsWith('đ')) {
+            animateNumber(dom.sum, total, 'đ');
+        }
     }
     if (dom.meta) {
         dom.meta.classList.remove('skeleton');
@@ -2503,7 +2518,11 @@ async function renderBillAsync(tab) {
     }
     document.getElementById('bill-list').innerHTML = h || "Trống";
     const bTotal = document.getElementById('bill-total'), tBox = document.getElementById('total-container');
-    if (parseInt(bTotal.textContent.replace(/\D/g, '')) !== t) { animateNumber('bill-total', t); tBox.classList.add('total-pop'); setTimeout(() => tBox.classList.remove('total-pop'), 400); }
+    if (animatedValues['bill-total'] !== t) {
+        animateNumber(bTotal, t);
+        tBox.classList.add('total-pop');
+        setTimeout(() => tBox.classList.remove('total-pop'), 400);
+    }
     requestAnimationFrame(() => syncBillFlipHeight(false));
 }
 
