@@ -1067,10 +1067,10 @@ initSoundMute();
 
 // Tần số dải trung-cao tối ưu cho loa điện thoại + tiếng gõ nhạc cụ gỗ "leng keng" cho +- món
 const SOUND_PATTERNS = {
-    // Chạm bàn / chuyển tab: tiếng "tưng tưng" kiểu thủy tinh trong trẻo, vang và to rõ
+    // Chạm bàn / chuyển tab: tiếng "tưng tưng" thủy tinh dải trung ấm áp (Bb5 -> Eb6), đỡ đanh, giữ nguyên âm lượng
     nav: [
-        { freq: 1479.98, dur: 0.145, delay: 0, instrument: 'glass', vol: 1.50 },
-        { freq: 1975.53, dur: 0.21, delay: 0.064, instrument: 'glass', vol: 1.60 }
+        { freq: 932.33, dur: 0.155, delay: 0, instrument: 'glass', vol: 1.32 },
+        { freq: 1244.51, dur: 0.22, delay: 0.066, instrument: 'glass', vol: 1.40 }
     ],
     // Thêm món (+): Tiếng "Leng - Keng" đàn gõ gỗ (Marimba/Xylophone) đi lên C6 -> G6
     add: [
@@ -1123,7 +1123,7 @@ function synthesizeSoundSamples(type, sampleRate = SOUND_SAMPLE_RATE) {
         const isGlass = n.instrument === 'glass';
         const startIdx = Math.floor(delay * sampleRate);
         const lenIdx = Math.max(1, Math.floor(dur * sampleRate));
-        const attackSamples = Math.max(1, Math.floor((isWood ? 0.0015 : ((isSolidKnock || isGlass) ? 0.0012 : 0.004)) * sampleRate));
+        const attackSamples = Math.max(1, Math.floor((isWood ? 0.0015 : (isGlass ? 0.0018 : (isSolidKnock ? 0.0012 : 0.004))) * sampleRate));
         const releaseSamples = Math.max(1, Math.floor((isSolidKnock ? 0.012 : 0.015) * sampleRate));
         let phase = 0;
         let malletPhase = 0;
@@ -1140,25 +1140,25 @@ function synthesizeSoundSamples(type, sampleRate = SOUND_SAMPLE_RATE) {
             const release = Math.min(1, (lenIdx - 1 - i) / releaseSamples);
 
             if (isGlass) {
-                // Cộng hưởng thủy tinh/pha lê: tần số gốc + quãng 8 + mode chuông thủy tinh 2.756x + ánh kim 4.15x
-                const f0Env = Math.exp(-elapsedSec * 15.5);
-                const f2Env = Math.exp(-elapsedSec * 28.0);
-                const f3Env = Math.exp(-elapsedSec * 46.0);
-                const f4Env = Math.exp(-elapsedSec * 78.0);
+                // Cộng hưởng ly thủy tinh dày, dải trung ấm: tăng thân âm gốc, giảm họa âm cao để bớt đanh
+                const f0Env = Math.exp(-elapsedSec * 14.5);
+                const f2Env = Math.exp(-elapsedSec * 34.0);
+                const f3Env = Math.exp(-elapsedSec * 58.0);
+                const f4Env = Math.exp(-elapsedSec * 95.0);
 
-                // Xung chạm thủy tinh sắc gọn 3.5ms đầu tạo độ "keng" trong trẻo
+                // Xung chạm kính dịu gọn 3.2ms đầu (2.65kHz -> 2.0kHz) giữ độ nảy mà không chói tai
                 let clink = 0;
-                if (elapsedSec < 0.0035) {
-                    const clinkFreq = 4400 - (elapsedSec / 0.0035) * 900;
+                if (elapsedSec < 0.0032) {
+                    const clinkFreq = 2650 - (elapsedSec / 0.0032) * 650;
                     malletPhase += (2 * Math.PI * clinkFreq) / sampleRate;
-                    clink = 0.55 * Math.sin(malletPhase) * Math.exp(-elapsedSec * 650);
+                    clink = 0.30 * Math.sin(malletPhase) * Math.exp(-elapsedSec * 720);
                 }
 
                 const glassSample =
-                    1.20 * Math.sin(phase) * f0Env +
-                    0.52 * Math.sin(2.0 * phase) * f2Env +
-                    0.44 * Math.sin(2.756 * phase) * f3Env +
-                    0.20 * Math.sin(4.15 * phase) * f4Env +
+                    1.35 * Math.sin(phase) * f0Env +
+                    0.40 * Math.sin(2.0 * phase) * f2Env +
+                    0.22 * Math.sin(2.756 * phase) * f3Env +
+                    0.06 * Math.sin(4.15 * phase) * f4Env +
                     clink;
 
                 mix[startIdx + i] += glassSample * vol * attack * release;
