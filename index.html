@@ -1,26 +1,12 @@
 <!DOCTYPE html>
-<html lang="vi" class="paper-flip-pending">
+<html lang="vi">
 <head>
 <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
 <link rel="preconnect" href="https://combetram-default-rtdb.asia-southeast1.firebasedatabase.app" crossorigin>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title data-id="th-modified">Cơm Bé Trâm - Quản lý</title>
-    <!-- Critical startup hide: visibility cannot be overridden by the status pulse animation. -->
-    <style>
-    html.paper-flip-pending #weather-hub,
-    html.paper-flip-pending #presence-count,
-    html.paper-flip-pending #sound-toggle,
-    html.paper-flip-pending #dark-toggle,
-    html.paper-flip-pending #load-speed-widget,
-    html.paper-flip-pending #crowd-status,
-    html.paper-flip-pending .header-title,
-    html.paper-flip-pending #net-speed-widget,
-    html.paper-flip-pending #btc-ticker,
-    html.paper-flip-pending #oil-ticker,
-    html.paper-flip-pending .flip-clock-container > .flip-unit,
-    html.paper-flip-pending .flip-clock-container > .flip-colon { visibility: hidden !important; }
-    </style>
+    <!-- Header & clock stay visible immediately on first paint -->
     <link rel="stylesheet" href="style.css?v=__BUILD_VER__">
     <script>
     window.__APP_BUILD_VERSION = '__BUILD_VER__';
@@ -86,7 +72,7 @@
     </div>
 
     <div class="top-bar-right">
-        <div id="offline-badge" class="hidden" role="status" aria-live="polite">⚠️ Mất mạng</div>
+        <div id="offline-badge" class="hidden" role="button" tabindex="0" aria-live="polite" title="Bấm để kết nối lại máy chủ">⚠️ Mất mạng</div>
         <div id="presence-count">
             <span class="online-dot"></span>
             👥 Online: <span id="online-val">1</span>

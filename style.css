@@ -101,6 +101,7 @@ body.dark-mode #weather-hub.wind-danger { background: rgba(183,28,28,0.3); color
     align-items: center;
     gap: 3px;
     white-space: nowrap;
+    cursor: pointer;
     animation: pulse-status-gpu 1.4s infinite ease-in-out;
 }
 body.dark-mode #offline-badge {
@@ -743,26 +744,36 @@ body.dark-mode .single-paper-wisp {
     border-color: rgba(180, 195, 208, .22);
 }
 
-html.paper-flip-pending #weather-hub,
-html.paper-flip-pending #presence-count,
-html.paper-flip-pending #sound-toggle,
-html.paper-flip-pending #dark-toggle,
-html.paper-flip-pending #load-speed-widget,
-html.paper-flip-pending #crowd-status,
-html.paper-flip-pending .header-title,
-html.paper-flip-pending #net-speed-widget,
-html.paper-flip-pending #btc-ticker,
-html.paper-flip-pending #oil-ticker,
-html.paper-flip-pending .flip-clock-container > .flip-unit,
-html.paper-flip-pending .flip-clock-container > .flip-colon {
-    opacity: 0;
-}
+/* Header & clock remain visible immediately on startup */
 
 .single-fold-active {
     animation: none !important;
     backface-visibility: hidden;
     -webkit-backface-visibility: hidden;
     will-change: transform, opacity;
+}
+
+/* NHÃN BÀN ĐÃ CHỐT BILL */
+.locked-status-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    margin-top: 4px;
+    padding: 2px 6px;
+    border-radius: 999px;
+    font-size: 0.56em;
+    font-weight: 800;
+    line-height: 1.2;
+    white-space: nowrap;
+    background: #e3f2fd;
+    color: #1565c0;
+    border: 1px solid #90caf9;
+}
+body.dark-mode .locked-status-pill {
+    background: rgba(21, 101, 192, 0.28);
+    color: #90caf9;
+    border-color: rgba(144, 202, 249, 0.45);
 }
 
 /* TRẠNG THÁI ĐANG THU TIỀN TỪ THIẾT BỊ KHÁC */

@@ -12,7 +12,9 @@ import {
     onChildRemoved as _fbOnChildRemoved,
     push as _fbPush,
     onDisconnect,
-    runTransaction
+    runTransaction,
+    goOffline,
+    goOnline
 } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-database.js";
 
 import { menu } from "./menu.js?v=__BUILD_VER__";
@@ -230,7 +232,15 @@ function getServerNow() {
     return Date.now() + serverTimeOffset;
 }
 
-// ─── HELPER FETCH CÓ TIMEOUT CHỐNG TREO PROXY/API ─────────────────────
+// ─── HELPER PROMISE & FETCH CÓ TIMEOUT CHỐNG TREO FIREBASE/PROXY ──────
+function withTimeout(promise, timeoutMs = 6500, timeoutCode = 'TIMEOUT') {
+    let timer = null;
+    const timeoutPromise = new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error(timeoutCode)), timeoutMs);
+    });
+    return Promise.race([promise, timeoutPromise]).finally(() => clearTimeout(timer));
+}
+
 async function fetchWithTimeout(url, options = {}, timeoutMs = 5500) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -1756,6 +1766,8 @@ const myActivityRef = child(activityRef, myPresenceId);
 
 let isFirebaseConnected = false;
 let hasEverConnected = false;
+let initialSyncTimedOut = false;
+let lastReconnectAttemptAt = 0;
 const presenceMap = {};
 const cursorsMap = {};
 const activityMap = {};
@@ -1782,13 +1794,35 @@ function cleanupStaleRealtimeNodes(parentRef, prefix, snapVal, maxAgeMs) {
     }
 }
 
+function forceFirebaseReconnect(manual = false) {
+    const now = Date.now();
+    if (!manual && (now - lastReconnectAttemptAt) < 8000) return;
+    lastReconnectAttemptAt = now;
+    try {
+        goOffline(database);
+        setTimeout(() => {
+            try { goOnline(database); } catch (e) {}
+        }, 260);
+    } catch (e) {}
+    if (manual) {
+        initialSyncTimedOut = false;
+        updateNetworkStatusBadge();
+        showToast('🔄 Đang kết nối lại máy chủ...', 'info', 2200);
+    }
+}
+
 function updateNetworkStatusBadge() {
     const badge = document.getElementById('offline-badge');
     if (!badge) return;
     const isOffline = navigator.onLine === false || (hasEverConnected && !isFirebaseConnected);
     if (isOffline) {
         badge.classList.remove('hidden', 'is-syncing');
-        badge.textContent = '⚠️ Mất mạng';
+        badge.textContent = '⚠️ Mất mạng (Bấm thử lại)';
+        return;
+    }
+    if (!initialDataReady && initialSyncTimedOut) {
+        badge.classList.remove('hidden', 'is-syncing');
+        badge.textContent = '⚠️ Chưa kết nối máy chủ (Thử lại)';
         return;
     }
     if (!initialDataReady && isShowingCachedSnapshot) {
@@ -1800,8 +1834,40 @@ function updateNetworkStatusBadge() {
     badge.classList.add('hidden');
     badge.classList.remove('is-syncing');
 }
-window.addEventListener('online', updateNetworkStatusBadge);
+window.addEventListener('online', () => {
+    updateNetworkStatusBadge();
+    forceFirebaseReconnect(false);
+});
 window.addEventListener('offline', updateNetworkStatusBadge);
+
+(function bindOfflineBadgeRetry() {
+    const badge = document.getElementById('offline-badge');
+    if (!badge) return;
+    badge.addEventListener('click', () => forceFirebaseReconnect(true));
+    badge.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            forceFirebaseReconnect(true);
+        }
+    });
+})();
+
+// Watchdog chống treo "Đang đồng bộ..." nếu WebSocket Firebase bị nghẽn lúc mở trang
+setTimeout(() => {
+    if (!initialDataReady) {
+        initialSyncTimedOut = true;
+        updateNetworkStatusBadge();
+        if (navigator.onLine !== false) {
+            forceFirebaseReconnect(false);
+        }
+    }
+}, 5500);
+
+setInterval(() => {
+    if (!initialDataReady && !document.hidden && navigator.onLine !== false) {
+        forceFirebaseReconnect(false);
+    }
+}, 14000);
 
 function renderPresenceCount(snapVal) {
     const now = getServerNow();
@@ -1864,6 +1930,7 @@ onValue(onlineRef, (snap) => {
     isFirebaseConnected = snap.val() === true;
     if (isFirebaseConnected) {
         hasEverConnected = true;
+        initialSyncTimedOut = false;
         tryFinalizeInitialSync();
         updateNetworkStatusBadge();
         onDisconnect(myPresenceRef).remove().catch(() => {});
@@ -2604,6 +2671,7 @@ function tryFinalizeInitialSync() {
     if (initialDataReady) return;
     if (initialBranchesLoaded.size < 3 || !isFirebaseConnected) return;
     initialDataReady = true;
+    initialSyncTimedOut = false;
     isShowingCachedSnapshot = false;
     cachedSnapshotSavedAt = 0;
     updateNetworkStatusBadge();
@@ -2774,6 +2842,10 @@ function bindBranchWithInitialSync(branchRef, branchName, applyInitialVal, handl
                 unsubInitial = null;
             }
         });
+    }, (err) => {
+        console.error(`[sync] Lỗi tải nhánh ${branchName}:`, err);
+        initialSyncTimedOut = true;
+        updateNetworkStatusBadge();
     });
 }
 
@@ -2850,6 +2922,12 @@ function selectTable(n, options = {}) {
         if (isLockedTable) {
             preloadBillAssets();
             setTimeout(scrollBillIntoView, 350);
+        } else {
+            setTimeout(() => {
+                if (currentTab === n) {
+                    section.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                }
+            }, 120);
         }
     } else {
         section.classList.remove('section-visible');
@@ -3288,6 +3366,17 @@ function renderTable(tableId, now = getServerNow()) {
             dom.card.classList.toggle('is-locked', locked);
             dom.lastLocked = locked;
         }
+        let lockedPill = dom.card.querySelector('.locked-status-pill');
+        if (locked && total > 0) {
+            if (!lockedPill) {
+                lockedPill = document.createElement('span');
+                lockedPill.className = 'locked-status-pill';
+                lockedPill.textContent = '🔒 Đã chốt bill';
+                dom.card.appendChild(lockedPill);
+            }
+        } else if (lockedPill) {
+            lockedPill.remove();
+        }
         if (dom.lastHasGuest !== hasGuest) {
             dom.card.classList.toggle('has-guest', hasGuest);
             dom.lastHasGuest = hasGuest;
@@ -3364,10 +3453,15 @@ async function renderBillAsync(tab) {
     requestAnimationFrame(() => syncBillFlipHeight(false));
 }
 
+let lockRequestInFlight = false;
 function setLock(v) {
-    if (!currentTab) return;
+    if (!currentTab || lockRequestInFlight) return;
     if (paymentInProgress) {
         showToast('Đang xử lý thanh toán, vui lòng chờ giây lát!', 'warning', 2000);
+        return;
+    }
+    if (navigator.onLine === false) {
+        showToast('⚠️ Đang mất mạng, không thể gửi lệnh lên máy chủ!', 'error', 3200);
         return;
     }
     const tab = currentTab;
@@ -3406,7 +3500,8 @@ function setLock(v) {
         });
     }
 
-    set(child(lockedRef, String(tab)), v ? true : null)
+    lockRequestInFlight = true;
+    withTimeout(set(child(lockedRef, String(tab)), v ? true : null), 6500, 'TIMEOUT_LOCK')
         .catch(err => {
             console.error('[lock] Lỗi ghi trạng thái khóa Firebase:', err);
             if (prevLocked) {
@@ -3417,7 +3512,15 @@ function setLock(v) {
             }
             scheduleSaveLocalStateCache();
             refresh(new Set([tab]), true);
-            showToast('Không thể kết nối máy chủ để chốt đơn. Vui lòng thử lại!', 'error', 3500);
+            if (err?.message === 'TIMEOUT_LOCK') {
+                forceFirebaseReconnect(false);
+                showToast('⚠️ Máy chủ phản hồi chậm, đang kết nối lại. Vui lòng thử bấm lại!', 'error', 4000);
+            } else {
+                showToast('Không thể kết nối máy chủ để chốt đơn. Vui lòng thử lại!', 'error', 3500);
+            }
+        })
+        .finally(() => {
+            lockRequestInFlight = false;
         });
 }
 
@@ -3538,12 +3641,16 @@ async function doPay() {
     let orderDeletedOnServer = false;
 
     try {
-        const txResult = await transaction(tableOrderRef, (serverOrder) => {
-            if (!areOrdersEqual(serverOrder, expectedOrder)) {
-                return undefined;
-            }
-            return null;
-        });
+        const txResult = await withTimeout(
+            transaction(tableOrderRef, (serverOrder) => {
+                if (!areOrdersEqual(serverOrder, expectedOrder)) {
+                    return undefined;
+                }
+                return null;
+            }),
+            8000,
+            'TIMEOUT_PAY'
+        );
 
         if (!txResult.committed) {
             localPaymentEchoTables.delete(tab);
@@ -3590,7 +3697,12 @@ async function doPay() {
             }
         } else {
             restoreTableState();
-            showToast('Mất kết nối! Thanh toán chưa lưu được, dữ liệu bàn đã được khôi phục.', 'error', 4500);
+            if (err?.message === 'TIMEOUT_PAY') {
+                forceFirebaseReconnect(false);
+                showToast('Máy chủ phản hồi quá lâu! Dữ liệu bàn đã được khôi phục, đang kết nối lại...', 'error', 4500);
+            } else {
+                showToast('Mất kết nối! Thanh toán chưa lưu được, dữ liệu bàn đã được khôi phục.', 'error', 4500);
+            }
         }
     } finally {
         payingTables.delete(tab);
