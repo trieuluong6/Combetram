@@ -21,9 +21,9 @@
     html.paper-flip-pending .flip-clock-container > .flip-unit,
     html.paper-flip-pending .flip-clock-container > .flip-colon { visibility: hidden !important; }
     </style>
-    <link rel="stylesheet" href="style.css?v=20261117">
+    <link rel="stylesheet" href="style.css?v=20261118">
     <script>
-    window.__APP_BUILD_VERSION = '20261117';
+    window.__APP_BUILD_VERSION = '20261118';
     window.__finishPaperFlipIntro = function() {
         document.documentElement.classList.remove('paper-flip-pending');
         clearTimeout(window.__paperFlipFailsafe);
@@ -37,23 +37,34 @@
         if (ov) ov.replaceChildren();
     };
     window.__paperFlipFailsafe = setTimeout(window.__finishPaperFlipIntro, 2800);
-    if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.getRegistrations().then(function(regs) {
-            if (!regs || !regs.length) return;
-            Promise.all(regs.map(function(r) { return r.unregister(); })).then(function() {
-                if ('caches' in window) {
-                    caches.keys().then(function(keys) {
-                        return Promise.all(keys.map(function(k) { return caches.delete(k); }));
-                    }).finally(function() {
-                        if (!sessionStorage.getItem('combetram_sw_cleaned')) {
-                            sessionStorage.setItem('combetram_sw_cleaned', '1');
-                            location.reload();
-                        }
-                    });
+    (function cleanupLegacySwAndCaches() {
+        var tasks = [];
+        var hadSw = false;
+        if ('serviceWorker' in navigator && navigator.serviceWorker.getRegistrations) {
+            tasks.push(navigator.serviceWorker.getRegistrations().then(function(regs) {
+                if (regs && regs.length) {
+                    hadSw = true;
+                    return Promise.all(regs.map(function(r) { return r.unregister(); }));
+                }
+            }).catch(function() {}));
+        }
+        if ('caches' in window && window.caches && caches.keys) {
+            tasks.push(caches.keys().then(function(keys) {
+                if (keys && keys.length) {
+                    hadSw = true;
+                    return Promise.all(keys.map(function(k) { return caches.delete(k); }));
+                }
+            }).catch(function() {}));
+        }
+        if (tasks.length) {
+            Promise.all(tasks).finally(function() {
+                if (hadSw && !sessionStorage.getItem('combetram_sw_cleaned')) {
+                    sessionStorage.setItem('combetram_sw_cleaned', '1');
+                    location.reload();
                 }
             });
-        }).catch(function() {});
-    }
+        }
+    })();
     </script>
 </head>
 <body>
@@ -186,7 +197,7 @@
                 </div>
                 <div class="bill-face bill-back" id="bill-face-qr" aria-hidden="true">
                     <div class="bill-box qr-bill-box">
-                        <img id="payment-qr" src="payment-qr.png?v=20261117" alt="Mã QR thanh toán" decoding="async" draggable="false">
+                        <img id="payment-qr" src="payment-qr.png?v=20261118" alt="Mã QR thanh toán" decoding="async" draggable="false">
                     </div>
                 </div>
             </div>
@@ -237,6 +248,6 @@
 </div>
 <div id="app-toast-container" class="app-toast-container" aria-live="polite"></div>
 
-<script type="module" src="app.js?v=20261117"></script>
+<script type="module" src="app.js?v=20261118"></script>
 </body>
 </html>

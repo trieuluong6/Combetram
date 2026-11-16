@@ -15,21 +15,57 @@ import {
     runTransaction
 } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-database.js";
 
-import { menu } from "./menu.js?v=20261117";
+import { menu } from "./menu.js?v=20261118";
 
-const APP_BUILD_VERSION = '20261117';
+const APP_BUILD_VERSION = '20261118';
 const APP_VERSION_STORAGE_KEY = 'combetram_app_version';
 const STATE_CACHE_KEY = 'combetram_state_cache_v1';
+const DICT_CACHE_PREFIX = 'combetram_dict_cache_';
+const DICT_CACHE_KEY = `${DICT_CACHE_PREFIX}${APP_BUILD_VERSION}`;
+
+function compareBuildVersions(a, b) {
+    const pa = String(a || '').split(/[^0-9]+/).filter(Boolean).map(Number);
+    const pb = String(b || '').split(/[^0-9]+/).filter(Boolean).map(Number);
+    const len = Math.max(pa.length, pb.length);
+    for (let i = 0; i < len; i++) {
+        const va = pa[i] || 0;
+        const vb = pb[i] || 0;
+        if (va !== vb) return va > vb ? 1 : -1;
+    }
+    return String(a || '').localeCompare(String(b || ''));
+}
+
+function purgeObsoleteLocalCaches(activeVer = APP_BUILD_VERSION) {
+    try {
+        localStorage.removeItem(STATE_CACHE_KEY);
+        const keepDictKey = `${DICT_CACHE_PREFIX}${activeVer}`;
+        const keysToRemove = [];
+        for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (k && k.startsWith(DICT_CACHE_PREFIX) && k !== keepDictKey) {
+                keysToRemove.push(k);
+            }
+        }
+        keysToRemove.forEach((k) => localStorage.removeItem(k));
+    } catch (e) {}
+}
 
 function reloadToBuildVersion(targetVer) {
     if (!targetVer) return;
     try {
-        if (sessionStorage.getItem('combetram_reloaded_to_ver') === targetVer) return;
-        sessionStorage.setItem('combetram_reloaded_to_ver', targetVer);
-        localStorage.removeItem(STATE_CACHE_KEY);
+        const reloadGuardKey = 'combetram_reloaded_to_ver';
+        const prevGuard = sessionStorage.getItem(reloadGuardKey) || '';
+        const [guardedVer, guardedTsStr] = prevGuard.split(':');
+        const guardedTs = Number(guardedTsStr) || 0;
+        if (guardedVer === targetVer && (Date.now() - guardedTs) < 12000) return;
+
+        sessionStorage.setItem(reloadGuardKey, `${targetVer}:${Date.now()}`);
+        purgeObsoleteLocalCaches(targetVer);
         localStorage.setItem(APP_VERSION_STORAGE_KEY, targetVer);
+
         const url = new URL(window.location.href);
         url.searchParams.set('v', targetVer);
+        url.searchParams.delete('_cb');
         window.location.replace(url.toString());
     } catch (e) {}
 }
@@ -38,14 +74,14 @@ function reloadToBuildVersion(targetVer) {
     try {
         const storedVer = localStorage.getItem(APP_VERSION_STORAGE_KEY);
         if (storedVer !== APP_BUILD_VERSION) {
-            localStorage.removeItem(STATE_CACHE_KEY);
+            purgeObsoleteLocalCaches(APP_BUILD_VERSION);
             localStorage.setItem(APP_VERSION_STORAGE_KEY, APP_BUILD_VERSION);
         }
     } catch (e) {}
 
     const htmlVer = window.__APP_BUILD_VERSION;
     if (htmlVer && htmlVer !== APP_BUILD_VERSION) {
-        const targetVer = htmlVer > APP_BUILD_VERSION ? htmlVer : APP_BUILD_VERSION;
+        const targetVer = compareBuildVersions(htmlVer, APP_BUILD_VERSION) >= 0 ? htmlVer : APP_BUILD_VERSION;
         reloadToBuildVersion(targetVer);
     }
 })();
@@ -606,30 +642,59 @@ const tableTotals = Array(10).fill(0);
 const STATE_CACHE_MAX_AGE_MS = 5 * 60 * 1000;
 let stateCacheSaveTimer = null;
 let isShowingCachedSnapshot = false;
-
-function scheduleSaveLocalStateCache() {
-    clearTimeout(stateCacheSaveTimer);
-    stateCacheSaveTimer = setTimeout(() => {
-        try {
-            const effectiveOrders = {};
-            for (let t = 1; t <= 9; t++) {
-                const merged = getMergedOrder(t);
-                if (merged && Object.keys(merged).length > 0) {
-                    effectiveOrders[t] = merged;
-                }
-            }
-            localStorage.setItem(STATE_CACHE_KEY, JSON.stringify({
-                orders: effectiveOrders,
-                locked: data.locked || {},
-                times: data.times || {},
-                savedAt: Date.now()
-            }));
-        } catch (e) {}
-    }, 350);
-}
+let cachedSnapshotSavedAt = 0;
 
 function isPlainObject(val) {
     return val !== null && typeof val === 'object' && !Array.isArray(val);
+}
+
+function normalizeOrderMap(raw) {
+    const out = {};
+    if (!raw || typeof raw !== 'object') return out;
+    for (const [k, v] of Object.entries(raw)) {
+        const itemId = Number(k);
+        if (!Number.isInteger(itemId) || itemId <= 0) continue;
+        const qty = Math.max(0, Number(v) || 0);
+        if (qty > 0) out[String(itemId)] = qty;
+    }
+    return out;
+}
+
+function saveLocalStateCacheNow() {
+    clearTimeout(stateCacheSaveTimer);
+    stateCacheSaveTimer = null;
+    try {
+        const effectiveOrders = {};
+        const effectiveLocked = {};
+        const effectiveTimes = {};
+        for (let t = 1; t <= 9; t++) {
+            const merged = normalizeOrderMap(getMergedOrder(t));
+            const hasItems = Object.keys(merged).length > 0;
+            if (hasItems) {
+                effectiveOrders[t] = merged;
+                if (data.locked?.[t]) effectiveLocked[t] = true;
+            }
+            const ts = Number(data.times?.[t]);
+            if (Number.isFinite(ts) && ts > 0 && (hasItems || effectiveLocked[t])) {
+                effectiveTimes[t] = ts;
+            }
+        }
+        const savedAt = initialDataReady
+            ? Date.now()
+            : (cachedSnapshotSavedAt > 0 ? cachedSnapshotSavedAt : Date.now());
+        localStorage.setItem(STATE_CACHE_KEY, JSON.stringify({
+            version: APP_BUILD_VERSION,
+            orders: effectiveOrders,
+            locked: effectiveLocked,
+            times: effectiveTimes,
+            savedAt
+        }));
+    } catch (e) {}
+}
+
+function scheduleSaveLocalStateCache() {
+    clearTimeout(stateCacheSaveTimer);
+    stateCacheSaveTimer = setTimeout(saveLocalStateCacheNow, 250);
 }
 
 function hydrateFromLocalStateCache() {
@@ -641,6 +706,10 @@ function hydrateFromLocalStateCache() {
             localStorage.removeItem(STATE_CACHE_KEY);
             return false;
         }
+        if (parsed.version && parsed.version !== APP_BUILD_VERSION) {
+            localStorage.removeItem(STATE_CACHE_KEY);
+            return false;
+        }
         if (!Number.isFinite(parsed.savedAt) || (Date.now() - parsed.savedAt) > STATE_CACHE_MAX_AGE_MS) {
             localStorage.removeItem(STATE_CACHE_KEY);
             return false;
@@ -648,13 +717,7 @@ function hydrateFromLocalStateCache() {
         const safeOrders = {};
         if (isPlainObject(parsed.orders)) {
             for (let t = 1; t <= 9; t++) {
-                const rawOrd = parsed.orders[t];
-                if (!isPlainObject(rawOrd)) continue;
-                const cleanOrd = {};
-                for (const [itemId, rawQty] of Object.entries(rawOrd)) {
-                    const qty = Math.max(0, Number(rawQty) || 0);
-                    if (qty > 0) cleanOrd[itemId] = qty;
-                }
+                const cleanOrd = normalizeOrderMap(parsed.orders[t]);
                 if (Object.keys(cleanOrd).length > 0) safeOrders[t] = cleanOrd;
             }
         }
@@ -674,6 +737,7 @@ function hydrateFromLocalStateCache() {
         data.orders = safeOrders;
         data.locked = safeLocked;
         data.times = safeTimes;
+        cachedSnapshotSavedAt = parsed.savedAt;
         isShowingCachedSnapshot = Object.keys(safeOrders).length > 0;
         return true;
     } catch (e) {
@@ -691,16 +755,6 @@ function shallowRecordEqual(a, b) {
     if (aKeys.length !== bKeys.length) return false;
     for (const key of aKeys) if (a[key] !== b[key]) return false;
     return true;
-}
-
-function normalizeOrderMap(raw) {
-    const out = {};
-    if (!raw || typeof raw !== 'object') return out;
-    for (const [k, v] of Object.entries(raw)) {
-        const qty = Math.max(0, Number(v) || 0);
-        if (qty > 0) out[String(k)] = qty;
-    }
-    return out;
 }
 
 function areOrdersEqual(a, b) {
@@ -739,12 +793,28 @@ let dictLoadPromise = null;
 let dictRetryCount = 0;
 let billAssetsPreloaded = false;
 
+(function hydrateDictFromLocalStorage() {
+    try {
+        const raw = localStorage.getItem(DICT_CACHE_KEY);
+        if (!raw) return;
+        const parsed = JSON.parse(raw);
+        if (isPlainObject(parsed) && isPlainObject(parsed.en)) {
+            dictCache = parsed;
+        }
+    } catch (e) {
+        try { localStorage.removeItem(DICT_CACHE_KEY); } catch (_) {}
+    }
+})();
+
 async function getLangData(lang) {
     if (dictCache[lang]) return dictCache[lang];
     if (!dictLoadPromise) {
         const retrySuffix = dictRetryCount > 0 ? `&retry=${dictRetryCount}` : '';
         dictLoadPromise = import(`./dict.js?v=${APP_BUILD_VERSION}${retrySuffix}`).then(m => {
-            dictCache = m.dict;
+            if (isPlainObject(m?.dict)) {
+                dictCache = m.dict;
+                try { localStorage.setItem(DICT_CACHE_KEY, JSON.stringify(m.dict)); } catch (e) {}
+            }
         }).catch((err) => {
             console.error('[dict] Lỗi tải từ điển đa ngôn ngữ:', err);
             dictRetryCount++;
@@ -810,7 +880,7 @@ async function checkForRemoteAppUpdate(force = false) {
     }
 }
 
-setTimeout(() => checkForRemoteAppUpdate(true), 1200);
+checkForRemoteAppUpdate(true);
 setInterval(() => {
     if (!document.hidden) checkForRemoteAppUpdate(false);
 }, 180000);
@@ -1157,7 +1227,31 @@ function stopClockInterval() {
 function handleAppBackgrounded() {
     flushAllPendingItems();
     flushPendingActivity();
+    saveLocalStateCacheNow();
 }
+
+window.addEventListener('storage', (e) => {
+    if (!e || !e.key) return;
+    if (e.key === APP_VERSION_STORAGE_KEY && e.newValue && e.newValue !== APP_BUILD_VERSION) {
+        if (compareBuildVersions(e.newValue, APP_BUILD_VERSION) > 0) {
+            reloadToBuildVersion(e.newValue);
+        }
+        return;
+    }
+    if (e.key === 'combetram_dark_mode') {
+        applyDarkMode(e.newValue === 'on');
+        return;
+    }
+    if (e.key === 'combetram_sound_muted') {
+        applySoundMuteUi(e.newValue === '1');
+        return;
+    }
+    if (e.key === STATE_CACHE_KEY && !initialDataReady && e.newValue) {
+        if (hydrateFromLocalStateCache()) {
+            scheduleRefresh(null, true);
+        }
+    }
+});
 
 document.addEventListener('visibilitychange', () => {
     document.body.classList.toggle('tab-hidden', document.hidden);
@@ -2491,21 +2585,38 @@ function flushRemoteOrderFlashes() {
     }
 }
 
+function reconcileCachedBranchesBeforeFullSync() {
+    if (!initialBranchesLoaded.has('orders')) return;
+    for (let t = 1; t <= 9; t++) {
+        const hasOrder = effectiveTableHasItems(t);
+        if (!hasOrder) {
+            if (!initialBranchesLoaded.has('locked') && data.locked?.[t]) {
+                delete data.locked[t];
+            }
+            if (!initialBranchesLoaded.has('times') && data.times?.[t]) {
+                delete data.times[t];
+            }
+        }
+    }
+}
+
 function tryFinalizeInitialSync() {
     if (initialDataReady) return;
     if (initialBranchesLoaded.size < 3 || !isFirebaseConnected) return;
     initialDataReady = true;
     isShowingCachedSnapshot = false;
+    cachedSnapshotSavedAt = 0;
     updateNetworkStatusBadge();
     cleanupStaleTimes();
     scheduleOrphanedLockCheck();
-    scheduleSaveLocalStateCache();
+    saveLocalStateCacheNow();
     scheduleRefresh(null);
 }
 
 function markInitialBranchLoaded(branch) {
     if (initialDataReady) return;
     initialBranchesLoaded.add(branch);
+    reconcileCachedBranchesBeforeFullSync();
     tryFinalizeInitialSync();
     if (!initialDataReady) {
         scheduleRefresh(null);
@@ -2516,8 +2627,8 @@ function handleSingleTableOrderSnapshot(rawKey, tableVal) {
     const tableId = Number(rawKey);
     if (!Number.isInteger(tableId) || tableId < 1 || tableId > 9) return;
 
-    const nextTableOrder = tableVal && typeof tableVal === 'object' ? tableVal : {};
-    const prevTableOrder = data.orders?.[tableId] || {};
+    const nextTableOrder = normalizeOrderMap(tableVal);
+    const prevTableOrder = normalizeOrderMap(data.orders?.[tableId]);
     if (shallowRecordEqual(prevTableOrder, nextTableOrder)) return;
 
     fbDownBytes += byteSizeOf(tableVal);
@@ -2633,7 +2744,7 @@ function bindBranchWithInitialSync(branchRef, branchName, applyInitialVal, handl
                 if (skipInitialAddedKeys.size === 0) skipInitialAddedKeys = null;
                 const val = snap.val();
                 const tableId = Number(key);
-                if (branchName === 'orders' && shallowRecordEqual(data.orders?.[tableId] || {}, val && typeof val === 'object' ? val : {})) return;
+                if (branchName === 'orders' && shallowRecordEqual(normalizeOrderMap(data.orders?.[tableId]), normalizeOrderMap(val))) return;
                 if (branchName === 'locked' && Boolean(data.locked?.[tableId]) === Boolean(val)) return;
                 if (branchName === 'times') {
                     const parsedTs = Number(val);
@@ -2651,18 +2762,18 @@ function bindBranchWithInitialSync(branchRef, branchName, applyInitialVal, handl
     unsubInitial = onValue(branchRef, (initialSnap) => {
         if (initialResolved) return;
         initialResolved = true;
-        queueMicrotask(() => {
-            if (unsubInitial) {
-                unsubInitial();
-                unsubInitial = null;
-            }
-        });
 
         const initialVal = initialSnap.val() || {};
         skipInitialAddedKeys = new Set(Object.keys(initialVal));
         applyInitialVal(initialVal);
         markInitialBranchLoaded(branchName);
         attachChildListeners();
+        queueMicrotask(() => {
+            if (unsubInitial) {
+                unsubInitial();
+                unsubInitial = null;
+            }
+        });
     });
 }
 
@@ -2678,9 +2789,9 @@ bindBranchWithInitialSync(
     (serverOrders) => {
         const reconciled = {};
         for (let t = 1; t <= 9; t++) {
-            const rawOrder = serverOrders[t];
-            if (rawOrder && typeof rawOrder === 'object' && Object.values(rawOrder).some(q => Number(q) > 0)) {
-                reconciled[t] = rawOrder;
+            const cleanOrder = normalizeOrderMap(serverOrders[t]);
+            if (Object.keys(cleanOrder).length > 0) {
+                reconciled[t] = cleanOrder;
             }
         }
         data.orders = reconciled;
@@ -2819,7 +2930,6 @@ function commitPendingItem(tab, id, expectedVersion = null) {
     let initialLocalCur = 0;
     let prevOptimisticTarget = null;
     let inFlightReleased = false;
-    let appliedLocally = false;
     const releaseInFlight = () => {
         if (inFlightReleased) return;
         inFlightReleased = true;
@@ -2838,6 +2948,7 @@ function commitPendingItem(tab, id, expectedVersion = null) {
                 recordLocalEchoDelta(tab, id, current - prevOptimisticTarget);
                 prevOptimisticTarget = current;
             }
+            releaseInFlight();
             return undefined;
         }
 
@@ -2852,7 +2963,8 @@ function commitPendingItem(tab, id, expectedVersion = null) {
             recordLocalEchoDelta(tab, id, (target - prevOptimisticTarget) - remoteShift);
         }
         prevOptimisticTarget = target;
-        if (passCount === 1) appliedLocally = true;
+        // Firebase SDK ngay lập tức cập nhật local cache sau pass đầu tiên, giải phóng inFlightDeltas để tránh cộng dồn 2 lần
+        releaseInFlight();
         return finalVal;
     })
         .then(() => {
@@ -2883,8 +2995,6 @@ function commitPendingItem(tab, id, expectedVersion = null) {
                 delete debounceVersions[key];
             }
         });
-
-    if (appliedLocally) releaseInFlight();
 }
 
 
@@ -2903,7 +3013,7 @@ function flushAllPendingItems() {
 }
 
 function getMergedOrder(tab) {
-    const serverOrder = data.orders?.[tab] || {};
+    const serverOrder = normalizeOrderMap(data.orders?.[tab]);
     const pendingOrder = pendingDeltas[tab];
     const inFlightOrder = inFlightDeltas[tab];
     if (!pendingOrder && !inFlightOrder) return serverOrder;
@@ -3287,7 +3397,7 @@ function setLock(v) {
         resetBillQrView(true);
     }
 
-    scheduleSaveLocalStateCache();
+    saveLocalStateCacheNow();
     refresh(new Set([tab]), true);
 
     if (v) {
@@ -3366,7 +3476,7 @@ async function doPay() {
         return;
     }
 
-    const backupOrder = data.orders?.[tab] ? { ...data.orders[tab] } : { ...expectedOrder };
+    const backupOrder = data.orders?.[tab] ? normalizeOrderMap(data.orders[tab]) : { ...expectedOrder };
     const backupLocked = data.locked?.[tab] !== undefined ? data.locked[tab] : null;
     const backupTime = data.times?.[tab] !== undefined ? data.times[tab] : null;
     const backupTotal = tableTotals[tab];
@@ -3464,7 +3574,7 @@ async function doPay() {
 
         await clearTableLockAndTimeOnServer(tab);
         localPaymentEchoTables.delete(tab);
-        scheduleSaveLocalStateCache();
+        saveLocalStateCacheNow();
 
         if (hasItems) {
             showToast(`Đã thanh toán ${getTableDisplayName(tab)} • ${totalAmount.toLocaleString()}đ`, 'info', 2800);
