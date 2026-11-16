@@ -578,8 +578,15 @@ function scheduleSaveLocalStateCache() {
     clearTimeout(stateCacheSaveTimer);
     stateCacheSaveTimer = setTimeout(() => {
         try {
+            const effectiveOrders = {};
+            for (let t = 1; t <= 9; t++) {
+                const merged = getMergedOrder(t);
+                if (merged && Object.keys(merged).length > 0) {
+                    effectiveOrders[t] = merged;
+                }
+            }
             localStorage.setItem(STATE_CACHE_KEY, JSON.stringify({
-                orders: data.orders || {},
+                orders: effectiveOrders,
                 locked: data.locked || {},
                 times: data.times || {},
                 savedAt: Date.now()
@@ -2248,13 +2255,26 @@ if (checkoutBtnEl && 'IntersectionObserver' in window) {
     const checkoutObserver = new IntersectionObserver((entries) => {
         checkoutBtnVisible = entries.some(entry => entry.isIntersecting);
         updateScrollCheckoutButton();
-    }, { threshold: 0.15 });
+    }, { threshold: 0.01 });
     checkoutObserver.observe(checkoutBtnEl);
 }
 
 // ─── DỮ LIỆU CHÍNH FIREBASE (SINGLE-SHOT INIT + GRANULAR CHILD LISTENERS) ──
 const pendingDeltas = {};
+const inFlightDeltas = {};
 const localEchoDeltas = {};
+
+function adjustDeltaMap(mapObj, tableId, itemId, delta) {
+    if (!delta) return;
+    if (!mapObj[tableId]) mapObj[tableId] = {};
+    const next = (mapObj[tableId][itemId] || 0) + delta;
+    if (next === 0) {
+        delete mapObj[tableId][itemId];
+        if (Object.keys(mapObj[tableId]).length === 0) delete mapObj[tableId];
+    } else {
+        mapObj[tableId][itemId] = next;
+    }
+}
 const tableEpoch = Array(10).fill(0);
 let firstOrdersLoad = true;
 const initialBranchesLoaded = new Set();
@@ -2606,13 +2626,15 @@ const pendingStartTimes = new Set();
 
 function getEffectiveItemQty(tab, itemId) {
     const serverQty = Number(data.orders?.[tab]?.[itemId] || 0);
-    const delta = Number(pendingDeltas[tab]?.[itemId] || 0);
-    return Math.max(0, serverQty + delta);
+    const pending = Number(pendingDeltas[tab]?.[itemId] || 0);
+    const inFlight = Number(inFlightDeltas[tab]?.[itemId] || 0);
+    return Math.max(0, serverQty + pending + inFlight);
 }
 
 function clearPendingForTable(tab) {
     tableEpoch[tab] = (tableEpoch[tab] || 0) + 1;
     delete pendingDeltas[tab];
+    delete inFlightDeltas[tab];
     delete localEchoDeltas[tab];
     pendingStartTimes.delete(tab);
     const prefix = `${tab}_`;
@@ -2646,9 +2668,10 @@ function commitPendingItem(tab, id, expectedVersion = null) {
 
     const startEpoch = tableEpoch[tab] || 0;
 
-    // Trừ delta khỏi pendingDeltas trước khi gọi transaction() vì Firebase SDK áp dụng latency compensation cục bộ
+    // Chuyển delta từ pendingDeltas sang inFlightDeltas để giữ nguyên số lượng hiển thị trong lúc chờ Firebase xác nhận
     delete pendingDeltas[tab][id];
     if (Object.keys(pendingDeltas[tab]).length === 0) delete pendingDeltas[tab];
+    adjustDeltaMap(inFlightDeltas, tab, id, deltaToSend);
 
     if (deltaToSend > 0 && !data.times?.[tab] && !pendingStartTimes.has(tab)) {
         pendingStartTimes.add(tab);
@@ -2690,6 +2713,9 @@ function commitPendingItem(tab, id, expectedVersion = null) {
         return finalVal;
     })
         .then(({ committed }) => {
+            if ((tableEpoch[tab] || 0) === startEpoch) {
+                adjustDeltaMap(inFlightDeltas, tab, id, -deltaToSend);
+            }
             if (!committed) {
                 scheduleRefresh(new Set([tab]), currentTab === tab);
             }
@@ -2705,8 +2731,8 @@ function commitPendingItem(tab, id, expectedVersion = null) {
                 recordLocalEchoDelta(tab, id, initialLocalCur - prevOptimisticTarget);
             }
             if ((tableEpoch[tab] || 0) === startEpoch) {
-                if (!pendingDeltas[tab]) pendingDeltas[tab] = {};
-                pendingDeltas[tab][id] = (pendingDeltas[tab][id] || 0) + deltaToSend;
+                adjustDeltaMap(inFlightDeltas, tab, id, -deltaToSend);
+                adjustDeltaMap(pendingDeltas, tab, id, deltaToSend);
             }
             scheduleRefresh(new Set([tab]), currentTab === tab);
         })
@@ -2735,10 +2761,16 @@ function flushAllPendingItems() {
 function getMergedOrder(tab) {
     const serverOrder = data.orders?.[tab] || {};
     const pendingOrder = pendingDeltas[tab];
-    if (!pendingOrder) return serverOrder;
+    const inFlightOrder = inFlightDeltas[tab];
+    if (!pendingOrder && !inFlightOrder) return serverOrder;
     const merged = { ...serverOrder };
-    for (const [id, delta] of Object.entries(pendingOrder)) {
-        const cleanQty = Math.max(0, (Number(merged[id]) || 0) + (Number(delta) || 0));
+    const allDeltaIds = new Set([
+        ...Object.keys(pendingOrder || {}),
+        ...Object.keys(inFlightOrder || {})
+    ]);
+    for (const id of allDeltaIds) {
+        const delta = (Number(pendingOrder?.[id]) || 0) + (Number(inFlightOrder?.[id]) || 0);
+        const cleanQty = Math.max(0, (Number(merged[id]) || 0) + delta);
         if (cleanQty > 0) merged[id] = cleanQty;
         else delete merged[id];
     }
@@ -2769,21 +2801,11 @@ function playQtyBump(el) {
 }
 
 function effectiveTableHasItems(tab) {
-    const serverOrder = data.orders?.[tab];
-    const pendingOrder = pendingDeltas[tab];
-    if (serverOrder && typeof serverOrder === 'object') {
-        for (const id of Object.keys(serverOrder)) {
-            if (!ITEM_MAP.has(Number(id))) continue;
-            const qty = (Number(serverOrder[id]) || 0) + (Number(pendingOrder?.[id]) || 0);
-            if (qty > 0) return true;
-        }
-    }
-    if (pendingOrder && typeof pendingOrder === 'object') {
-        for (const id of Object.keys(pendingOrder)) {
-            if (serverOrder && Object.prototype.hasOwnProperty.call(serverOrder, id)) continue;
-            if (!ITEM_MAP.has(Number(id))) continue;
-            if ((Number(pendingOrder[id]) || 0) > 0) return true;
-        }
+    const merged = getMergedOrder(tab);
+    if (!merged || typeof merged !== 'object') return false;
+    for (const [id, rawQty] of Object.entries(merged)) {
+        if (!ITEM_MAP.has(Number(id))) continue;
+        if ((Number(rawQty) || 0) > 0) return true;
     }
     return false;
 }
@@ -3084,29 +3106,55 @@ async function renderBillAsync(tab) {
 
 function setLock(v) {
     if (!currentTab || paymentInProgress) return;
-    if (isTableRemotePaying(currentTab)) {
+    const tab = currentTab;
+    if (isTableRemotePaying(tab)) {
         showToast('Thiết bị khác đang thu tiền bàn này, vui lòng chờ!', 'warning', 2800);
         return;
     }
-    if (v && !effectiveTableHasItems(currentTab)) {
+    if (v && !effectiveTableHasItems(tab)) {
         showToast('Bàn chưa có món nào để chốt đơn!', 'warning', 2600);
         return;
     }
+
+    const prevLocked = Boolean(data.locked?.[tab]);
     triggerHaptic(v ? 'lock' : 'unlock');
-    broadcastActivity({ sfx: v ? 'lock' : 'unlock', tableId: currentTab, itemId: null, immediate: true });
+    broadcastActivity({ sfx: v ? 'lock' : 'unlock', tableId: tab, itemId: null, immediate: true });
+
     if (v) {
-        flushPendingForTable(currentTab);
+        flushPendingForTable(tab);
         preloadBillAssets();
         resetBillQrView(true);
-    }
-    set(child(lockedRef, String(currentTab)), v ? true : null)
-        .catch(err => console.error('[lock] Lỗi ghi trạng thái khóa Firebase:', err));
-    if (!v) {
+        if (!data.locked) data.locked = {};
+        data.locked[tab] = true;
+    } else {
+        if (data.locked) delete data.locked[tab];
         currentBillLang = 'vi';
         syncActiveLangButton('vi');
         resetBillQrView(true);
     }
-    if (v) setTimeout(scrollBillIntoView, 100);
+
+    scheduleSaveLocalStateCache();
+    refresh(new Set([tab]), true);
+
+    if (v) {
+        requestAnimationFrame(() => {
+            document.getElementById('bill-area')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+    }
+
+    set(child(lockedRef, String(tab)), v ? true : null)
+        .catch(err => {
+            console.error('[lock] Lỗi ghi trạng thái khóa Firebase:', err);
+            if (prevLocked) {
+                if (!data.locked) data.locked = {};
+                data.locked[tab] = true;
+            } else if (data.locked) {
+                delete data.locked[tab];
+            }
+            scheduleSaveLocalStateCache();
+            refresh(new Set([tab]), true);
+            showToast('Không thể kết nối máy chủ để chốt đơn. Vui lòng thử lại!', 'error', 3500);
+        });
 }
 
 async function doPay() {
