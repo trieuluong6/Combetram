@@ -1991,7 +1991,7 @@ function getActiveRemotePayingByTable(snapVal = activityMap) {
     for (const [id, f] of Object.entries(snapVal || {})) {
         if (id === myPresenceId || !f || f.paying !== true || !f.table) continue;
         const ts = Number(f.ts);
-        if (!Number.isFinite(ts) || (now - ts) >= PAYING_TTL_MS) continue;
+        if (!Number.isFinite(ts) || (now - ts) >= PAYING_TTL_MS || (ts - now) > PAYING_TTL_MS) continue;
         const tableNum = Number(f.table);
         if (!Number.isInteger(tableNum) || tableNum < 1 || tableNum > 9) continue;
         const prev = byTable.get(tableNum);
@@ -3105,7 +3105,11 @@ async function renderBillAsync(tab) {
 }
 
 function setLock(v) {
-    if (!currentTab || paymentInProgress) return;
+    if (!currentTab) return;
+    if (paymentInProgress) {
+        showToast('Đang xử lý thanh toán, vui lòng chờ giây lát!', 'warning', 2000);
+        return;
+    }
     const tab = currentTab;
     if (isTableRemotePaying(tab)) {
         showToast('Thiết bị khác đang thu tiền bàn này, vui lòng chờ!', 'warning', 2800);
@@ -3242,20 +3246,25 @@ async function doPay() {
     paymentInProgress = true;
     payingTables.add(tab);
     localPaymentEchoTables.add(tab);
-    clearPendingForTable(tab);
-    stopBillScrollAnimation();
-    triggerHaptic('success');
-    broadcastActivity({ sfx: 'success', tableId: tab, itemId: null, paying: true, immediate: true });
+    try {
+        clearPendingForTable(tab);
+        stopBillScrollAnimation();
+        triggerHaptic('success');
+        broadcastActivity({ sfx: 'success', tableId: tab, itemId: null, paying: true, immediate: true });
 
-    if (data.orders) delete data.orders[tab];
-    if (data.locked) delete data.locked[tab];
-    if (data.times) delete data.times[tab];
-    tableTotals[tab] = 0;
-    scheduleSaveLocalStateCache();
-    scheduleRefresh(new Set([tab]), true);
+        if (data.orders) delete data.orders[tab];
+        if (data.locked) delete data.locked[tab];
+        if (data.times) delete data.times[tab];
+        tableTotals[tab] = 0;
+        scheduleSaveLocalStateCache();
+        scheduleRefresh(new Set([tab]), true);
 
-    selectTable(null, { haptic: false, allowDuringPayment: true, instantClose: true });
-    paymentInProgress = false;
+        selectTable(null, { haptic: false, allowDuringPayment: true, instantClose: true });
+    } catch (prepErr) {
+        console.error('[payment] Lỗi chuẩn bị thanh toán:', prepErr);
+    } finally {
+        paymentInProgress = false;
+    }
 
     const tableOrderRef = child(ordersRef, String(tab));
     let orderDeletedOnServer = false;
