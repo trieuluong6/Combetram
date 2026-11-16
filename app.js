@@ -15,9 +15,9 @@ import {
     runTransaction
 } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-database.js";
 
-import { menu } from "./menu.js?v=20261118";
+import { menu } from "./menu.js?v=__BUILD_VER__";
 
-const APP_BUILD_VERSION = '20261118';
+const APP_BUILD_VERSION = '__BUILD_VER__';
 const APP_VERSION_STORAGE_KEY = 'combetram_app_version';
 const STATE_CACHE_KEY = 'combetram_state_cache_v1';
 const DICT_CACHE_PREFIX = 'combetram_dict_cache_';
@@ -80,7 +80,7 @@ function reloadToBuildVersion(targetVer) {
     } catch (e) {}
 
     const htmlVer = window.__APP_BUILD_VERSION;
-    if (htmlVer && htmlVer !== APP_BUILD_VERSION) {
+    if (htmlVer && htmlVer !== '__BUILD_VER__' && htmlVer !== APP_BUILD_VERSION) {
         const targetVer = compareBuildVersions(htmlVer, APP_BUILD_VERSION) >= 0 ? htmlVer : APP_BUILD_VERSION;
         reloadToBuildVersion(targetVer);
     }
@@ -869,7 +869,7 @@ async function checkForRemoteAppUpdate(force = false) {
         const html = await res.text();
         const match = html.match(/window\.__APP_BUILD_VERSION\s*=\s*['"]([^'"]+)['"]/);
         const remoteVer = match ? match[1].trim() : '';
-        if (remoteVer && remoteVer !== APP_BUILD_VERSION) {
+        if (remoteVer && remoteVer !== '__BUILD_VER__' && remoteVer !== APP_BUILD_VERSION) {
             flushAllPendingItems();
             reloadToBuildVersion(remoteVer);
         }
