@@ -12,81 +12,10 @@ import {
     onChildRemoved as _fbOnChildRemoved,
     push as _fbPush,
     onDisconnect,
-    runTransaction,
-    goOffline,
-    goOnline
+    runTransaction
 } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-database.js";
 
-import { menu } from "./menu.js?v=__BUILD_VER__";
-
-const APP_BUILD_VERSION = '__BUILD_VER__';
-const APP_VERSION_STORAGE_KEY = 'combetram_app_version';
-const STATE_CACHE_KEY = 'combetram_state_cache_v1';
-const DICT_CACHE_PREFIX = 'combetram_dict_cache_';
-const DICT_CACHE_KEY = `${DICT_CACHE_PREFIX}${APP_BUILD_VERSION}`;
-
-function compareBuildVersions(a, b) {
-    const pa = String(a || '').split(/[^0-9]+/).filter(Boolean).map(Number);
-    const pb = String(b || '').split(/[^0-9]+/).filter(Boolean).map(Number);
-    const len = Math.max(pa.length, pb.length);
-    for (let i = 0; i < len; i++) {
-        const va = pa[i] || 0;
-        const vb = pb[i] || 0;
-        if (va !== vb) return va > vb ? 1 : -1;
-    }
-    return String(a || '').localeCompare(String(b || ''));
-}
-
-function purgeObsoleteLocalCaches(activeVer = APP_BUILD_VERSION) {
-    try {
-        localStorage.removeItem(STATE_CACHE_KEY);
-        const keepDictKey = `${DICT_CACHE_PREFIX}${activeVer}`;
-        const keysToRemove = [];
-        for (let i = 0; i < localStorage.length; i++) {
-            const k = localStorage.key(i);
-            if (k && k.startsWith(DICT_CACHE_PREFIX) && k !== keepDictKey) {
-                keysToRemove.push(k);
-            }
-        }
-        keysToRemove.forEach((k) => localStorage.removeItem(k));
-    } catch (e) {}
-}
-
-function reloadToBuildVersion(targetVer) {
-    if (!targetVer) return;
-    try {
-        const reloadGuardKey = 'combetram_reloaded_to_ver';
-        const prevGuard = sessionStorage.getItem(reloadGuardKey) || '';
-        const [guardedVer, guardedTsStr] = prevGuard.split(':');
-        const guardedTs = Number(guardedTsStr) || 0;
-        if (guardedVer === targetVer && (Date.now() - guardedTs) < 12000) return;
-
-        sessionStorage.setItem(reloadGuardKey, `${targetVer}:${Date.now()}`);
-        purgeObsoleteLocalCaches(targetVer);
-        localStorage.setItem(APP_VERSION_STORAGE_KEY, targetVer);
-
-        const url = new URL(window.location.href);
-        url.searchParams.set('v', targetVer);
-        url.searchParams.delete('_cb');
-        window.location.replace(url.toString());
-    } catch (e) {}
-}
-
-(function ensureBuildConsistency() {
-    try {
-        const storedVer = localStorage.getItem(APP_VERSION_STORAGE_KEY);
-        if (storedVer !== APP_BUILD_VERSION) {
-            purgeObsoleteLocalCaches(APP_BUILD_VERSION);
-            localStorage.setItem(APP_VERSION_STORAGE_KEY, APP_BUILD_VERSION);
-        }
-    } catch (e) {}
-
-    const htmlVer = window.__APP_BUILD_VERSION;
-    if (htmlVer && htmlVer !== '__BUILD_VER__' && htmlVer !== APP_BUILD_VERSION) {
-        const targetVer = compareBuildVersions(htmlVer, APP_BUILD_VERSION) >= 0 ? htmlVer : APP_BUILD_VERSION;
-        reloadToBuildVersion(targetVer);
-    }
-})();
+import { menu } from "./menu.js";
 
 const firebaseConfig = {
     apiKey: "AIzaSyDVgtCsFzrPOqRWBqoncZrsZsRdCn7wTWo",
@@ -232,15 +161,7 @@ function getServerNow() {
     return Date.now() + serverTimeOffset;
 }
 
-// ─── HELPER PROMISE & FETCH CÓ TIMEOUT CHỐNG TREO FIREBASE/PROXY ──────
-function withTimeout(promise, timeoutMs = 6500, timeoutCode = 'TIMEOUT') {
-    let timer = null;
-    const timeoutPromise = new Promise((_, reject) => {
-        timer = setTimeout(() => reject(new Error(timeoutCode)), timeoutMs);
-    });
-    return Promise.race([promise, timeoutPromise]).finally(() => clearTimeout(timer));
-}
-
+// ─── HELPER FETCH CÓ TIMEOUT CHỐNG TREO PROXY/API ─────────────────────
 async function fetchWithTimeout(url, options = {}, timeoutMs = 5500) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -614,97 +535,36 @@ const ordersRef = child(dbRef, 'orders');
 const lockedRef = child(dbRef, 'locked');
 const timesRef = child(dbRef, 'times');
 
-// Cache DOM cố định cho các đường render nóng (tránh DOM churn khi đổi số lượng).
+// Cache DOM cố định cho các đường render nóng.
 const TABLE_DOM = Array.from({ length: 9 }, (_, idx) => {
     const table = idx + 1;
-    const meta = document.getElementById(`meta-${table}`);
-    let foodSpan = null;
-    let drinkSpan = null;
-    if (meta) {
-        meta.hidden = true;
-        meta.style.display = 'none';
-        foodSpan = document.createElement('span');
-        foodSpan.className = 'table-meta-count';
-        drinkSpan = document.createElement('span');
-        drinkSpan.className = 'table-meta-count';
-        meta.append('🍽 ', foodSpan, ' món · 🥤🍺 ', drinkSpan);
-    }
     return {
         card: document.getElementById(`tab-${table}`),
         sum: document.getElementById(`sum-${table}`),
-        meta,
-        foodSpan,
-        drinkSpan,
-        time: document.getElementById(`time-${table}`),
-        lastFoodQty: -1,
-        lastDrinkQty: -1,
-        lastMetaVisible: false,
-        lastActive: false,
-        lastLocked: false,
-        lastHasGuest: false,
-        flashTimer: 0
+        meta: document.getElementById(`meta-${table}`),
+        time: document.getElementById(`time-${table}`)
     };
 });
 const ITEM_DOM = new Map();
 const tableTotals = Array(10).fill(0);
 
 // ─── LOCALSTORAGE SNAPSHOT CACHE (HIỂN THỊ TỨC THÌ KHI MỞ APP) ──────────
-const STATE_CACHE_MAX_AGE_MS = 5 * 60 * 1000;
+const STATE_CACHE_KEY = 'combetram_state_cache_v1';
+const STATE_CACHE_MAX_AGE_MS = 30 * 60 * 1000;
 let stateCacheSaveTimer = null;
-let isShowingCachedSnapshot = false;
-let cachedSnapshotSavedAt = 0;
-
-function isPlainObject(val) {
-    return val !== null && typeof val === 'object' && !Array.isArray(val);
-}
-
-function normalizeOrderMap(raw) {
-    const out = {};
-    if (!raw || typeof raw !== 'object') return out;
-    for (const [k, v] of Object.entries(raw)) {
-        const itemId = Number(k);
-        if (!Number.isInteger(itemId) || itemId <= 0) continue;
-        const qty = Math.max(0, Number(v) || 0);
-        if (qty > 0) out[String(itemId)] = qty;
-    }
-    return out;
-}
-
-function saveLocalStateCacheNow() {
-    clearTimeout(stateCacheSaveTimer);
-    stateCacheSaveTimer = null;
-    try {
-        const effectiveOrders = {};
-        const effectiveLocked = {};
-        const effectiveTimes = {};
-        for (let t = 1; t <= 9; t++) {
-            const merged = normalizeOrderMap(getMergedOrder(t));
-            const hasItems = Object.keys(merged).length > 0;
-            if (hasItems) {
-                effectiveOrders[t] = merged;
-                if (data.locked?.[t]) effectiveLocked[t] = true;
-            }
-            const ts = Number(data.times?.[t]);
-            if (Number.isFinite(ts) && ts > 0 && (hasItems || effectiveLocked[t])) {
-                effectiveTimes[t] = ts;
-            }
-        }
-        const savedAt = initialDataReady
-            ? Date.now()
-            : (cachedSnapshotSavedAt > 0 ? cachedSnapshotSavedAt : Date.now());
-        localStorage.setItem(STATE_CACHE_KEY, JSON.stringify({
-            version: APP_BUILD_VERSION,
-            orders: effectiveOrders,
-            locked: effectiveLocked,
-            times: effectiveTimes,
-            savedAt
-        }));
-    } catch (e) {}
-}
 
 function scheduleSaveLocalStateCache() {
     clearTimeout(stateCacheSaveTimer);
-    stateCacheSaveTimer = setTimeout(saveLocalStateCacheNow, 250);
+    stateCacheSaveTimer = setTimeout(() => {
+        try {
+            localStorage.setItem(STATE_CACHE_KEY, JSON.stringify({
+                orders: data.orders || {},
+                locked: data.locked || {},
+                times: data.times || {},
+                savedAt: Date.now()
+            }));
+        } catch (e) {}
+    }, 450);
 }
 
 function hydrateFromLocalStateCache() {
@@ -712,46 +572,21 @@ function hydrateFromLocalStateCache() {
         const raw = localStorage.getItem(STATE_CACHE_KEY);
         if (!raw) return false;
         const parsed = JSON.parse(raw);
-        if (!isPlainObject(parsed)) {
-            localStorage.removeItem(STATE_CACHE_KEY);
-            return false;
-        }
-        if (parsed.version && parsed.version !== APP_BUILD_VERSION) {
-            localStorage.removeItem(STATE_CACHE_KEY);
-            return false;
-        }
-        if (!Number.isFinite(parsed.savedAt) || (Date.now() - parsed.savedAt) > STATE_CACHE_MAX_AGE_MS) {
-            localStorage.removeItem(STATE_CACHE_KEY);
-            return false;
-        }
-        const safeOrders = {};
-        if (isPlainObject(parsed.orders)) {
-            for (let t = 1; t <= 9; t++) {
-                const cleanOrd = normalizeOrderMap(parsed.orders[t]);
-                if (Object.keys(cleanOrd).length > 0) safeOrders[t] = cleanOrd;
+        if (!parsed || typeof parsed !== 'object') return false;
+        if (!Number.isFinite(parsed.savedAt) || (Date.now() - parsed.savedAt) > STATE_CACHE_MAX_AGE_MS) return false;
+        data.orders = parsed.orders && typeof parsed.orders === 'object' ? parsed.orders : {};
+        data.locked = parsed.locked && typeof parsed.locked === 'object' ? parsed.locked : {};
+        data.times = parsed.times && typeof parsed.times === 'object' ? parsed.times : {};
+        // Loại bỏ trạng thái khóa mồ côi nếu bàn trong cache không còn món (0đ)
+        for (let t = 1; t <= 9; t++) {
+            const ord = data.orders?.[t];
+            const hasAny = ord && typeof ord === 'object' && Object.values(ord).some(q => Number(q) > 0);
+            if (!hasAny && data.locked?.[t]) {
+                delete data.locked[t];
             }
         }
-        const safeLocked = {};
-        if (isPlainObject(parsed.locked)) {
-            for (let t = 1; t <= 9; t++) {
-                if (parsed.locked[t] && safeOrders[t]) safeLocked[t] = true;
-            }
-        }
-        const safeTimes = {};
-        if (isPlainObject(parsed.times)) {
-            for (let t = 1; t <= 9; t++) {
-                const ts = Number(parsed.times[t]);
-                if (Number.isFinite(ts) && ts > 0 && (safeOrders[t] || safeLocked[t])) safeTimes[t] = ts;
-            }
-        }
-        data.orders = safeOrders;
-        data.locked = safeLocked;
-        data.times = safeTimes;
-        cachedSnapshotSavedAt = parsed.savedAt;
-        isShowingCachedSnapshot = Object.keys(safeOrders).length > 0;
         return true;
     } catch (e) {
-        try { localStorage.removeItem(STATE_CACHE_KEY); } catch (_) {}
         return false;
     }
 }
@@ -765,6 +600,16 @@ function shallowRecordEqual(a, b) {
     if (aKeys.length !== bKeys.length) return false;
     for (const key of aKeys) if (a[key] !== b[key]) return false;
     return true;
+}
+
+function normalizeOrderMap(raw) {
+    const out = {};
+    if (!raw || typeof raw !== 'object') return out;
+    for (const [k, v] of Object.entries(raw)) {
+        const qty = Math.max(0, Number(v) || 0);
+        if (qty > 0) out[String(k)] = qty;
+    }
+    return out;
 }
 
 function areOrdersEqual(a, b) {
@@ -800,34 +645,15 @@ function scheduleRefresh(tableIds = null, updateCurrentOrder = false) {
 // ─── Lazy-load dict theo ngôn ngữ + Preload bill assets ─────────────────
 let dictCache = { vi: { flag: "🇻🇳", total: "TỔNG", items: {} } };
 let dictLoadPromise = null;
-let dictRetryCount = 0;
 let billAssetsPreloaded = false;
-
-(function hydrateDictFromLocalStorage() {
-    try {
-        const raw = localStorage.getItem(DICT_CACHE_KEY);
-        if (!raw) return;
-        const parsed = JSON.parse(raw);
-        if (isPlainObject(parsed) && isPlainObject(parsed.en)) {
-            dictCache = parsed;
-        }
-    } catch (e) {
-        try { localStorage.removeItem(DICT_CACHE_KEY); } catch (_) {}
-    }
-})();
 
 async function getLangData(lang) {
     if (dictCache[lang]) return dictCache[lang];
     if (!dictLoadPromise) {
-        const retrySuffix = dictRetryCount > 0 ? `&retry=${dictRetryCount}` : '';
-        dictLoadPromise = import(`./dict.js?v=${APP_BUILD_VERSION}${retrySuffix}`).then(m => {
-            if (isPlainObject(m?.dict)) {
-                dictCache = m.dict;
-                try { localStorage.setItem(DICT_CACHE_KEY, JSON.stringify(m.dict)); } catch (e) {}
-            }
+        dictLoadPromise = import('./dict.js').then(m => {
+            dictCache = m.dict;
         }).catch((err) => {
             console.error('[dict] Lỗi tải từ điển đa ngôn ngữ:', err);
-            dictRetryCount++;
             dictLoadPromise = null;
         });
     }
@@ -856,50 +682,6 @@ function syncActiveLangButton(lang) {
         btn.classList.toggle('active-lang', btn.dataset.lang === lang);
     });
 }
-
-// ─── KIỂM TRA PHIÊN BẢN MỚI TRÊN GITHUB PAGES (BYPASS CDN/DISK CACHE) ───
-let updateCheckInFlight = false;
-let lastUpdateCheckAt = 0;
-
-async function checkForRemoteAppUpdate(force = false) {
-    if (updateCheckInFlight) return;
-    if (paymentInProgress || payingModalTable !== null || payingTables.size > 0) return;
-    if (window.location.protocol !== 'http:' && window.location.protocol !== 'https:') return;
-
-    const now = Date.now();
-    if (!force && (now - lastUpdateCheckAt) < 15000) return;
-    lastUpdateCheckAt = now;
-    updateCheckInFlight = true;
-
-    try {
-        const probeUrl = new URL('./index.html', window.location.href);
-        probeUrl.searchParams.set('_cb', String(now));
-        const res = await fetchWithTimeout(probeUrl.toString(), { cache: 'no-store' }, 4500);
-        if (!res.ok) return;
-        const html = await res.text();
-        const match = html.match(/window\.__APP_BUILD_VERSION\s*=\s*['"]([^'"]+)['"]/);
-        const remoteVer = match ? match[1].trim() : '';
-        if (remoteVer && remoteVer !== '__BUILD_VER__' && remoteVer !== APP_BUILD_VERSION) {
-            flushAllPendingItems();
-            reloadToBuildVersion(remoteVer);
-        }
-    } catch (e) {
-        // Bỏ qua lặng lẽ nếu đang mất mạng hoặc offline
-    } finally {
-        updateCheckInFlight = false;
-    }
-}
-
-checkForRemoteAppUpdate(true);
-setInterval(() => {
-    if (!document.hidden) checkForRemoteAppUpdate(false);
-}, 180000);
-window.addEventListener('pageshow', (e) => {
-    if (e.persisted) {
-        checkForRemoteAppUpdate(true);
-        refreshPresenceHeartbeat();
-    }
-});
 
 // CACHE THỜI TIẾT
 let weatherCache = { status: 'cloudy', temp: 31, windSpeed: 14.0, windDir: 135 };
@@ -1237,31 +1019,7 @@ function stopClockInterval() {
 function handleAppBackgrounded() {
     flushAllPendingItems();
     flushPendingActivity();
-    saveLocalStateCacheNow();
 }
-
-window.addEventListener('storage', (e) => {
-    if (!e || !e.key) return;
-    if (e.key === APP_VERSION_STORAGE_KEY && e.newValue && e.newValue !== APP_BUILD_VERSION) {
-        if (compareBuildVersions(e.newValue, APP_BUILD_VERSION) > 0) {
-            reloadToBuildVersion(e.newValue);
-        }
-        return;
-    }
-    if (e.key === 'combetram_dark_mode') {
-        applyDarkMode(e.newValue === 'on');
-        return;
-    }
-    if (e.key === 'combetram_sound_muted') {
-        applySoundMuteUi(e.newValue === '1');
-        return;
-    }
-    if (e.key === STATE_CACHE_KEY && !initialDataReady && e.newValue) {
-        if (hydrateFromLocalStateCache()) {
-            scheduleRefresh(null, true);
-        }
-    }
-});
 
 document.addEventListener('visibilitychange', () => {
     document.body.classList.toggle('tab-hidden', document.hidden);
@@ -1274,13 +1032,12 @@ document.addEventListener('visibilitychange', () => {
         startClockInterval();
         refreshPresenceHeartbeat();
         runPeriodicMaintenance();
-        checkForRemoteAppUpdate(false);
     }
 });
 window.addEventListener('pagehide', handleAppBackgrounded);
 startClockInterval();
 
-// ─── ÂM THANH THAO TÁC CÔNG SUẤT CAO + LAZY ON-DEMAND AUDIO CACHE ───────
+// ─── ÂM THANH THAO TÁC CÔNG SUẤT CAO + PRE-RENDERED AUDIOBUFFER CACHE ───
 if (typeof navigator !== 'undefined' && navigator.audioSession) {
     try { navigator.audioSession.type = 'playback'; } catch (e) {}
 }
@@ -1310,14 +1067,17 @@ initSoundMute();
 
 // Tần số dải trung-cao tối ưu cho loa điện thoại + tiếng gõ nhạc cụ gỗ "leng keng" cho +- món
 const SOUND_PATTERNS = {
+    // Chạm bàn / chuyển tab: tiếng "tưng tưng" thủy tinh dải trung ấm áp (Bb5 -> Eb6), đỡ đanh, giữ nguyên âm lượng
     nav: [
         { freq: 932.33, dur: 0.155, delay: 0, instrument: 'glass', vol: 1.32 },
         { freq: 1244.51, dur: 0.22, delay: 0.066, instrument: 'glass', vol: 1.40 }
     ],
+    // Thêm món (+): Tiếng "Leng - Keng" đàn gõ gỗ (Marimba/Xylophone) đi lên C6 -> G6
     add: [
         { freq: 1046.50, dur: 0.16, instrument: 'wood', vol: 1.0 },
         { freq: 1567.98, dur: 0.24, delay: 0.068, instrument: 'wood', vol: 1.0 }
     ],
+    // Bớt món (-): Tiếng "Keng - Leng" đàn gõ gỗ đi xuống D6 -> A5
     sub: [
         { freq: 1174.66, dur: 0.15, instrument: 'wood', vol: 0.96 },
         { freq: 880.00, dur: 0.23, delay: 0.068, instrument: 'wood', vol: 0.96 }
@@ -1342,7 +1102,6 @@ const SOUND_PATTERNS = {
 };
 
 const SOUND_SAMPLE_RATE = 22050;
-const MAX_POOL_PER_SOUND = 2;
 const pcmSamplesCache = {};
 
 function synthesizeSoundSamples(type, sampleRate = SOUND_SAMPLE_RATE) {
@@ -1381,11 +1140,13 @@ function synthesizeSoundSamples(type, sampleRate = SOUND_SAMPLE_RATE) {
             const release = Math.min(1, (lenIdx - 1 - i) / releaseSamples);
 
             if (isGlass) {
+                // Cộng hưởng ly thủy tinh dày, dải trung ấm: tăng thân âm gốc, giảm họa âm cao để bớt đanh
                 const f0Env = Math.exp(-elapsedSec * 14.5);
                 const f2Env = Math.exp(-elapsedSec * 34.0);
                 const f3Env = Math.exp(-elapsedSec * 58.0);
                 const f4Env = Math.exp(-elapsedSec * 95.0);
 
+                // Xung chạm kính dịu gọn 3.2ms đầu (2.65kHz -> 2.0kHz) giữ độ nảy mà không chói tai
                 let clink = 0;
                 if (elapsedSec < 0.0032) {
                     const clinkFreq = 2650 - (elapsedSec / 0.0032) * 650;
@@ -1402,11 +1163,13 @@ function synthesizeSoundSamples(type, sampleRate = SOUND_SAMPLE_RATE) {
 
                 mix[startIdx + i] += glassSample * vol * attack * release;
             } else if (isSolidKnock) {
+                // Thân khối gỗ đặc (fundamental + các bậc cộng hưởng gỗ 1.48, 2.15, 2.85 nằm đúng dải nhạy loa điện thoại)
                 const bodyEnv = Math.exp(-elapsedSec * 26);
                 const overtone1Env = Math.exp(-elapsedSec * 38);
                 const overtone2Env = Math.exp(-elapsedSec * 58);
                 const overtone3Env = Math.exp(-elapsedSec * 90);
 
+                // Xung dùi gõ đanh 9ms đầu tạo độ "cộc" dứt khoát, xuyên tiếng ồn quán
                 let knock = 0;
                 if (elapsedSec < 0.009) {
                     const knockFreq = 1950 - (elapsedSec / 0.009) * 950;
@@ -1504,41 +1267,26 @@ function buildWavBlobUrl(type, sampleRate = SOUND_SAMPLE_RATE) {
 const wavUrlMap = {};
 const htmlAudioPools = {};
 const htmlAudioPoolIdx = {};
+let soundPoolsInitialized = false;
 let audioUnlocked = false;
 
-function getOrCreateHtmlAudioForType(type) {
-    const key = SOUND_PATTERNS[type] ? type : 'ting';
-    if (typeof URL === 'undefined' || typeof Blob === 'undefined') return null;
-
-    if (!wavUrlMap[key]) {
+function ensureSoundPools() {
+    if (soundPoolsInitialized) return;
+    if (typeof URL === 'undefined' || typeof Blob === 'undefined') return;
+    soundPoolsInitialized = true;
+    for (const type of Object.keys(SOUND_PATTERNS)) {
         try {
-            wavUrlMap[key] = buildWavBlobUrl(key);
-        } catch (e) {
-            return null;
-        }
+            const url = buildWavBlobUrl(type);
+            wavUrlMap[type] = url;
+            htmlAudioPoolIdx[type] = 0;
+            htmlAudioPools[type] = Array.from({ length: 4 }, () => {
+                const a = new Audio(url);
+                a.preload = 'auto';
+                a.setAttribute('playsinline', '');
+                return a;
+            });
+        } catch (e) {}
     }
-
-    let pool = htmlAudioPools[key];
-    if (!pool) {
-        pool = [];
-        htmlAudioPools[key] = pool;
-        htmlAudioPoolIdx[key] = 0;
-    }
-
-    let idleAudio = pool.find(a => a.paused || a.ended);
-    if (!idleAudio) {
-        if (pool.length < MAX_POOL_PER_SOUND) {
-            idleAudio = new Audio(wavUrlMap[key]);
-            idleAudio.preload = 'none';
-            idleAudio.setAttribute('playsinline', '');
-            pool.push(idleAudio);
-        } else {
-            const idx = (htmlAudioPoolIdx[key] || 0) % pool.length;
-            htmlAudioPoolIdx[key] = idx + 1;
-            idleAudio = pool[idx];
-        }
-    }
-    return idleAudio;
 }
 
 let sharedAudioCtx = null;
@@ -1588,27 +1336,52 @@ function getCachedWebAudioBuffer(ctx, type) {
 }
 
 function unlockAllAudio() {
-    if (audioUnlocked) return;
-    audioUnlocked = true;
-
     if (typeof navigator !== 'undefined' && navigator.audioSession) {
         try { navigator.audioSession.type = 'playback'; } catch (e) {}
     }
     const ctx = getAudioContext();
-    if (ctx) {
+    if (ctx && !audioUnlocked) {
         try {
             const silentBuf = ctx.createBuffer(1, 1, SOUND_SAMPLE_RATE);
             const src = ctx.createBufferSource();
             src.buffer = silentBuf;
             src.connect(ctx.destination);
             src.start(0);
+            for (const type of Object.keys(SOUND_PATTERNS)) {
+                getCachedWebAudioBuffer(ctx, type);
+            }
         } catch (e) {}
+    }
+    if (!audioUnlocked) {
+        audioUnlocked = true;
+        if (IS_IOS_DEVICE) {
+            ensureSoundPools();
+        }
+        if (soundPoolsInitialized) {
+            for (const pool of Object.values(htmlAudioPools)) {
+                for (const a of pool) {
+                    try {
+                        a.muted = true;
+                        const p = a.play();
+                        if (p && p.then) {
+                            p.then(() => { a.pause(); a.currentTime = 0; a.muted = false; }).catch(() => { a.muted = false; });
+                        } else {
+                            a.pause(); a.currentTime = 0; a.muted = false;
+                        }
+                    } catch (e) { a.muted = false; }
+                }
+            }
+        }
     }
 }
 
 function playHtmlWav(type) {
-    const audio = getOrCreateHtmlAudioForType(type);
-    if (!audio) return false;
+    ensureSoundPools();
+    const pool = htmlAudioPools[type] || htmlAudioPools.ting || htmlAudioPools.nav;
+    if (!pool || !pool.length) return false;
+    const idx = (htmlAudioPoolIdx[type] || 0) % pool.length;
+    htmlAudioPoolIdx[type] = idx + 1;
+    const audio = pool[idx];
     try {
         audio.muted = false;
         audio.volume = 1.0;
@@ -1761,13 +1534,12 @@ const myPresenceRef = getOrCreatePresenceRef();
 const myPresenceId = myPresenceRef.key;
 const cursorsRef = ref(database, `${RT_ROOT}/cursors`);
 const myCursorRef = child(cursorsRef, myPresenceId);
+// Gộp focus + sfx thành 1 node ephemeral duy nhất trên mỗi user, tự hết hạn cục bộ sau FOCUS_TTL_MS (bỏ lệnh remove() thứ 2)
 const activityRef = ref(database, `${RT_ROOT}/activity`);
 const myActivityRef = child(activityRef, myPresenceId);
 
 let isFirebaseConnected = false;
 let hasEverConnected = false;
-let initialSyncTimedOut = false;
-let lastReconnectAttemptAt = 0;
 const presenceMap = {};
 const cursorsMap = {};
 const activityMap = {};
@@ -1794,80 +1566,14 @@ function cleanupStaleRealtimeNodes(parentRef, prefix, snapVal, maxAgeMs) {
     }
 }
 
-function forceFirebaseReconnect(manual = false) {
-    const now = Date.now();
-    if (!manual && (now - lastReconnectAttemptAt) < 8000) return;
-    lastReconnectAttemptAt = now;
-    try {
-        goOffline(database);
-        setTimeout(() => {
-            try { goOnline(database); } catch (e) {}
-        }, 260);
-    } catch (e) {}
-    if (manual) {
-        initialSyncTimedOut = false;
-        updateNetworkStatusBadge();
-        showToast('🔄 Đang kết nối lại máy chủ...', 'info', 2200);
-    }
-}
-
 function updateNetworkStatusBadge() {
     const badge = document.getElementById('offline-badge');
     if (!badge) return;
     const isOffline = navigator.onLine === false || (hasEverConnected && !isFirebaseConnected);
-    if (isOffline) {
-        badge.classList.remove('hidden', 'is-syncing');
-        badge.textContent = '⚠️ Mất mạng (Bấm thử lại)';
-        return;
-    }
-    if (!initialDataReady && initialSyncTimedOut) {
-        badge.classList.remove('hidden', 'is-syncing');
-        badge.textContent = '⚠️ Chưa kết nối máy chủ (Thử lại)';
-        return;
-    }
-    if (!initialDataReady && isShowingCachedSnapshot) {
-        badge.classList.remove('hidden');
-        badge.classList.add('is-syncing');
-        badge.textContent = '🔄 Đang đồng bộ...';
-        return;
-    }
-    badge.classList.add('hidden');
-    badge.classList.remove('is-syncing');
+    badge.classList.toggle('hidden', !isOffline);
 }
-window.addEventListener('online', () => {
-    updateNetworkStatusBadge();
-    forceFirebaseReconnect(false);
-});
+window.addEventListener('online', updateNetworkStatusBadge);
 window.addEventListener('offline', updateNetworkStatusBadge);
-
-(function bindOfflineBadgeRetry() {
-    const badge = document.getElementById('offline-badge');
-    if (!badge) return;
-    badge.addEventListener('click', () => forceFirebaseReconnect(true));
-    badge.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            forceFirebaseReconnect(true);
-        }
-    });
-})();
-
-// Watchdog chống treo "Đang đồng bộ..." nếu WebSocket Firebase bị nghẽn lúc mở trang
-setTimeout(() => {
-    if (!initialDataReady) {
-        initialSyncTimedOut = true;
-        updateNetworkStatusBadge();
-        if (navigator.onLine !== false) {
-            forceFirebaseReconnect(false);
-        }
-    }
-}, 5500);
-
-setInterval(() => {
-    if (!initialDataReady && !document.hidden && navigator.onLine !== false) {
-        forceFirebaseReconnect(false);
-    }
-}, 14000);
 
 function renderPresenceCount(snapVal) {
     const now = getServerNow();
@@ -1930,8 +1636,6 @@ onValue(onlineRef, (snap) => {
     isFirebaseConnected = snap.val() === true;
     if (isFirebaseConnected) {
         hasEverConnected = true;
-        initialSyncTimedOut = false;
-        tryFinalizeInitialSync();
         updateNetworkStatusBadge();
         onDisconnect(myPresenceRef).remove().catch(() => {});
         onDisconnect(myCursorRef).remove().catch(() => {});
@@ -1944,10 +1648,6 @@ onValue(onlineRef, (snap) => {
         cleanupStaleRealtimeNodes(presenceListRef, 'presence', presenceMap, STALE_PRESENCE_MS);
         cleanupStaleRealtimeNodes(cursorsRef, 'cursors', cursorsMap, STALE_CURSOR_MS);
         cleanupStaleRealtimeNodes(activityRef, 'activity', activityMap, STALE_CURSOR_MS);
-        if (initialDataReady) {
-            cleanupStaleTimes();
-            scheduleOrphanedLockCheck();
-        }
     } else {
         updateNetworkStatusBadge();
     }
@@ -2275,7 +1975,7 @@ function getActiveRemotePayingByTable(snapVal = activityMap) {
     for (const [id, f] of Object.entries(snapVal || {})) {
         if (id === myPresenceId || !f || f.paying !== true || !f.table) continue;
         const ts = Number(f.ts);
-        if (!Number.isFinite(ts) || (now - ts) >= PAYING_TTL_MS || (ts - now) > PAYING_TTL_MS) continue;
+        if (!Number.isFinite(ts) || (now - ts) >= PAYING_TTL_MS) continue;
         const tableNum = Number(f.table);
         if (!Number.isInteger(tableNum) || tableNum < 1 || tableNum > 9) continue;
         const prev = byTable.get(tableNum);
@@ -2390,18 +2090,6 @@ bindChildMap(activityRef, activityMap, (id, ev, eventType) => {
 
 // ─── MENU + THANH NHẢY NHANH THEO NHÓM MÓN ─────────────────────────────
 const SHORT_CAT_LABELS = ['Cơm / Mỳ', 'Hấp / Cháo', 'Món thêm', 'Nước uống', 'Bia'];
-let catPillEls = [];
-let catSectionEls = [];
-let activeCatIdx = 0;
-
-function setActiveCatPill(idx) {
-    if (!catPillEls.length) return;
-    const nextIdx = Math.max(0, Math.min(catPillEls.length - 1, Number(idx) || 0));
-    if (nextIdx === activeCatIdx) return;
-    catPillEls[activeCatIdx]?.classList.remove('active');
-    catPillEls[nextIdx]?.classList.add('active');
-    activeCatIdx = nextIdx;
-}
 
 function renderMenu() {
     const navParts = [];
@@ -2422,23 +2110,14 @@ function renderMenu() {
         });
     });
     const catNav = document.getElementById('menu-cat-nav');
-    if (catNav) {
-        catNav.innerHTML = navParts.join('');
-        catPillEls = Array.from(catNav.querySelectorAll('.cat-pill'));
-    }
-    const menuListEl = document.getElementById('menu-list');
-    menuListEl.innerHTML = parts.join('');
-    catSectionEls = Array.from(menuListEl.querySelectorAll('.category-title'));
-    activeCatIdx = 0;
+    if (catNav) catNav.innerHTML = navParts.join('');
+    document.getElementById('menu-list').innerHTML = parts.join('');
 }
 renderMenu();
 ALL_ITEMS.forEach(item => {
     ITEM_DOM.set(item.id, {
         row: document.getElementById(`row-${item.id}`),
-        qty: document.getElementById(`q-${item.id}`),
-        qtyClass: '',
-        lastQty: 0,
-        flashTimer: 0
+        qty: document.getElementById(`q-${item.id}`)
     });
 });
 
@@ -2446,61 +2125,56 @@ document.getElementById('menu-cat-nav')?.addEventListener('click', (e) => {
     const pill = e.target.closest('.cat-pill');
     if (!pill) return;
     triggerHaptic('nav');
-    const idx = Number(pill.dataset.catIdx);
-    setActiveCatPill(idx);
-    catSectionEls[idx]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const idx = pill.dataset.catIdx;
+    document.querySelectorAll('#menu-cat-nav .cat-pill').forEach(p => p.classList.toggle('active', p === pill));
+    document.getElementById(`cat-sec-${idx}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 });
 
-// Dùng IntersectionObserver thay vì scroll + getBoundingClientRect() để loại bỏ layout thrashing
-if ('IntersectionObserver' in window && catSectionEls.length > 0) {
-    const catObserver = new IntersectionObserver((entries) => {
-        if (!currentTab || data.locked?.[currentTab]) return;
-        for (const entry of entries) {
-            const idx = Number(entry.target.dataset.catIdx);
-            if (!Number.isInteger(idx)) continue;
-            if (entry.isIntersecting) {
-                setActiveCatPill(idx);
-            } else if (entry.rootBounds && entry.boundingClientRect.top > entry.rootBounds.top) {
-                setActiveCatPill(idx - 1);
-            }
+let catScrollTicking = false;
+window.addEventListener('scroll', () => {
+    if (!currentTab || data.locked?.[currentTab] || catScrollTicking) return;
+    catScrollTicking = true;
+    requestAnimationFrame(() => {
+        catScrollTicking = false;
+        const nav = document.getElementById('menu-cat-nav');
+        if (!nav) return;
+        const threshold = nav.getBoundingClientRect().bottom + 14;
+        let activeIdx = 0;
+        for (let i = 0; i < menu.length; i++) {
+            const sec = document.getElementById(`cat-sec-${i}`);
+            if (sec && sec.getBoundingClientRect().top <= threshold) activeIdx = i;
         }
-    }, {
-        rootMargin: '-56px 0px -72% 0px',
-        threshold: 0
+        nav.querySelectorAll('.cat-pill').forEach((p, idx) => p.classList.toggle('active', idx === activeIdx));
     });
-    catSectionEls.forEach(sec => catObserver.observe(sec));
-}
+}, { passive: true });
 
-// Mở khóa nhẹ AudioContext ở chạm đầu tiên
+// Mở khóa toàn bộ kênh âm thanh ngay từ chạm đầu tiên
 ['pointerdown', 'touchstart', 'keydown'].forEach(evt => {
     document.addEventListener(evt, unlockAllAudio, { once: true, passive: true, capture: true });
 });
 
 // ─── EVENT DELEGATION TẬP TRUNG (THAY THẾ TOÀN BỘ INLINE ONCLICK) ──────
 document.addEventListener('click', (e) => {
-    const targetEl = e.target instanceof Element ? e.target : e.target?.parentElement;
-    if (!targetEl) return;
-
-    const tableCard = targetEl.closest('.table-card[data-table]');
+    const tableCard = e.target.closest('.table-card[data-table]');
     if (tableCard) {
         selectTable(Number(tableCard.dataset.table));
         return;
     }
 
-    const qtyBtn = targetEl.closest('#menu-list .btn-qty[data-item-id]');
+    const qtyBtn = e.target.closest('#menu-list .btn-qty[data-item-id]');
     if (qtyBtn) {
         const itemId = Number(qtyBtn.dataset.itemId);
         change(itemId, qtyBtn.classList.contains('btn-add') ? 1 : -1);
         return;
     }
 
-    const langBtn = targetEl.closest('#lang-grid .lang-btn[data-lang]');
+    const langBtn = e.target.closest('#lang-grid .lang-btn[data-lang]');
     if (langBtn) {
         changeBillLang(langBtn.dataset.lang);
         return;
     }
 
-    const actionEl = targetEl.closest('[data-action]');
+    const actionEl = e.target.closest('[data-action]');
     if (!actionEl) return;
 
     switch (actionEl.dataset.action) {
@@ -2542,26 +2216,13 @@ if (checkoutBtnEl && 'IntersectionObserver' in window) {
     const checkoutObserver = new IntersectionObserver((entries) => {
         checkoutBtnVisible = entries.some(entry => entry.isIntersecting);
         updateScrollCheckoutButton();
-    }, { threshold: 0.01 });
+    }, { threshold: 0.15 });
     checkoutObserver.observe(checkoutBtnEl);
 }
 
 // ─── DỮ LIỆU CHÍNH FIREBASE (SINGLE-SHOT INIT + GRANULAR CHILD LISTENERS) ──
 const pendingDeltas = {};
-const inFlightDeltas = {};
 const localEchoDeltas = {};
-
-function adjustDeltaMap(mapObj, tableId, itemId, delta) {
-    if (!delta) return;
-    if (!mapObj[tableId]) mapObj[tableId] = {};
-    const next = (mapObj[tableId][itemId] || 0) + delta;
-    if (next === 0) {
-        delete mapObj[tableId][itemId];
-        if (Object.keys(mapObj[tableId]).length === 0) delete mapObj[tableId];
-    } else {
-        mapObj[tableId][itemId] = next;
-    }
-}
 const tableEpoch = Array(10).fill(0);
 let firstOrdersLoad = true;
 const initialBranchesLoaded = new Set();
@@ -2586,6 +2247,7 @@ function consumeLocalEchoDelta(tableId, itemId, observedDelta) {
         if (Object.keys(localEchoDeltas[tableId]).length === 0) delete localEchoDeltas[tableId];
         return true;
     }
+    // Trường hợp gộp với thay đổi từ máy khác trong cùng frame
     if ((expected > 0 && observedDelta > 0) || (expected < 0 && observedDelta < 0)) {
         const remaining = expected - observedDelta;
         if (remaining === 0) {
@@ -2627,66 +2289,33 @@ function queueRemoteOrderFlashes(prevOrders, nextOrders, ignoredTables = null) {
     return queued;
 }
 
-function applyElementFlash(el, timerOwner, delta, durationMs) {
-    if (!el || !timerOwner) return;
-    if (timerOwner.flashTimer) clearTimeout(timerOwner.flashTimer);
-    const addCls = delta > 0 ? 'flash-add' : 'flash-sub';
-    const remCls = delta > 0 ? 'flash-sub' : 'flash-add';
-    el.classList.remove(remCls);
-    el.classList.add(addCls);
-    timerOwner.flashTimer = setTimeout(() => {
-        el.classList.remove(addCls);
-        timerOwner.flashTimer = 0;
-    }, durationMs);
-}
-
 function flushRemoteOrderFlashes() {
     if (!pendingRemoteOrderFlashes.length) return;
     const flashes = pendingRemoteOrderFlashes.splice(0);
 
     for (const { tableId, itemId, delta } of flashes) {
-        const dom = TABLE_DOM[tableId - 1];
-        const itemDom = currentTab === tableId ? ITEM_DOM.get(itemId) : null;
-        if (dom?.card) applyElementFlash(dom.card, dom, delta, 400);
-        if (itemDom?.row) applyElementFlash(itemDom.row, itemDom, delta, 400);
-    }
-}
+        const cls = delta > 0 ? 'flash-add' : 'flash-sub';
+        const tableBtn = TABLE_DOM[tableId - 1]?.card;
+        const row = currentTab === tableId ? ITEM_DOM.get(itemId)?.row : null;
 
-function reconcileCachedBranchesBeforeFullSync() {
-    if (!initialBranchesLoaded.has('orders')) return;
-    for (let t = 1; t <= 9; t++) {
-        const hasOrder = effectiveTableHasItems(t);
-        if (!hasOrder) {
-            if (!initialBranchesLoaded.has('locked') && data.locked?.[t]) {
-                delete data.locked[t];
-            }
-            if (!initialBranchesLoaded.has('times') && data.times?.[t]) {
-                delete data.times[t];
-            }
-        }
-    }
-}
+        if (tableBtn) tableBtn.classList.add(cls);
+        if (row) row.classList.add(cls);
 
-function tryFinalizeInitialSync() {
-    if (initialDataReady) return;
-    if (initialBranchesLoaded.size < 3 || !isFirebaseConnected) return;
-    initialDataReady = true;
-    initialSyncTimedOut = false;
-    isShowingCachedSnapshot = false;
-    cachedSnapshotSavedAt = 0;
-    updateNetworkStatusBadge();
-    cleanupStaleTimes();
-    scheduleOrphanedLockCheck();
-    saveLocalStateCacheNow();
-    scheduleRefresh(null);
+        setTimeout(() => {
+            if (tableBtn) tableBtn.classList.remove(cls);
+            if (row) row.classList.remove(cls);
+        }, 400);
+    }
 }
 
 function markInitialBranchLoaded(branch) {
     if (initialDataReady) return;
     initialBranchesLoaded.add(branch);
-    reconcileCachedBranchesBeforeFullSync();
-    tryFinalizeInitialSync();
-    if (!initialDataReady) {
+    if (initialBranchesLoaded.size === 3) {
+        initialDataReady = true;
+        cleanupStaleTimes();
+        scheduleOrphanedLockCheck();
+        scheduleSaveLocalStateCache();
         scheduleRefresh(null);
     }
 }
@@ -2695,8 +2324,8 @@ function handleSingleTableOrderSnapshot(rawKey, tableVal) {
     const tableId = Number(rawKey);
     if (!Number.isInteger(tableId) || tableId < 1 || tableId > 9) return;
 
-    const nextTableOrder = normalizeOrderMap(tableVal);
-    const prevTableOrder = normalizeOrderMap(data.orders?.[tableId]);
+    const nextTableOrder = tableVal && typeof tableVal === 'object' ? tableVal : {};
+    const prevTableOrder = data.orders?.[tableId] || {};
     if (shallowRecordEqual(prevTableOrder, nextTableOrder)) return;
 
     fbDownBytes += byteSizeOf(tableVal);
@@ -2795,63 +2424,23 @@ function handleSingleTableTimeSnapshot(rawKey, rawVal) {
 }
 
 function bindBranchWithInitialSync(branchRef, branchName, applyInitialVal, handleChildVal) {
-    let initialResolved = false;
-    let listenersAttached = false;
-    let skipInitialAddedKeys = null;
     let unsubInitial = null;
+    unsubInitial = onValue(branchRef, (initialSnap) => {
+        if (unsubInitial) {
+            unsubInitial();
+            unsubInitial = null;
+        }
+        applyInitialVal(initialSnap.val() || {});
+        markInitialBranchLoaded(branchName);
 
-    const attachChildListeners = () => {
-        if (listenersAttached) return;
-        listenersAttached = true;
-
-        _fbOnChildAdded(branchRef, (snap) => {
-            const key = snap.key;
-            if (!key) return;
-            if (skipInitialAddedKeys && skipInitialAddedKeys.has(key)) {
-                skipInitialAddedKeys.delete(key);
-                if (skipInitialAddedKeys.size === 0) skipInitialAddedKeys = null;
-                const val = snap.val();
-                const tableId = Number(key);
-                if (branchName === 'orders' && shallowRecordEqual(normalizeOrderMap(data.orders?.[tableId]), normalizeOrderMap(val))) return;
-                if (branchName === 'locked' && Boolean(data.locked?.[tableId]) === Boolean(val)) return;
-                if (branchName === 'times') {
-                    const parsedTs = Number(val);
-                    const nextTime = (val !== null && val !== undefined && Number.isFinite(parsedTs) && parsedTs > 0) ? parsedTs : null;
-                    const prevTime = data.times?.[tableId] !== undefined ? Number(data.times[tableId]) : null;
-                    if (prevTime === nextTime) return;
-                }
-            }
-            handleChildVal(key, snap.val());
-        });
+        _fbOnChildAdded(branchRef, (snap) => handleChildVal(snap.key, snap.val()));
         _fbOnChildChanged(branchRef, (snap) => handleChildVal(snap.key, snap.val()));
         _fbOnChildRemoved(branchRef, (snap) => handleChildVal(snap.key, null));
-    };
-
-    unsubInitial = onValue(branchRef, (initialSnap) => {
-        if (initialResolved) return;
-        initialResolved = true;
-
-        const initialVal = initialSnap.val() || {};
-        skipInitialAddedKeys = new Set(Object.keys(initialVal));
-        applyInitialVal(initialVal);
-        markInitialBranchLoaded(branchName);
-        attachChildListeners();
-        queueMicrotask(() => {
-            if (unsubInitial) {
-                unsubInitial();
-                unsubInitial = null;
-            }
-        });
-    }, (err) => {
-        console.error(`[sync] Lỗi tải nhánh ${branchName}:`, err);
-        initialSyncTimedOut = true;
-        updateNetworkStatusBadge();
     });
 }
 
 // Vẽ ngay từ bản nháp localStorage (nếu có) trước khi Firebase đồng bộ xong
 if (hydrateFromLocalStateCache()) {
-    updateNetworkStatusBadge();
     refresh(null, false);
 }
 
@@ -2861,9 +2450,9 @@ bindBranchWithInitialSync(
     (serverOrders) => {
         const reconciled = {};
         for (let t = 1; t <= 9; t++) {
-            const cleanOrder = normalizeOrderMap(serverOrders[t]);
-            if (Object.keys(cleanOrder).length > 0) {
-                reconciled[t] = cleanOrder;
+            const rawOrder = serverOrders[t];
+            if (rawOrder && typeof rawOrder === 'object' && Object.values(rawOrder).some(q => Number(q) > 0)) {
+                reconciled[t] = rawOrder;
             }
         }
         data.orders = reconciled;
@@ -2922,12 +2511,6 @@ function selectTable(n, options = {}) {
         if (isLockedTable) {
             preloadBillAssets();
             setTimeout(scrollBillIntoView, 350);
-        } else {
-            setTimeout(() => {
-                if (currentTab === n) {
-                    section.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                }
-            }, 120);
         }
     } else {
         section.classList.remove('section-visible');
@@ -2949,15 +2532,13 @@ const pendingStartTimes = new Set();
 
 function getEffectiveItemQty(tab, itemId) {
     const serverQty = Number(data.orders?.[tab]?.[itemId] || 0);
-    const pending = Number(pendingDeltas[tab]?.[itemId] || 0);
-    const inFlight = Number(inFlightDeltas[tab]?.[itemId] || 0);
-    return Math.max(0, serverQty + pending + inFlight);
+    const delta = Number(pendingDeltas[tab]?.[itemId] || 0);
+    return Math.max(0, serverQty + delta);
 }
 
 function clearPendingForTable(tab) {
     tableEpoch[tab] = (tableEpoch[tab] || 0) + 1;
     delete pendingDeltas[tab];
-    delete inFlightDeltas[tab];
     delete localEchoDeltas[tab];
     pendingStartTimes.delete(tab);
     const prefix = `${tab}_`;
@@ -2991,9 +2572,9 @@ function commitPendingItem(tab, id, expectedVersion = null) {
 
     const startEpoch = tableEpoch[tab] || 0;
 
+    // Trừ delta khỏi pendingDeltas trước khi gọi transaction() vì Firebase SDK áp dụng latency compensation cục bộ
     delete pendingDeltas[tab][id];
     if (Object.keys(pendingDeltas[tab]).length === 0) delete pendingDeltas[tab];
-    adjustDeltaMap(inFlightDeltas, tab, id, deltaToSend);
 
     if (deltaToSend > 0 && !data.times?.[tab] && !pendingStartTimes.has(tab)) {
         pendingStartTimes.add(tab);
@@ -3007,14 +2588,6 @@ function commitPendingItem(tab, id, expectedVersion = null) {
     let passCount = 0;
     let initialLocalCur = 0;
     let prevOptimisticTarget = null;
-    let inFlightReleased = false;
-    const releaseInFlight = () => {
-        if (inFlightReleased) return;
-        inFlightReleased = true;
-        if ((tableEpoch[tab] || 0) === startEpoch) {
-            adjustDeltaMap(inFlightDeltas, tab, id, -deltaToSend);
-        }
-    };
 
     transaction(itemRef, (cur) => {
         passCount++;
@@ -3022,11 +2595,11 @@ function commitPendingItem(tab, id, expectedVersion = null) {
         if (passCount === 1) initialLocalCur = current;
 
         if ((tableEpoch[tab] || 0) !== startEpoch || (current === 0 && deltaToSend < 0)) {
+            // Nếu Pass 1 từng áp dụng giá trị lạc quan và Pass >= 2 hủy bỏ, bù echo rollback chính xác
             if (prevOptimisticTarget !== null && prevOptimisticTarget !== current) {
-                recordLocalEchoDelta(tab, id, current - prevOptimisticTarget);
+                recordLocalEchoDelta(tab, id, initialLocalCur - prevOptimisticTarget);
                 prevOptimisticTarget = current;
             }
-            releaseInFlight();
             return undefined;
         }
 
@@ -3041,14 +2614,12 @@ function commitPendingItem(tab, id, expectedVersion = null) {
             recordLocalEchoDelta(tab, id, (target - prevOptimisticTarget) - remoteShift);
         }
         prevOptimisticTarget = target;
-        // Firebase SDK ngay lập tức cập nhật local cache sau pass đầu tiên, giải phóng inFlightDeltas để tránh cộng dồn 2 lần
-        releaseInFlight();
         return finalVal;
     })
-        .then(() => {
-            releaseInFlight();
-            scheduleSaveLocalStateCache();
-            scheduleRefresh(new Set([tab]), currentTab === tab);
+        .then(({ committed }) => {
+            if (!committed) {
+                scheduleRefresh(new Set([tab]), currentTab === tab);
+            }
             queueMicrotask(() => {
                 if (!effectiveTableHasItems(tab) && (data.times?.[tab] || pendingStartTimes.has(tab))) {
                     remove(child(timesRef, String(tab))).catch(() => {});
@@ -3061,10 +2632,9 @@ function commitPendingItem(tab, id, expectedVersion = null) {
                 recordLocalEchoDelta(tab, id, initialLocalCur - prevOptimisticTarget);
             }
             if ((tableEpoch[tab] || 0) === startEpoch) {
-                releaseInFlight();
-                adjustDeltaMap(pendingDeltas, tab, id, deltaToSend);
+                if (!pendingDeltas[tab]) pendingDeltas[tab] = {};
+                pendingDeltas[tab][id] = (pendingDeltas[tab][id] || 0) + deltaToSend;
             }
-            scheduleSaveLocalStateCache();
             scheduleRefresh(new Set([tab]), currentTab === tab);
         })
         .finally(() => {
@@ -3074,7 +2644,6 @@ function commitPendingItem(tab, id, expectedVersion = null) {
             }
         });
 }
-
 
 function flushPendingForTable(tab) {
     const pending = pendingDeltas[tab];
@@ -3091,18 +2660,12 @@ function flushAllPendingItems() {
 }
 
 function getMergedOrder(tab) {
-    const serverOrder = normalizeOrderMap(data.orders?.[tab]);
+    const serverOrder = data.orders?.[tab] || {};
     const pendingOrder = pendingDeltas[tab];
-    const inFlightOrder = inFlightDeltas[tab];
-    if (!pendingOrder && !inFlightOrder) return serverOrder;
+    if (!pendingOrder) return serverOrder;
     const merged = { ...serverOrder };
-    const allDeltaIds = new Set([
-        ...Object.keys(pendingOrder || {}),
-        ...Object.keys(inFlightOrder || {})
-    ]);
-    for (const id of allDeltaIds) {
-        const delta = (Number(pendingOrder?.[id]) || 0) + (Number(inFlightOrder?.[id]) || 0);
-        const cleanQty = Math.max(0, (Number(merged[id]) || 0) + delta);
+    for (const [id, delta] of Object.entries(pendingOrder)) {
+        const cleanQty = Math.max(0, (Number(merged[id]) || 0) + (Number(delta) || 0));
         if (cleanQty > 0) merged[id] = cleanQty;
         else delete merged[id];
     }
@@ -3133,33 +2696,43 @@ function playQtyBump(el) {
 }
 
 function effectiveTableHasItems(tab) {
-    const merged = getMergedOrder(tab);
-    if (!merged || typeof merged !== 'object') return false;
-    for (const [id, rawQty] of Object.entries(merged)) {
-        if (!ITEM_MAP.has(Number(id))) continue;
-        if ((Number(rawQty) || 0) > 0) return true;
+    const serverOrder = data.orders?.[tab];
+    const pendingOrder = pendingDeltas[tab];
+    if (serverOrder && typeof serverOrder === 'object') {
+        for (const id of Object.keys(serverOrder)) {
+            if (!ITEM_MAP.has(Number(id))) continue;
+            const qty = (Number(serverOrder[id]) || 0) + (Number(pendingOrder?.[id]) || 0);
+            if (qty > 0) return true;
+        }
+    }
+    if (pendingOrder && typeof pendingOrder === 'object') {
+        for (const id of Object.keys(pendingOrder)) {
+            if (serverOrder && Object.prototype.hasOwnProperty.call(serverOrder, id)) continue;
+            if (!ITEM_MAP.has(Number(id))) continue;
+            if ((Number(pendingOrder[id]) || 0) > 0) return true;
+        }
     }
     return false;
 }
 
 const STALE_TIME_GRACE_MS = 15000;
 function cleanupStaleTimes(tableIds = null) {
-    if (!initialDataReady || !isFirebaseConnected) return;
+    if (!initialDataReady) return;
     const now = getServerNow();
     const ids = tableIds ? Array.from(tableIds) : Array.from({ length: 9 }, (_, i) => i + 1);
     for (const tab of ids) {
         const startTs = Number(data.times?.[tab]);
         if (!startTs || data.locked?.[tab] || effectiveTableHasItems(tab)) continue;
+        // Chờ qua ngưỡng 15s để tránh máy khác xóa nhầm giờ vừa khởi tạo khi 2 gói tin tới lệch nhịp
         if ((now - startTs) < STALE_TIME_GRACE_MS) continue;
         remove(child(timesRef, String(tab))).catch(() => {});
     }
 }
 
-// Tự động giải phóng trạng thái khóa mồ côi (sau 8s để không đè lệnh chốt đơn từ máy khác đang đồng bộ)
-const ORPHAN_LOCK_GRACE_MS = 8000;
+// Tự động giải phóng trạng thái khóa mồ côi (bàn 0đ nhưng vẫn sáng viền LED chốt đơn)
 const orphanedLockTimers = {};
 function scheduleOrphanedLockCheck(tableIds = null) {
-    if (!initialDataReady || !isFirebaseConnected) return;
+    if (!initialDataReady) return;
     const ids = tableIds ? Array.from(tableIds) : Array.from({ length: 9 }, (_, i) => i + 1);
     for (const rawTab of ids) {
         const tab = Number(rawTab);
@@ -3172,43 +2745,29 @@ function scheduleOrphanedLockCheck(tableIds = null) {
         if (orphanedLockTimers[tab]) continue;
         orphanedLockTimers[tab] = setTimeout(() => {
             delete orphanedLockTimers[tab];
-            if (!initialDataReady || !isFirebaseConnected || paymentInProgress || payingTables.has(tab) || localPaymentEchoTables.has(tab)) return;
+            if (!initialDataReady || paymentInProgress || payingTables.has(tab) || localPaymentEchoTables.has(tab)) return;
             if (!data.locked?.[tab] || effectiveTableHasItems(tab)) return;
-
-            const tableStartTs = Number(data.times?.[tab]);
-            if (Number.isFinite(tableStartTs) && tableStartTs > 0 && (getServerNow() - tableStartTs) < ORPHAN_LOCK_GRACE_MS) {
-                scheduleOrphanedLockCheck([tab]);
-                return;
-            }
 
             delete data.locked[tab];
             if (data.times?.[tab]) delete data.times[tab];
             scheduleSaveLocalStateCache();
             scheduleRefresh(new Set([tab]), currentTab === tab);
             clearTableLockAndTimeOnServer(tab);
-        }, ORPHAN_LOCK_GRACE_MS);
+        }, 1200);
     }
 }
 
-function applyMenuRowQtyClasses(itemDom, qty) {
-    const row = itemDom?.row;
+function applyMenuRowQtyClasses(row, qty) {
     if (!row) return;
-    const nextClass = qty >= 5 ? 'qty-5' : (qty > 0 ? `qty-${qty}` : '');
-    if (itemDom.qtyClass === nextClass) return;
-    if (itemDom.qtyClass) row.classList.remove(itemDom.qtyClass);
-    if (nextClass) row.classList.add(nextClass);
-    itemDom.qtyClass = nextClass;
-}
-
-function updateItemRowQty(itemId, qty, bump = false) {
-    const itemDom = ITEM_DOM.get(itemId);
-    if (!itemDom) return;
-    if (itemDom.lastQty !== qty) {
-        itemDom.lastQty = qty;
-        if (itemDom.qty) itemDom.qty.textContent = String(qty);
-        applyMenuRowQtyClasses(itemDom, qty);
-    }
-    if (bump && itemDom.qty) playQtyBump(itemDom.qty);
+    const preserveRemoteFocus = row.classList.contains('remote-focus');
+    const preserveFlashAdd = row.classList.contains('flash-add');
+    const preserveFlashSub = row.classList.contains('flash-sub');
+    row.className = 'menu-item';
+    if (qty >= 5) row.classList.add('qty-5');
+    else if (qty > 0) row.classList.add('qty-' + qty);
+    if (preserveRemoteFocus) row.classList.add('remote-focus');
+    if (preserveFlashAdd) row.classList.add('flash-add');
+    if (preserveFlashSub) row.classList.add('flash-sub');
 }
 
 function change(id, delta) {
@@ -3221,6 +2780,7 @@ function change(id, delta) {
     const currentQty = getEffectiveItemQty(tab, id);
     if (delta < 0 && currentQty <= 0) return;
 
+    // Cộng dồn delta cục bộ để tránh lost-update khi nhiều thiết bị bấm cùng lúc
     if (!pendingDeltas[tab]) pendingDeltas[tab] = {};
     const nextDelta = (pendingDeltas[tab][id] || 0) + delta;
     if (nextDelta === 0) {
@@ -3231,12 +2791,19 @@ function change(id, delta) {
     }
 
     const newQty = getEffectiveItemQty(tab, id);
-    updateItemRowQty(id, newQty, true);
+    const itemDom = ITEM_DOM.get(id);
+    const qSpan = itemDom?.qty;
+    const row = itemDom?.row;
+    if (qSpan) {
+        qSpan.textContent = newQty;
+        applyMenuRowQtyClasses(row, newQty);
+        playQtyBump(qSpan);
+    }
     renderTable(tab, getServerNow());
     renderCrowdStatus();
     flashRow(id, delta);
-    scheduleSaveLocalStateCache();
 
+    // Debounce ghi Firebase
     const key = `${tab}_${id}`;
     const version = (debounceVersions[key] || 0) + 1;
     debounceVersions[key] = version;
@@ -3245,10 +2812,9 @@ function change(id, delta) {
 }
 
 function flashRow(id, delta) {
-    const itemDom = ITEM_DOM.get(id);
-    const dom = currentTab ? TABLE_DOM[currentTab - 1] : null;
-    if (itemDom?.row) applyElementFlash(itemDom.row, itemDom, delta, 320);
-    if (dom?.card) applyElementFlash(dom.card, dom, delta, 320);
+    const itemDom = ITEM_DOM.get(id), row = itemDom?.row, tabBtn = currentTab ? TABLE_DOM[currentTab - 1]?.card : null, cls = delta > 0 ? 'flash-add' : 'flash-sub';
+    if (row) row.classList.add(cls); if (tabBtn) tabBtn.classList.add(cls);
+    setTimeout(() => { if (row) row.classList.remove(cls); if (tabBtn) tabBtn.classList.remove(cls); }, 320);
 }
 
 function changeBillLang(l) {
@@ -3298,7 +2864,12 @@ function renderCurrentOrder() {
 
     ALL_ITEMS.forEach(item => {
         const q = getEffectiveItemQty(currentTab, item.id);
-        updateItemRowQty(item.id, q, false);
+        const itemDom = ITEM_DOM.get(item.id);
+        const row = itemDom?.row, qSpan = itemDom?.qty;
+        if (row && qSpan && qSpan.textContent !== String(q)) {
+            qSpan.textContent = q;
+            applyMenuRowQtyClasses(row, q);
+        }
     });
 
     if (isLock) renderBillAsync(currentTab);
@@ -3332,75 +2903,42 @@ function renderTable(tableId, now = getServerNow()) {
     }
     if (dom.meta) {
         dom.meta.classList.remove('skeleton');
-        const shouldShowMeta = total > 0;
-        if (shouldShowMeta) {
-            if (!dom.lastMetaVisible) {
-                dom.meta.hidden = false;
-                dom.meta.style.display = '';
-                dom.lastMetaVisible = true;
-            }
-            if (dom.lastFoodQty !== foodQty || dom.lastDrinkQty !== drinkQty) {
-                if (dom.foodSpan && dom.lastFoodQty !== foodQty) dom.foodSpan.textContent = String(foodQty);
-                if (dom.drinkSpan && dom.lastDrinkQty !== drinkQty) dom.drinkSpan.textContent = String(drinkQty);
-                dom.meta.title = `${foodQty} phần món ăn · ${drinkQty} nước/bia`;
-                dom.lastFoodQty = foodQty;
-                dom.lastDrinkQty = drinkQty;
-            }
-        } else if (dom.lastMetaVisible) {
-            dom.meta.hidden = true;
-            dom.meta.style.display = 'none';
-            dom.meta.title = '';
-            dom.lastMetaVisible = false;
-        }
+        dom.meta.innerHTML = total > 0 ? `🍽 <span class="table-meta-count">${foodQty}</span> món · 🥤🍺 <span class="table-meta-count">${drinkQty}</span>` : '';
+        dom.meta.title = total > 0 ? `${foodQty} phần món ăn · ${drinkQty} nước/bia` : '';
     }
     renderTableTime(tableId, now);
 
     if (dom.card) {
-        const isActive = tableId === currentTab;
-        const hasGuest = !locked && total > 0;
-        if (dom.lastActive !== isActive) {
-            dom.card.classList.toggle('active', isActive);
-            dom.lastActive = isActive;
-        }
-        if (dom.lastLocked !== locked) {
-            dom.card.classList.toggle('is-locked', locked);
-            dom.lastLocked = locked;
-        }
-        let lockedPill = dom.card.querySelector('.locked-status-pill');
-        if (locked && total > 0) {
-            if (!lockedPill) {
-                lockedPill = document.createElement('span');
-                lockedPill.className = 'locked-status-pill';
-                lockedPill.textContent = '🔒 Đã chốt bill';
-                dom.card.appendChild(lockedPill);
-            }
-        } else if (lockedPill) {
-            lockedPill.remove();
-        }
-        if (dom.lastHasGuest !== hasGuest) {
-            dom.card.classList.toggle('has-guest', hasGuest);
-            dom.lastHasGuest = hasGuest;
+        const preserveViewer = dom.card.classList.contains('has-viewer');
+        const preserveRemotePaying = dom.card.classList.contains('is-remote-paying');
+        const preserveFlashAdd = dom.card.classList.contains('flash-add');
+        const preserveFlashSub = dom.card.classList.contains('flash-sub');
+        let className = tableId === 7 ? 'table-card full-width' : (tableId >= 8 ? 'table-card half-width' : 'table-card');
+        if (tableId === currentTab) className += ' active';
+        if (locked) className += ' is-locked';
+        else if (total > 0) className += ' has-guest';
+        if (dom.card.className !== className) {
+            dom.card.className = className;
+            if (preserveViewer) dom.card.classList.add('has-viewer');
+            if (preserveRemotePaying) dom.card.classList.add('is-remote-paying');
+            if (preserveFlashAdd) dom.card.classList.add('flash-add');
+            if (preserveFlashSub) dom.card.classList.add('flash-sub');
         }
     }
 }
 
-let lastCrowdTier = null;
 function renderCrowdStatus() {
     let activeTablesCount = 0;
     for (let i = 1; i <= 9; i++) {
         if (tableTotals[i] > 0 || data.locked?.[i]) activeTablesCount++;
     }
-    const nextTier = activeTablesCount <= 3 ? 'empty' : (activeTablesCount <= 6 ? 'normal' : 'crowded');
-    if (nextTier === lastCrowdTier) return;
-    lastCrowdTier = nextTier;
-
     const crowdEl = document.getElementById('crowd-status');
     const crowdTxt = document.getElementById('crowd-text');
     const crowdIcon = document.getElementById('crowd-icon');
     if (crowdEl && crowdTxt && crowdIcon) {
-        if (nextTier === 'empty') {
+        if (activeTablesCount <= 3) {
             crowdEl.className = 'status-badge status-empty'; crowdTxt.textContent = 'Vắng khách'; crowdIcon.textContent = '🟢';
-        } else if (nextTier === 'normal') {
+        } else if (activeTablesCount <= 6) {
             crowdEl.className = 'status-badge status-normal'; crowdTxt.textContent = 'Bình thường'; crowdIcon.textContent = '🟡';
         } else {
             crowdEl.className = 'status-badge status-crowded'; crowdTxt.textContent = 'ĐÔNG KHÁCH'; crowdIcon.textContent = '🚨';
@@ -3453,84 +2991,35 @@ async function renderBillAsync(tab) {
     requestAnimationFrame(() => syncBillFlipHeight(false));
 }
 
-let lockRequestInFlight = false;
 function setLock(v) {
-    if (!currentTab || lockRequestInFlight) return;
-    if (paymentInProgress) {
-        showToast('Đang xử lý thanh toán, vui lòng chờ giây lát!', 'warning', 2000);
-        return;
-    }
-    if (navigator.onLine === false) {
-        showToast('⚠️ Đang mất mạng, không thể gửi lệnh lên máy chủ!', 'error', 3200);
-        return;
-    }
-    const tab = currentTab;
-    if (isTableRemotePaying(tab)) {
+    if (!currentTab || paymentInProgress) return;
+    if (isTableRemotePaying(currentTab)) {
         showToast('Thiết bị khác đang thu tiền bàn này, vui lòng chờ!', 'warning', 2800);
         return;
     }
-    if (v && !effectiveTableHasItems(tab)) {
+    if (v && !effectiveTableHasItems(currentTab)) {
         showToast('Bàn chưa có món nào để chốt đơn!', 'warning', 2600);
         return;
     }
-
-    const prevLocked = Boolean(data.locked?.[tab]);
     triggerHaptic(v ? 'lock' : 'unlock');
-    broadcastActivity({ sfx: v ? 'lock' : 'unlock', tableId: tab, itemId: null, immediate: true });
-
+    broadcastActivity({ sfx: v ? 'lock' : 'unlock', tableId: currentTab, itemId: null, immediate: true });
     if (v) {
-        flushPendingForTable(tab);
+        flushPendingForTable(currentTab);
         preloadBillAssets();
         resetBillQrView(true);
-        if (!data.locked) data.locked = {};
-        data.locked[tab] = true;
-    } else {
-        if (data.locked) delete data.locked[tab];
+    }
+    set(child(lockedRef, String(currentTab)), v ? true : null)
+        .catch(err => console.error('[lock] Lỗi ghi trạng thái khóa Firebase:', err));
+    if (!v) {
         currentBillLang = 'vi';
         syncActiveLangButton('vi');
         resetBillQrView(true);
     }
-
-    saveLocalStateCacheNow();
-    refresh(new Set([tab]), true);
-
-    if (v) {
-        requestAnimationFrame(() => {
-            document.getElementById('bill-area')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        });
-    }
-
-    lockRequestInFlight = true;
-    withTimeout(set(child(lockedRef, String(tab)), v ? true : null), 6500, 'TIMEOUT_LOCK')
-        .catch(err => {
-            console.error('[lock] Lỗi ghi trạng thái khóa Firebase:', err);
-            if (prevLocked) {
-                if (!data.locked) data.locked = {};
-                data.locked[tab] = true;
-            } else if (data.locked) {
-                delete data.locked[tab];
-            }
-            scheduleSaveLocalStateCache();
-            refresh(new Set([tab]), true);
-            if (err?.message === 'TIMEOUT_LOCK') {
-                forceFirebaseReconnect(false);
-                showToast('⚠️ Máy chủ phản hồi chậm, đang kết nối lại. Vui lòng thử bấm lại!', 'error', 4000);
-            } else {
-                showToast('Không thể kết nối máy chủ để chốt đơn. Vui lòng thử lại!', 'error', 3500);
-            }
-        })
-        .finally(() => {
-            lockRequestInFlight = false;
-        });
+    if (v) setTimeout(scrollBillIntoView, 100);
 }
 
 async function doPay() {
     if (!currentTab || paymentInProgress || payingTables.has(currentTab)) return;
-
-    if (!isFirebaseConnected || navigator.onLine === false) {
-        showToast('Đang mất mạng, không thể xác nhận thanh toán!', 'error', 3500);
-        return;
-    }
 
     const tab = currentTab;
     if (isTableRemotePaying(tab)) {
@@ -3564,12 +3053,7 @@ async function doPay() {
         return;
     }
 
-    if (!isFirebaseConnected || navigator.onLine === false) {
-        stopLocalPayingBroadcast(null, tab);
-        showToast('Mất kết nối mạng, giao dịch thanh toán đã được hủy!', 'error', 3500);
-        return;
-    }
-
+    // Kiểm tra xem máy khác có vừa mở khóa hoặc sửa đơn trong lúc hộp thoại xác nhận đang mở không
     const lockedAfterConfirm = !!data.locked?.[tab];
     const expectedOrder = normalizeOrderMap(getMergedOrder(tab));
     if ((lockedBeforeConfirm && !lockedAfterConfirm) || !areOrdersEqual(orderBeforeConfirm, expectedOrder)) {
@@ -3579,7 +3063,8 @@ async function doPay() {
         return;
     }
 
-    const backupOrder = data.orders?.[tab] ? normalizeOrderMap(data.orders[tab]) : { ...expectedOrder };
+    // Sao lưu trạng thái bàn để hoàn tác (rollback) nếu giao dịch Firebase gặp lỗi kết nối
+    const backupOrder = data.orders?.[tab] ? { ...data.orders[tab] } : { ...expectedOrder };
     const backupLocked = data.locked?.[tab] !== undefined ? data.locked[tab] : null;
     const backupTime = data.times?.[tab] !== undefined ? data.times[tab] : null;
     const backupTotal = tableTotals[tab];
@@ -3618,39 +3103,32 @@ async function doPay() {
     paymentInProgress = true;
     payingTables.add(tab);
     localPaymentEchoTables.add(tab);
-    try {
-        clearPendingForTable(tab);
-        stopBillScrollAnimation();
-        triggerHaptic('success');
-        broadcastActivity({ sfx: 'success', tableId: tab, itemId: null, paying: true, immediate: true });
+    clearPendingForTable(tab);
+    stopBillScrollAnimation();
+    triggerHaptic('success');
+    broadcastActivity({ sfx: 'success', tableId: tab, itemId: null, paying: true, immediate: true });
 
-        if (data.orders) delete data.orders[tab];
-        if (data.locked) delete data.locked[tab];
-        if (data.times) delete data.times[tab];
-        tableTotals[tab] = 0;
-        scheduleRefresh(new Set([tab]), true);
+    if (data.orders) delete data.orders[tab];
+    if (data.locked) delete data.locked[tab];
+    if (data.times) delete data.times[tab];
+    tableTotals[tab] = 0;
+    scheduleSaveLocalStateCache();
+    scheduleRefresh(new Set([tab]), true);
 
-        selectTable(null, { haptic: false, allowDuringPayment: true, instantClose: true });
-    } catch (prepErr) {
-        console.error('[payment] Lỗi chuẩn bị thanh toán:', prepErr);
-    } finally {
-        paymentInProgress = false;
-    }
+    selectTable(null, { haptic: false, allowDuringPayment: true, instantClose: true });
+    paymentInProgress = false;
 
     const tableOrderRef = child(ordersRef, String(tab));
     let orderDeletedOnServer = false;
 
     try {
-        const txResult = await withTimeout(
-            transaction(tableOrderRef, (serverOrder) => {
-                if (!areOrdersEqual(serverOrder, expectedOrder)) {
-                    return undefined;
-                }
-                return null;
-            }),
-            8000,
-            'TIMEOUT_PAY'
-        );
+        // 1. Kiểm tra & xóa nguyên tử orders/${tab}
+        const txResult = await transaction(tableOrderRef, (serverOrder) => {
+            if (!areOrdersEqual(serverOrder, expectedOrder)) {
+                return undefined;
+            }
+            return null;
+        });
 
         if (!txResult.committed) {
             localPaymentEchoTables.delete(tab);
@@ -3679,9 +3157,9 @@ async function doPay() {
 
         orderDeletedOnServer = true;
 
+        // 2. Xóa trực tiếp từng nhánh con locked/${tab} và times/${tab} (tránh ghi ở node cha dbRef)
         await clearTableLockAndTimeOnServer(tab);
         localPaymentEchoTables.delete(tab);
-        saveLocalStateCacheNow();
 
         if (hasItems) {
             showToast(`Đã thanh toán ${getTableDisplayName(tab)} • ${totalAmount.toLocaleString()}đ`, 'info', 2800);
@@ -3691,18 +3169,12 @@ async function doPay() {
         console.error('[payment] Lỗi thanh toán Firebase:', err);
         if (orderDeletedOnServer) {
             clearTableLockAndTimeOnServer(tab);
-            scheduleSaveLocalStateCache();
             if (hasItems) {
                 showToast(`Đã thanh toán ${getTableDisplayName(tab)} • ${totalAmount.toLocaleString()}đ`, 'info', 2800);
             }
         } else {
             restoreTableState();
-            if (err?.message === 'TIMEOUT_PAY') {
-                forceFirebaseReconnect(false);
-                showToast('Máy chủ phản hồi quá lâu! Dữ liệu bàn đã được khôi phục, đang kết nối lại...', 'error', 4500);
-            } else {
-                showToast('Mất kết nối! Thanh toán chưa lưu được, dữ liệu bàn đã được khôi phục.', 'error', 4500);
-            }
+            showToast('Mất kết nối! Thanh toán chưa lưu được, dữ liệu bàn đã được khôi phục.', 'error', 4500);
         }
     } finally {
         payingTables.delete(tab);
@@ -3812,30 +3284,26 @@ function animateSingleSheet(target, delay = 0, variant = 0, withWisp = false) {
 
         if (withWisp) spawnPaperWisp(target, variant);
 
-        try {
-            const anim = target.animate([
-                { opacity: 0, transform: spec.start },
-                { opacity: .42, transform: spec.start, offset: .10 },
-                { opacity: 1, transform: spec.mid, offset: .78 },
-                { opacity: 1, transform: 'perspective(850px) translate3d(0,0,0) rotateX(0deg) rotateY(0deg) scale(1)' }
-            ], {
-                duration: SINGLE_FOLD_DURATION,
-                easing: 'cubic-bezier(.18,.78,.18,1)',
-                fill: 'forwards'
-            });
-            singleFoldAnimations.push(anim);
+        const anim = target.animate([
+            { opacity: 0, transform: spec.start },
+            { opacity: .42, transform: spec.start, offset: .10 },
+            { opacity: 1, transform: spec.mid, offset: .78 },
+            { opacity: 1, transform: 'perspective(850px) translate3d(0,0,0) rotateX(0deg) rotateY(0deg) scale(1)' }
+        ], {
+            duration: SINGLE_FOLD_DURATION,
+            easing: 'cubic-bezier(.18,.78,.18,1)',
+            fill: 'forwards'
+        });
+        singleFoldAnimations.push(anim);
 
-            anim.onfinish = () => {
-                if (!target.isConnected) return;
-                target.style.setProperty('opacity', '1', 'important');
-                target.style.setProperty('visibility', 'visible', 'important');
-                target.classList.remove('single-fold-active');
-                target.style.removeProperty('transform-origin');
-                try { anim.cancel(); } catch (e) {}
-            };
-        } catch (err) {
-            finishPaperFlipIntro();
-        }
+        anim.onfinish = () => {
+            if (!target.isConnected) return;
+            target.style.setProperty('opacity', '1', 'important');
+            target.style.setProperty('visibility', 'visible', 'important');
+            target.classList.remove('single-fold-active');
+            target.style.removeProperty('transform-origin');
+            try { anim.cancel(); } catch (e) {}
+        };
     }, delay);
 }
 
@@ -3861,11 +3329,9 @@ function finishPaperFlipIntro() {
     document.getElementById('paper-flip-overlay')?.replaceChildren();
 }
 
-window.__finishPaperFlipIntro = finishPaperFlipIntro;
-
 function runPaperFlipIntro() {
     if (!document.documentElement.classList.contains('paper-flip-pending')) return;
-    if (document.hidden || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
         finishPaperFlipIntro();
         return;
     }
@@ -3940,16 +3406,3 @@ if (document.readyState === 'complete') {
 }
 
 updateNetWidget();
-
-// Tương thích ngược nếu trình duyệt từng lưu cache HTML cũ dùng inline onclick
-Object.assign(window, {
-    selectTable,
-    change,
-    setLock,
-    doPay,
-    toggleBillQr,
-    changeBillLang,
-    toggleDarkMode,
-    toggleSoundMute,
-    scrollToCheckout
-});

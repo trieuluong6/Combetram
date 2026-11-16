@@ -1,57 +1,28 @@
 <!DOCTYPE html>
-<html lang="vi">
+<html lang="vi" class="paper-flip-pending">
 <head>
 <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
 <link rel="preconnect" href="https://combetram-default-rtdb.asia-southeast1.firebasedatabase.app" crossorigin>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title data-id="th-modified">Cơm Bé Trâm - Quản lý</title>
-    <!-- Header & clock stay visible immediately on first paint -->
-    <link rel="stylesheet" href="style.css?v=__BUILD_VER__">
-    <script>
-    window.__APP_BUILD_VERSION = '__BUILD_VER__';
-    window.__finishPaperFlipIntro = function() {
-        document.documentElement.classList.remove('paper-flip-pending');
-        clearTimeout(window.__paperFlipFailsafe);
-        document.querySelectorAll('.single-fold-active').forEach(function(el) {
-            el.classList.remove('single-fold-active');
-            el.style.removeProperty('visibility');
-            el.style.removeProperty('opacity');
-            el.style.removeProperty('transform-origin');
-        });
-        var ov = document.getElementById('paper-flip-overlay');
-        if (ov) ov.replaceChildren();
-    };
-    window.__paperFlipFailsafe = setTimeout(window.__finishPaperFlipIntro, 2800);
-    (function cleanupLegacySwAndCaches() {
-        var tasks = [];
-        var hadSw = false;
-        if ('serviceWorker' in navigator && navigator.serviceWorker.getRegistrations) {
-            tasks.push(navigator.serviceWorker.getRegistrations().then(function(regs) {
-                if (regs && regs.length) {
-                    hadSw = true;
-                    return Promise.all(regs.map(function(r) { return r.unregister(); }));
-                }
-            }).catch(function() {}));
-        }
-        if ('caches' in window && window.caches && caches.keys) {
-            tasks.push(caches.keys().then(function(keys) {
-                if (keys && keys.length) {
-                    hadSw = true;
-                    return Promise.all(keys.map(function(k) { return caches.delete(k); }));
-                }
-            }).catch(function() {}));
-        }
-        if (tasks.length) {
-            Promise.all(tasks).finally(function() {
-                if (hadSw && !sessionStorage.getItem('combetram_sw_cleaned')) {
-                    sessionStorage.setItem('combetram_sw_cleaned', '1');
-                    location.reload();
-                }
-            });
-        }
-    })();
-    </script>
+    <!-- Critical startup hide: visibility cannot be overridden by the status pulse animation. -->
+    <style>
+    html.paper-flip-pending #weather-hub,
+    html.paper-flip-pending #presence-count,
+    html.paper-flip-pending #sound-toggle,
+    html.paper-flip-pending #dark-toggle,
+    html.paper-flip-pending #load-speed-widget,
+    html.paper-flip-pending #crowd-status,
+    html.paper-flip-pending .header-title,
+    html.paper-flip-pending #net-speed-widget,
+    html.paper-flip-pending #btc-ticker,
+    html.paper-flip-pending #oil-ticker,
+    html.paper-flip-pending .flip-clock-container > .flip-unit,
+    html.paper-flip-pending .flip-clock-container > .flip-colon { visibility: hidden !important; }
+    </style>
+    <link rel="stylesheet" href="style.css?v=fx-sound-v18">
+    <script>window.__paperFlipFailsafe = setTimeout(() => document.documentElement.classList.remove('paper-flip-pending'), 3000);</script>
 </head>
 <body>
 
@@ -72,7 +43,7 @@
     </div>
 
     <div class="top-bar-right">
-        <div id="offline-badge" class="hidden" role="button" tabindex="0" aria-live="polite" title="Bấm để kết nối lại máy chủ">⚠️ Mất mạng</div>
+        <div id="offline-badge" class="hidden" role="status" aria-live="polite">⚠️ Mất mạng</div>
         <div id="presence-count">
             <span class="online-dot"></span>
             👥 Online: <span id="online-val">1</span>
@@ -183,7 +154,7 @@
                 </div>
                 <div class="bill-face bill-back" id="bill-face-qr" aria-hidden="true">
                     <div class="bill-box qr-bill-box">
-                        <img id="payment-qr" src="payment-qr.png?v=__BUILD_VER__" alt="Mã QR thanh toán" decoding="async" draggable="false">
+                        <img id="payment-qr" src="payment-qr.png" alt="Mã QR thanh toán" decoding="async" draggable="false">
                     </div>
                 </div>
             </div>
@@ -234,6 +205,6 @@
 </div>
 <div id="app-toast-container" class="app-toast-container" aria-live="polite"></div>
 
-<script type="module" src="app.js?v=__BUILD_VER__"></script>
+<script type="module" src="app.js?v=fx-sound-v18"></script>
 </body>
 </html>

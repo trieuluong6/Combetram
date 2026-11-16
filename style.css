@@ -101,23 +101,12 @@ body.dark-mode #weather-hub.wind-danger { background: rgba(183,28,28,0.3); color
     align-items: center;
     gap: 3px;
     white-space: nowrap;
-    cursor: pointer;
     animation: pulse-status-gpu 1.4s infinite ease-in-out;
 }
 body.dark-mode #offline-badge {
     background: rgba(198,40,40,0.28);
     color: #ffcdd2;
     border-color: rgba(239,154,154,0.5);
-}
-#offline-badge.is-syncing {
-    background: #fff8e1;
-    color: #b45309;
-    border-color: #fcd34d;
-}
-body.dark-mode #offline-badge.is-syncing {
-    background: rgba(180,83,9,0.28);
-    color: #fde68a;
-    border-color: rgba(252,211,77,0.45);
 }
 #offline-badge.hidden { display: none; }
 
@@ -744,7 +733,20 @@ body.dark-mode .single-paper-wisp {
     border-color: rgba(180, 195, 208, .22);
 }
 
-/* Header & clock remain visible immediately on startup */
+html.paper-flip-pending #weather-hub,
+html.paper-flip-pending #presence-count,
+html.paper-flip-pending #sound-toggle,
+html.paper-flip-pending #dark-toggle,
+html.paper-flip-pending #load-speed-widget,
+html.paper-flip-pending #crowd-status,
+html.paper-flip-pending .header-title,
+html.paper-flip-pending #net-speed-widget,
+html.paper-flip-pending #btc-ticker,
+html.paper-flip-pending #oil-ticker,
+html.paper-flip-pending .flip-clock-container > .flip-unit,
+html.paper-flip-pending .flip-clock-container > .flip-colon {
+    opacity: 0;
+}
 
 .single-fold-active {
     animation: none !important;
@@ -753,29 +755,26 @@ body.dark-mode .single-paper-wisp {
     will-change: transform, opacity;
 }
 
-/* NHÃN BÀN ĐÃ CHỐT BILL */
-.locked-status-pill {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 2px;
-    margin-top: 4px;
-    padding: 2px 6px;
-    border-radius: 999px;
-    font-size: 0.56em;
-    font-weight: 800;
-    line-height: 1.2;
-    white-space: nowrap;
-    background: #e3f2fd;
-    color: #1565c0;
-    border: 1px solid #90caf9;
-}
-body.dark-mode .locked-status-pill {
-    background: rgba(21, 101, 192, 0.28);
-    color: #90caf9;
-    border-color: rgba(144, 202, 249, 0.45);
-}
-
+/* Tạm dừng animation nền khi ẩn tab để tiết kiệm pin */
+body.tab-hidden .status-empty,
+body.tab-hidden .status-normal,
+body.tab-hidden .status-crowded::before,
+body.tab-hidden .online-dot,
+body.tab-hidden .wi-spin,
+body.tab-hidden .wi-pulse,
+body.tab-hidden .wi-sway,
+body.tab-hidden .wi-drop,
+body.tab-hidden .wi-flash,
+body.tab-hidden .wi-blow,
+body.tab-hidden .wi-blow2,
+body.tab-hidden .wi-blow3,
+body.tab-hidden .flip-colon,
+body.tab-hidden .has-guest::after,
+body.tab-hidden .is-locked::before,
+body.tab-hidden .is-locked::after,
+body.tab-hidden .total-container,
+body.tab-hidden .arrow-shaft::after,
+body.tab-hidden .arrow-head::after,
 /* TRẠNG THÁI ĐANG THU TIỀN TỪ THIẾT BỊ KHÁC */
 .table-card.is-remote-paying {
     opacity: 0.78;
@@ -831,26 +830,6 @@ body.dark-mode .remote-paying-banner {
     filter: grayscale(0.35);
 }
 
-/* Tạm dừng animation nền khi ẩn tab để tiết kiệm pin */
-body.tab-hidden .status-empty,
-body.tab-hidden .status-normal,
-body.tab-hidden .status-crowded::before,
-body.tab-hidden .online-dot,
-body.tab-hidden .wi-spin,
-body.tab-hidden .wi-pulse,
-body.tab-hidden .wi-sway,
-body.tab-hidden .wi-drop,
-body.tab-hidden .wi-flash,
-body.tab-hidden .wi-blow,
-body.tab-hidden .wi-blow2,
-body.tab-hidden .wi-blow3,
-body.tab-hidden .flip-colon,
-body.tab-hidden .has-guest::after,
-body.tab-hidden .is-locked::before,
-body.tab-hidden .is-locked::after,
-body.tab-hidden .total-container,
-body.tab-hidden .arrow-shaft::after,
-body.tab-hidden .arrow-head::after,
 body.tab-hidden .table-card.has-viewer,
 body.tab-hidden .remote-paying-badge,
 body.tab-hidden .remote-paying-banner,
