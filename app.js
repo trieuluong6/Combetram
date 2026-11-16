@@ -2533,8 +2533,6 @@ function bindBranchWithInitialSync(branchRef, branchName, applyInitialVal, handl
     });
 }
 
-let lastCrowdTier = null; // phải khai báo TRƯỚC lần gọi refresh() đầu tiên (tránh TDZ)
-
 // Vẽ ngay từ bản nháp localStorage (nếu có) trước khi Firebase đồng bộ xong
 if (hydrateFromLocalStateCache()) {
     refresh(null, false);
@@ -2687,8 +2685,17 @@ function commitPendingItem(tab, id, expectedVersion = null) {
     let passCount = 0;
     let initialLocalCur = 0;
     let prevOptimisticTarget = null;
+    let inFlightReleased = false;
+    let appliedLocally = false;
+    const releaseInFlight = () => {
+        if (inFlightReleased) return;
+        inFlightReleased = true;
+        if ((tableEpoch[tab] || 0) === startEpoch) {
+            adjustDeltaMap(inFlightDeltas, tab, id, -deltaToSend);
+        }
+    };
 
-    transaction(itemRef, (cur) => {
+    const txPromise = transaction(itemRef, (cur) => {
         passCount++;
         const current = Math.max(0, Number(cur) || 0);
         if (passCount === 1) initialLocalCur = current;
@@ -2712,15 +2719,13 @@ function commitPendingItem(tab, id, expectedVersion = null) {
             recordLocalEchoDelta(tab, id, (target - prevOptimisticTarget) - remoteShift);
         }
         prevOptimisticTarget = target;
+        if (passCount === 1) appliedLocally = true;
         return finalVal;
     })
         .then(({ committed }) => {
-            if ((tableEpoch[tab] || 0) === startEpoch) {
-                adjustDeltaMap(inFlightDeltas, tab, id, -deltaToSend);
-            }
-            if (!committed) {
-                scheduleRefresh(new Set([tab]), currentTab === tab);
-            }
+            releaseInFlight();
+            // Luôn vẽ lại sau khi xác nhận để số lượng không bị kẹt giá trị cũ
+            scheduleRefresh(new Set([tab]), currentTab === tab);
             queueMicrotask(() => {
                 if (!effectiveTableHasItems(tab) && (data.times?.[tab] || pendingStartTimes.has(tab))) {
                     remove(child(timesRef, String(tab))).catch(() => {});
@@ -2733,7 +2738,7 @@ function commitPendingItem(tab, id, expectedVersion = null) {
                 recordLocalEchoDelta(tab, id, initialLocalCur - prevOptimisticTarget);
             }
             if ((tableEpoch[tab] || 0) === startEpoch) {
-                adjustDeltaMap(inFlightDeltas, tab, id, -deltaToSend);
+                releaseInFlight();
                 adjustDeltaMap(pendingDeltas, tab, id, deltaToSend);
             }
             scheduleRefresh(new Set([tab]), currentTab === tab);
@@ -2744,7 +2749,12 @@ function commitPendingItem(tab, id, expectedVersion = null) {
                 delete debounceVersions[key];
             }
         });
+
+    // Firebase đã áp giá trị lạc quan vào cache và bắn sự kiện cục bộ ngay (đồng bộ),
+    // nên server đã chứa delta này -> thả inFlight ngay để tránh cộng đôi (bấm 1 ra 2).
+    if (appliedLocally) releaseInFlight();
 }
+
 
 function flushPendingForTable(tab) {
     const pending = pendingDeltas[tab];
@@ -3037,6 +3047,7 @@ function renderTable(tableId, now = getServerNow()) {
     }
 }
 
+let lastCrowdTier = null;
 function renderCrowdStatus() {
     let activeTablesCount = 0;
     for (let i = 1; i <= 9; i++) {
