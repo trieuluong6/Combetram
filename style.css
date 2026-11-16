@@ -108,6 +108,16 @@ body.dark-mode #offline-badge {
     color: #ffcdd2;
     border-color: rgba(239,154,154,0.5);
 }
+#offline-badge.is-syncing {
+    background: #fff8e1;
+    color: #b45309;
+    border-color: #fcd34d;
+}
+body.dark-mode #offline-badge.is-syncing {
+    background: rgba(180,83,9,0.28);
+    color: #fde68a;
+    border-color: rgba(252,211,77,0.45);
+}
 #offline-badge.hidden { display: none; }
 
 #presence-count {
@@ -755,28 +765,6 @@ html.paper-flip-pending .flip-clock-container > .flip-colon {
     will-change: transform, opacity;
 }
 
-/* Tạm dừng animation nền khi ẩn tab để tiết kiệm pin */
-body.tab-hidden .status-empty,
-body.tab-hidden .status-normal,
-body.tab-hidden .status-crowded::before,
-body.tab-hidden .online-dot,
-body.tab-hidden .wi-spin,
-body.tab-hidden .wi-pulse,
-body.tab-hidden .wi-sway,
-body.tab-hidden .wi-drop,
-body.tab-hidden .wi-flash,
-body.tab-hidden .wi-blow,
-body.tab-hidden .wi-blow2,
-body.tab-hidden .wi-blow3,
-body.tab-hidden .flip-colon,
-body.tab-hidden .has-guest::after,
-body.tab-hidden .is-locked::before,
-body.tab-hidden .is-locked::after,
-body.tab-hidden .total-container,
-body.tab-hidden .arrow-shaft::after,
-body.tab-hidden .arrow-head::after,
-
-
 /* TRẠNG THÁI ĐANG THU TIỀN TỪ THIẾT BỊ KHÁC */
 .table-card.is-remote-paying {
     opacity: 0.78;
@@ -832,6 +820,26 @@ body.dark-mode .remote-paying-banner {
     filter: grayscale(0.35);
 }
 
+/* Tạm dừng animation nền khi ẩn tab để tiết kiệm pin */
+body.tab-hidden .status-empty,
+body.tab-hidden .status-normal,
+body.tab-hidden .status-crowded::before,
+body.tab-hidden .online-dot,
+body.tab-hidden .wi-spin,
+body.tab-hidden .wi-pulse,
+body.tab-hidden .wi-sway,
+body.tab-hidden .wi-drop,
+body.tab-hidden .wi-flash,
+body.tab-hidden .wi-blow,
+body.tab-hidden .wi-blow2,
+body.tab-hidden .wi-blow3,
+body.tab-hidden .flip-colon,
+body.tab-hidden .has-guest::after,
+body.tab-hidden .is-locked::before,
+body.tab-hidden .is-locked::after,
+body.tab-hidden .total-container,
+body.tab-hidden .arrow-shaft::after,
+body.tab-hidden .arrow-head::after,
 body.tab-hidden .table-card.has-viewer,
 body.tab-hidden .remote-paying-badge,
 body.tab-hidden .remote-paying-banner,

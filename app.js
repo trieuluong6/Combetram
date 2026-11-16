@@ -15,28 +15,38 @@ import {
     runTransaction
 } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-database.js";
 
-import { menu } from "./menu.js?v=20261116";
+import { menu } from "./menu.js?v=20261117";
 
-const APP_BUILD_VERSION = '20261116';
+const APP_BUILD_VERSION = '20261117';
 const APP_VERSION_STORAGE_KEY = 'combetram_app_version';
+const STATE_CACHE_KEY = 'combetram_state_cache_v1';
+
+function reloadToBuildVersion(targetVer) {
+    if (!targetVer) return;
+    try {
+        if (sessionStorage.getItem('combetram_reloaded_to_ver') === targetVer) return;
+        sessionStorage.setItem('combetram_reloaded_to_ver', targetVer);
+        localStorage.removeItem(STATE_CACHE_KEY);
+        localStorage.setItem(APP_VERSION_STORAGE_KEY, targetVer);
+        const url = new URL(window.location.href);
+        url.searchParams.set('v', targetVer);
+        window.location.replace(url.toString());
+    } catch (e) {}
+}
+
 (function ensureBuildConsistency() {
     try {
         const storedVer = localStorage.getItem(APP_VERSION_STORAGE_KEY);
         if (storedVer !== APP_BUILD_VERSION) {
-            localStorage.removeItem('combetram_state_cache_v1');
+            localStorage.removeItem(STATE_CACHE_KEY);
             localStorage.setItem(APP_VERSION_STORAGE_KEY, APP_BUILD_VERSION);
         }
     } catch (e) {}
 
-    if (window.__APP_BUILD_VERSION && window.__APP_BUILD_VERSION !== APP_BUILD_VERSION) {
-        try {
-            if (!sessionStorage.getItem('combetram_ver_reloaded')) {
-                sessionStorage.setItem('combetram_ver_reloaded', '1');
-                const url = new URL(window.location.href);
-                url.searchParams.set('v', APP_BUILD_VERSION);
-                window.location.replace(url.toString());
-            }
-        } catch (e) {}
+    const htmlVer = window.__APP_BUILD_VERSION;
+    if (htmlVer && htmlVer !== APP_BUILD_VERSION) {
+        const targetVer = htmlVer > APP_BUILD_VERSION ? htmlVer : APP_BUILD_VERSION;
+        reloadToBuildVersion(targetVer);
     }
 })();
 
@@ -593,9 +603,9 @@ const ITEM_DOM = new Map();
 const tableTotals = Array(10).fill(0);
 
 // ─── LOCALSTORAGE SNAPSHOT CACHE (HIỂN THỊ TỨC THÌ KHI MỞ APP) ──────────
-const STATE_CACHE_KEY = 'combetram_state_cache_v1';
-const STATE_CACHE_MAX_AGE_MS = 30 * 60 * 1000;
+const STATE_CACHE_MAX_AGE_MS = 5 * 60 * 1000;
 let stateCacheSaveTimer = null;
+let isShowingCachedSnapshot = false;
 
 function scheduleSaveLocalStateCache() {
     clearTimeout(stateCacheSaveTimer);
@@ -615,7 +625,7 @@ function scheduleSaveLocalStateCache() {
                 savedAt: Date.now()
             }));
         } catch (e) {}
-    }, 450);
+    }, 350);
 }
 
 function isPlainObject(val) {
@@ -664,6 +674,7 @@ function hydrateFromLocalStateCache() {
         data.orders = safeOrders;
         data.locked = safeLocked;
         data.times = safeTimes;
+        isShowingCachedSnapshot = Object.keys(safeOrders).length > 0;
         return true;
     } catch (e) {
         try { localStorage.removeItem(STATE_CACHE_KEY); } catch (_) {}
@@ -725,15 +736,18 @@ function scheduleRefresh(tableIds = null, updateCurrentOrder = false) {
 // ─── Lazy-load dict theo ngôn ngữ + Preload bill assets ─────────────────
 let dictCache = { vi: { flag: "🇻🇳", total: "TỔNG", items: {} } };
 let dictLoadPromise = null;
+let dictRetryCount = 0;
 let billAssetsPreloaded = false;
 
 async function getLangData(lang) {
     if (dictCache[lang]) return dictCache[lang];
     if (!dictLoadPromise) {
-        dictLoadPromise = import('./dict.js?v=20261116').then(m => {
+        const retrySuffix = dictRetryCount > 0 ? `&retry=${dictRetryCount}` : '';
+        dictLoadPromise = import(`./dict.js?v=${APP_BUILD_VERSION}${retrySuffix}`).then(m => {
             dictCache = m.dict;
         }).catch((err) => {
             console.error('[dict] Lỗi tải từ điển đa ngôn ngữ:', err);
+            dictRetryCount++;
             dictLoadPromise = null;
         });
     }
@@ -762,6 +776,50 @@ function syncActiveLangButton(lang) {
         btn.classList.toggle('active-lang', btn.dataset.lang === lang);
     });
 }
+
+// ─── KIỂM TRA PHIÊN BẢN MỚI TRÊN GITHUB PAGES (BYPASS CDN/DISK CACHE) ───
+let updateCheckInFlight = false;
+let lastUpdateCheckAt = 0;
+
+async function checkForRemoteAppUpdate(force = false) {
+    if (updateCheckInFlight) return;
+    if (paymentInProgress || payingModalTable !== null || payingTables.size > 0) return;
+    if (window.location.protocol !== 'http:' && window.location.protocol !== 'https:') return;
+
+    const now = Date.now();
+    if (!force && (now - lastUpdateCheckAt) < 15000) return;
+    lastUpdateCheckAt = now;
+    updateCheckInFlight = true;
+
+    try {
+        const probeUrl = new URL('./index.html', window.location.href);
+        probeUrl.searchParams.set('_cb', String(now));
+        const res = await fetchWithTimeout(probeUrl.toString(), { cache: 'no-store' }, 4500);
+        if (!res.ok) return;
+        const html = await res.text();
+        const match = html.match(/window\.__APP_BUILD_VERSION\s*=\s*['"]([^'"]+)['"]/);
+        const remoteVer = match ? match[1].trim() : '';
+        if (remoteVer && remoteVer !== APP_BUILD_VERSION) {
+            flushAllPendingItems();
+            reloadToBuildVersion(remoteVer);
+        }
+    } catch (e) {
+        // Bỏ qua lặng lẽ nếu đang mất mạng hoặc offline
+    } finally {
+        updateCheckInFlight = false;
+    }
+}
+
+setTimeout(() => checkForRemoteAppUpdate(true), 1200);
+setInterval(() => {
+    if (!document.hidden) checkForRemoteAppUpdate(false);
+}, 180000);
+window.addEventListener('pageshow', (e) => {
+    if (e.persisted) {
+        checkForRemoteAppUpdate(true);
+        refreshPresenceHeartbeat();
+    }
+});
 
 // CACHE THỜI TIẾT
 let weatherCache = { status: 'cloudy', temp: 31, windSpeed: 14.0, windDir: 135 };
@@ -1112,6 +1170,7 @@ document.addEventListener('visibilitychange', () => {
         startClockInterval();
         refreshPresenceHeartbeat();
         runPeriodicMaintenance();
+        checkForRemoteAppUpdate(false);
     }
 });
 window.addEventListener('pagehide', handleAppBackgrounded);
@@ -1147,17 +1206,14 @@ initSoundMute();
 
 // Tần số dải trung-cao tối ưu cho loa điện thoại + tiếng gõ nhạc cụ gỗ "leng keng" cho +- món
 const SOUND_PATTERNS = {
-    // Chạm bàn / chuyển tab: tiếng "tưng tưng" thủy tinh dải trung ấm áp (Bb5 -> Eb6), đỡ đanh, giữ nguyên âm lượng
     nav: [
         { freq: 932.33, dur: 0.155, delay: 0, instrument: 'glass', vol: 1.32 },
         { freq: 1244.51, dur: 0.22, delay: 0.066, instrument: 'glass', vol: 1.40 }
     ],
-    // Thêm món (+): Tiếng "Leng - Keng" đàn gõ gỗ (Marimba/Xylophone) đi lên C6 -> G6
     add: [
         { freq: 1046.50, dur: 0.16, instrument: 'wood', vol: 1.0 },
         { freq: 1567.98, dur: 0.24, delay: 0.068, instrument: 'wood', vol: 1.0 }
     ],
-    // Bớt món (-): Tiếng "Keng - Leng" đàn gõ gỗ đi xuống D6 -> A5
     sub: [
         { freq: 1174.66, dur: 0.15, instrument: 'wood', vol: 0.96 },
         { freq: 880.00, dur: 0.23, delay: 0.068, instrument: 'wood', vol: 0.96 }
@@ -1365,7 +1421,6 @@ function getOrCreateHtmlAudioForType(type) {
         htmlAudioPoolIdx[key] = 0;
     }
 
-    // Ưu tiên tái sử dụng phần tử Audio đang rảnh; chỉ tạo thêm tối đa MAX_POOL_PER_SOUND phần tử khi thật sự phát chồng
     let idleAudio = pool.find(a => a.paused || a.ended);
     if (!idleAudio) {
         if (pool.length < MAX_POOL_PER_SOUND) {
@@ -1602,7 +1657,6 @@ const myPresenceRef = getOrCreatePresenceRef();
 const myPresenceId = myPresenceRef.key;
 const cursorsRef = ref(database, `${RT_ROOT}/cursors`);
 const myCursorRef = child(cursorsRef, myPresenceId);
-// Gộp focus + sfx thành 1 node ephemeral duy nhất trên mỗi user, tự hết hạn cục bộ sau FOCUS_TTL_MS (bỏ lệnh remove() thứ 2)
 const activityRef = ref(database, `${RT_ROOT}/activity`);
 const myActivityRef = child(activityRef, myPresenceId);
 
@@ -1638,7 +1692,19 @@ function updateNetworkStatusBadge() {
     const badge = document.getElementById('offline-badge');
     if (!badge) return;
     const isOffline = navigator.onLine === false || (hasEverConnected && !isFirebaseConnected);
-    badge.classList.toggle('hidden', !isOffline);
+    if (isOffline) {
+        badge.classList.remove('hidden', 'is-syncing');
+        badge.textContent = '⚠️ Mất mạng';
+        return;
+    }
+    if (!initialDataReady && isShowingCachedSnapshot) {
+        badge.classList.remove('hidden');
+        badge.classList.add('is-syncing');
+        badge.textContent = '🔄 Đang đồng bộ...';
+        return;
+    }
+    badge.classList.add('hidden');
+    badge.classList.remove('is-syncing');
 }
 window.addEventListener('online', updateNetworkStatusBadge);
 window.addEventListener('offline', updateNetworkStatusBadge);
@@ -1704,6 +1770,7 @@ onValue(onlineRef, (snap) => {
     isFirebaseConnected = snap.val() === true;
     if (isFirebaseConnected) {
         hasEverConnected = true;
+        tryFinalizeInitialSync();
         updateNetworkStatusBadge();
         onDisconnect(myPresenceRef).remove().catch(() => {});
         onDisconnect(myCursorRef).remove().catch(() => {});
@@ -1716,6 +1783,10 @@ onValue(onlineRef, (snap) => {
         cleanupStaleRealtimeNodes(presenceListRef, 'presence', presenceMap, STALE_PRESENCE_MS);
         cleanupStaleRealtimeNodes(cursorsRef, 'cursors', cursorsMap, STALE_CURSOR_MS);
         cleanupStaleRealtimeNodes(activityRef, 'activity', activityMap, STALE_CURSOR_MS);
+        if (initialDataReady) {
+            cleanupStaleTimes();
+            scheduleOrphanedLockCheck();
+        }
     } else {
         updateNetworkStatusBadge();
     }
@@ -2239,7 +2310,7 @@ if ('IntersectionObserver' in window && catSectionEls.length > 0) {
     catSectionEls.forEach(sec => catObserver.observe(sec));
 }
 
-// Mở khóa nhẹ AudioContext ở chạm đầu tiên (không khởi tạo 28 Audio pool gây nghẽn INP)
+// Mở khóa nhẹ AudioContext ở chạm đầu tiên
 ['pointerdown', 'touchstart', 'keydown'].forEach(evt => {
     document.addEventListener(evt, unlockAllAudio, { once: true, passive: true, capture: true });
 });
@@ -2354,7 +2425,6 @@ function consumeLocalEchoDelta(tableId, itemId, observedDelta) {
         if (Object.keys(localEchoDeltas[tableId]).length === 0) delete localEchoDeltas[tableId];
         return true;
     }
-    // Trường hợp gộp với thay đổi từ máy khác trong cùng frame
     if ((expected > 0 && observedDelta > 0) || (expected < 0 && observedDelta < 0)) {
         const remaining = expected - observedDelta;
         if (remaining === 0) {
@@ -2421,14 +2491,23 @@ function flushRemoteOrderFlashes() {
     }
 }
 
+function tryFinalizeInitialSync() {
+    if (initialDataReady) return;
+    if (initialBranchesLoaded.size < 3 || !isFirebaseConnected) return;
+    initialDataReady = true;
+    isShowingCachedSnapshot = false;
+    updateNetworkStatusBadge();
+    cleanupStaleTimes();
+    scheduleOrphanedLockCheck();
+    scheduleSaveLocalStateCache();
+    scheduleRefresh(null);
+}
+
 function markInitialBranchLoaded(branch) {
     if (initialDataReady) return;
     initialBranchesLoaded.add(branch);
-    if (initialBranchesLoaded.size === 3) {
-        initialDataReady = true;
-        cleanupStaleTimes();
-        scheduleOrphanedLockCheck();
-        scheduleSaveLocalStateCache();
+    tryFinalizeInitialSync();
+    if (!initialDataReady) {
         scheduleRefresh(null);
     }
 }
@@ -2572,7 +2651,6 @@ function bindBranchWithInitialSync(branchRef, branchName, applyInitialVal, handl
     unsubInitial = onValue(branchRef, (initialSnap) => {
         if (initialResolved) return;
         initialResolved = true;
-        // Hủy đăng ký ở microtask kế tiếp để tránh race condition khi onValue bắn đồng bộ từ cache
         queueMicrotask(() => {
             if (unsubInitial) {
                 unsubInitial();
@@ -2590,6 +2668,7 @@ function bindBranchWithInitialSync(branchRef, branchName, applyInitialVal, handl
 
 // Vẽ ngay từ bản nháp localStorage (nếu có) trước khi Firebase đồng bộ xong
 if (hydrateFromLocalStateCache()) {
+    updateNetworkStatusBadge();
     refresh(null, false);
 }
 
@@ -2723,7 +2802,6 @@ function commitPendingItem(tab, id, expectedVersion = null) {
 
     const startEpoch = tableEpoch[tab] || 0;
 
-    // Chuyển delta từ pendingDeltas sang inFlightDeltas để giữ nguyên số lượng hiển thị trong lúc chờ Firebase xác nhận
     delete pendingDeltas[tab][id];
     if (Object.keys(pendingDeltas[tab]).length === 0) delete pendingDeltas[tab];
     adjustDeltaMap(inFlightDeltas, tab, id, deltaToSend);
@@ -2750,14 +2828,14 @@ function commitPendingItem(tab, id, expectedVersion = null) {
         }
     };
 
-    const txPromise = transaction(itemRef, (cur) => {
+    transaction(itemRef, (cur) => {
         passCount++;
         const current = Math.max(0, Number(cur) || 0);
         if (passCount === 1) initialLocalCur = current;
 
         if ((tableEpoch[tab] || 0) !== startEpoch || (current === 0 && deltaToSend < 0)) {
             if (prevOptimisticTarget !== null && prevOptimisticTarget !== current) {
-                recordLocalEchoDelta(tab, id, initialLocalCur - prevOptimisticTarget);
+                recordLocalEchoDelta(tab, id, current - prevOptimisticTarget);
                 prevOptimisticTarget = current;
             }
             return undefined;
@@ -2777,9 +2855,9 @@ function commitPendingItem(tab, id, expectedVersion = null) {
         if (passCount === 1) appliedLocally = true;
         return finalVal;
     })
-        .then(({ committed }) => {
+        .then(() => {
             releaseInFlight();
-            // Luôn vẽ lại sau khi xác nhận để số lượng không bị kẹt giá trị cũ
+            scheduleSaveLocalStateCache();
             scheduleRefresh(new Set([tab]), currentTab === tab);
             queueMicrotask(() => {
                 if (!effectiveTableHasItems(tab) && (data.times?.[tab] || pendingStartTimes.has(tab))) {
@@ -2796,6 +2874,7 @@ function commitPendingItem(tab, id, expectedVersion = null) {
                 releaseInFlight();
                 adjustDeltaMap(pendingDeltas, tab, id, deltaToSend);
             }
+            scheduleSaveLocalStateCache();
             scheduleRefresh(new Set([tab]), currentTab === tab);
         })
         .finally(() => {
@@ -2805,8 +2884,6 @@ function commitPendingItem(tab, id, expectedVersion = null) {
             }
         });
 
-    // Firebase đã áp giá trị lạc quan vào cache và bắn sự kiện cục bộ ngay (đồng bộ),
-    // nên server đã chứa delta này -> thả inFlight ngay để tránh cộng đôi (bấm 1 ra 2).
     if (appliedLocally) releaseInFlight();
 }
 
@@ -2879,7 +2956,7 @@ function effectiveTableHasItems(tab) {
 
 const STALE_TIME_GRACE_MS = 15000;
 function cleanupStaleTimes(tableIds = null) {
-    if (!initialDataReady) return;
+    if (!initialDataReady || !isFirebaseConnected) return;
     const now = getServerNow();
     const ids = tableIds ? Array.from(tableIds) : Array.from({ length: 9 }, (_, i) => i + 1);
     for (const tab of ids) {
@@ -2890,10 +2967,11 @@ function cleanupStaleTimes(tableIds = null) {
     }
 }
 
-// Tự động giải phóng trạng thái khóa mồ côi (bàn 0đ nhưng vẫn sáng viền LED chốt đơn)
+// Tự động giải phóng trạng thái khóa mồ côi (sau 8s để không đè lệnh chốt đơn từ máy khác đang đồng bộ)
+const ORPHAN_LOCK_GRACE_MS = 8000;
 const orphanedLockTimers = {};
 function scheduleOrphanedLockCheck(tableIds = null) {
-    if (!initialDataReady) return;
+    if (!initialDataReady || !isFirebaseConnected) return;
     const ids = tableIds ? Array.from(tableIds) : Array.from({ length: 9 }, (_, i) => i + 1);
     for (const rawTab of ids) {
         const tab = Number(rawTab);
@@ -2906,15 +2984,21 @@ function scheduleOrphanedLockCheck(tableIds = null) {
         if (orphanedLockTimers[tab]) continue;
         orphanedLockTimers[tab] = setTimeout(() => {
             delete orphanedLockTimers[tab];
-            if (!initialDataReady || paymentInProgress || payingTables.has(tab) || localPaymentEchoTables.has(tab)) return;
+            if (!initialDataReady || !isFirebaseConnected || paymentInProgress || payingTables.has(tab) || localPaymentEchoTables.has(tab)) return;
             if (!data.locked?.[tab] || effectiveTableHasItems(tab)) return;
+
+            const tableStartTs = Number(data.times?.[tab]);
+            if (Number.isFinite(tableStartTs) && tableStartTs > 0 && (getServerNow() - tableStartTs) < ORPHAN_LOCK_GRACE_MS) {
+                scheduleOrphanedLockCheck([tab]);
+                return;
+            }
 
             delete data.locked[tab];
             if (data.times?.[tab]) delete data.times[tab];
             scheduleSaveLocalStateCache();
             scheduleRefresh(new Set([tab]), currentTab === tab);
             clearTableLockAndTimeOnServer(tab);
-        }, 1200);
+        }, ORPHAN_LOCK_GRACE_MS);
     }
 }
 
@@ -2949,7 +3033,6 @@ function change(id, delta) {
     const currentQty = getEffectiveItemQty(tab, id);
     if (delta < 0 && currentQty <= 0) return;
 
-    // Cộng dồn delta cục bộ để tránh lost-update khi nhiều thiết bị bấm cùng lúc
     if (!pendingDeltas[tab]) pendingDeltas[tab] = {};
     const nextDelta = (pendingDeltas[tab][id] || 0) + delta;
     if (nextDelta === 0) {
@@ -2964,8 +3047,8 @@ function change(id, delta) {
     renderTable(tab, getServerNow());
     renderCrowdStatus();
     flashRow(id, delta);
+    scheduleSaveLocalStateCache();
 
-    // Debounce ghi Firebase
     const key = `${tab}_${id}`;
     const version = (debounceVersions[key] || 0) + 1;
     debounceVersions[key] = version;
@@ -3231,6 +3314,11 @@ function setLock(v) {
 async function doPay() {
     if (!currentTab || paymentInProgress || payingTables.has(currentTab)) return;
 
+    if (!isFirebaseConnected || navigator.onLine === false) {
+        showToast('Đang mất mạng, không thể xác nhận thanh toán!', 'error', 3500);
+        return;
+    }
+
     const tab = currentTab;
     if (isTableRemotePaying(tab)) {
         showToast('Thiết bị khác đang thu tiền bàn này, vui lòng chờ!', 'warning', 2800);
@@ -3263,7 +3351,12 @@ async function doPay() {
         return;
     }
 
-    // Kiểm tra xem máy khác có vừa mở khóa hoặc sửa đơn trong lúc hộp thoại xác nhận đang mở không
+    if (!isFirebaseConnected || navigator.onLine === false) {
+        stopLocalPayingBroadcast(null, tab);
+        showToast('Mất kết nối mạng, giao dịch thanh toán đã được hủy!', 'error', 3500);
+        return;
+    }
+
     const lockedAfterConfirm = !!data.locked?.[tab];
     const expectedOrder = normalizeOrderMap(getMergedOrder(tab));
     if ((lockedBeforeConfirm && !lockedAfterConfirm) || !areOrdersEqual(orderBeforeConfirm, expectedOrder)) {
@@ -3273,7 +3366,6 @@ async function doPay() {
         return;
     }
 
-    // Sao lưu trạng thái bàn để hoàn tác (rollback) nếu giao dịch Firebase gặp lỗi kết nối
     const backupOrder = data.orders?.[tab] ? { ...data.orders[tab] } : { ...expectedOrder };
     const backupLocked = data.locked?.[tab] !== undefined ? data.locked[tab] : null;
     const backupTime = data.times?.[tab] !== undefined ? data.times[tab] : null;
@@ -3323,7 +3415,6 @@ async function doPay() {
         if (data.locked) delete data.locked[tab];
         if (data.times) delete data.times[tab];
         tableTotals[tab] = 0;
-        scheduleSaveLocalStateCache();
         scheduleRefresh(new Set([tab]), true);
 
         selectTable(null, { haptic: false, allowDuringPayment: true, instantClose: true });
@@ -3337,7 +3428,6 @@ async function doPay() {
     let orderDeletedOnServer = false;
 
     try {
-        // 1. Kiểm tra & xóa nguyên tử orders/${tab}
         const txResult = await transaction(tableOrderRef, (serverOrder) => {
             if (!areOrdersEqual(serverOrder, expectedOrder)) {
                 return undefined;
@@ -3372,9 +3462,9 @@ async function doPay() {
 
         orderDeletedOnServer = true;
 
-        // 2. Xóa trực tiếp từng nhánh con locked/${tab} và times/${tab} (tránh ghi ở node cha dbRef)
         await clearTableLockAndTimeOnServer(tab);
         localPaymentEchoTables.delete(tab);
+        scheduleSaveLocalStateCache();
 
         if (hasItems) {
             showToast(`Đã thanh toán ${getTableDisplayName(tab)} • ${totalAmount.toLocaleString()}đ`, 'info', 2800);
@@ -3384,6 +3474,7 @@ async function doPay() {
         console.error('[payment] Lỗi thanh toán Firebase:', err);
         if (orderDeletedOnServer) {
             clearTableLockAndTimeOnServer(tab);
+            scheduleSaveLocalStateCache();
             if (hasItems) {
                 showToast(`Đã thanh toán ${getTableDisplayName(tab)} • ${totalAmount.toLocaleString()}đ`, 'info', 2800);
             }
@@ -3627,7 +3718,6 @@ if (document.readyState === 'complete') {
 }
 
 updateNetWidget();
-
 
 // Tương thích ngược nếu trình duyệt từng lưu cache HTML cũ dùng inline onclick
 Object.assign(window, {

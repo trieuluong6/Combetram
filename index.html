@@ -21,12 +21,9 @@
     html.paper-flip-pending .flip-clock-container > .flip-unit,
     html.paper-flip-pending .flip-clock-container > .flip-colon { visibility: hidden !important; }
     </style>
-    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-    <meta http-equiv="Pragma" content="no-cache">
-    <meta http-equiv="Expires" content="0">
-    <link rel="stylesheet" href="style.css?v=20261116">
+    <link rel="stylesheet" href="style.css?v=20261117">
     <script>
-    window.__APP_BUILD_VERSION = '20261116';
+    window.__APP_BUILD_VERSION = '20261117';
     window.__finishPaperFlipIntro = function() {
         document.documentElement.classList.remove('paper-flip-pending');
         clearTimeout(window.__paperFlipFailsafe);
@@ -189,7 +186,7 @@
                 </div>
                 <div class="bill-face bill-back" id="bill-face-qr" aria-hidden="true">
                     <div class="bill-box qr-bill-box">
-                        <img id="payment-qr" src="payment-qr.png" alt="Mã QR thanh toán" decoding="async" draggable="false">
+                        <img id="payment-qr" src="payment-qr.png?v=20261117" alt="Mã QR thanh toán" decoding="async" draggable="false">
                     </div>
                 </div>
             </div>
@@ -240,6 +237,6 @@
 </div>
 <div id="app-toast-container" class="app-toast-container" aria-live="polite"></div>
 
-<script type="module" src="app.js?v=20261116"></script>
+<script type="module" src="app.js?v=20261117"></script>
 </body>
 </html>
