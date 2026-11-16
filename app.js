@@ -535,14 +535,35 @@ const ordersRef = child(dbRef, 'orders');
 const lockedRef = child(dbRef, 'locked');
 const timesRef = child(dbRef, 'times');
 
-// Cache DOM cố định cho các đường render nóng.
+// Cache DOM cố định cho các đường render nóng (tránh DOM churn khi đổi số lượng).
 const TABLE_DOM = Array.from({ length: 9 }, (_, idx) => {
     const table = idx + 1;
+    const meta = document.getElementById(`meta-${table}`);
+    let foodSpan = null;
+    let drinkSpan = null;
+    if (meta) {
+        meta.hidden = true;
+        meta.style.display = 'none';
+        foodSpan = document.createElement('span');
+        foodSpan.className = 'table-meta-count';
+        drinkSpan = document.createElement('span');
+        drinkSpan.className = 'table-meta-count';
+        meta.append('🍽 ', foodSpan, ' món · 🥤🍺 ', drinkSpan);
+    }
     return {
         card: document.getElementById(`tab-${table}`),
         sum: document.getElementById(`sum-${table}`),
-        meta: document.getElementById(`meta-${table}`),
-        time: document.getElementById(`time-${table}`)
+        meta,
+        foodSpan,
+        drinkSpan,
+        time: document.getElementById(`time-${table}`),
+        lastFoodQty: -1,
+        lastDrinkQty: -1,
+        lastMetaVisible: false,
+        lastActive: false,
+        lastLocked: false,
+        lastHasGuest: false,
+        flashTimer: 0
     };
 });
 const ITEM_DOM = new Map();
@@ -1037,7 +1058,7 @@ document.addEventListener('visibilitychange', () => {
 window.addEventListener('pagehide', handleAppBackgrounded);
 startClockInterval();
 
-// ─── ÂM THANH THAO TÁC CÔNG SUẤT CAO + PRE-RENDERED AUDIOBUFFER CACHE ───
+// ─── ÂM THANH THAO TÁC CÔNG SUẤT CAO + LAZY ON-DEMAND AUDIO CACHE ───────
 if (typeof navigator !== 'undefined' && navigator.audioSession) {
     try { navigator.audioSession.type = 'playback'; } catch (e) {}
 }
@@ -1102,6 +1123,7 @@ const SOUND_PATTERNS = {
 };
 
 const SOUND_SAMPLE_RATE = 22050;
+const MAX_POOL_PER_SOUND = 2;
 const pcmSamplesCache = {};
 
 function synthesizeSoundSamples(type, sampleRate = SOUND_SAMPLE_RATE) {
@@ -1140,13 +1162,11 @@ function synthesizeSoundSamples(type, sampleRate = SOUND_SAMPLE_RATE) {
             const release = Math.min(1, (lenIdx - 1 - i) / releaseSamples);
 
             if (isGlass) {
-                // Cộng hưởng ly thủy tinh dày, dải trung ấm: tăng thân âm gốc, giảm họa âm cao để bớt đanh
                 const f0Env = Math.exp(-elapsedSec * 14.5);
                 const f2Env = Math.exp(-elapsedSec * 34.0);
                 const f3Env = Math.exp(-elapsedSec * 58.0);
                 const f4Env = Math.exp(-elapsedSec * 95.0);
 
-                // Xung chạm kính dịu gọn 3.2ms đầu (2.65kHz -> 2.0kHz) giữ độ nảy mà không chói tai
                 let clink = 0;
                 if (elapsedSec < 0.0032) {
                     const clinkFreq = 2650 - (elapsedSec / 0.0032) * 650;
@@ -1163,13 +1183,11 @@ function synthesizeSoundSamples(type, sampleRate = SOUND_SAMPLE_RATE) {
 
                 mix[startIdx + i] += glassSample * vol * attack * release;
             } else if (isSolidKnock) {
-                // Thân khối gỗ đặc (fundamental + các bậc cộng hưởng gỗ 1.48, 2.15, 2.85 nằm đúng dải nhạy loa điện thoại)
                 const bodyEnv = Math.exp(-elapsedSec * 26);
                 const overtone1Env = Math.exp(-elapsedSec * 38);
                 const overtone2Env = Math.exp(-elapsedSec * 58);
                 const overtone3Env = Math.exp(-elapsedSec * 90);
 
-                // Xung dùi gõ đanh 9ms đầu tạo độ "cộc" dứt khoát, xuyên tiếng ồn quán
                 let knock = 0;
                 if (elapsedSec < 0.009) {
                     const knockFreq = 1950 - (elapsedSec / 0.009) * 950;
@@ -1267,26 +1285,42 @@ function buildWavBlobUrl(type, sampleRate = SOUND_SAMPLE_RATE) {
 const wavUrlMap = {};
 const htmlAudioPools = {};
 const htmlAudioPoolIdx = {};
-let soundPoolsInitialized = false;
 let audioUnlocked = false;
 
-function ensureSoundPools() {
-    if (soundPoolsInitialized) return;
-    if (typeof URL === 'undefined' || typeof Blob === 'undefined') return;
-    soundPoolsInitialized = true;
-    for (const type of Object.keys(SOUND_PATTERNS)) {
+function getOrCreateHtmlAudioForType(type) {
+    const key = SOUND_PATTERNS[type] ? type : 'ting';
+    if (typeof URL === 'undefined' || typeof Blob === 'undefined') return null;
+
+    if (!wavUrlMap[key]) {
         try {
-            const url = buildWavBlobUrl(type);
-            wavUrlMap[type] = url;
-            htmlAudioPoolIdx[type] = 0;
-            htmlAudioPools[type] = Array.from({ length: 4 }, () => {
-                const a = new Audio(url);
-                a.preload = 'auto';
-                a.setAttribute('playsinline', '');
-                return a;
-            });
-        } catch (e) {}
+            wavUrlMap[key] = buildWavBlobUrl(key);
+        } catch (e) {
+            return null;
+        }
     }
+
+    let pool = htmlAudioPools[key];
+    if (!pool) {
+        pool = [];
+        htmlAudioPools[key] = pool;
+        htmlAudioPoolIdx[key] = 0;
+    }
+
+    // Ưu tiên tái sử dụng phần tử Audio đang rảnh; chỉ tạo thêm tối đa MAX_POOL_PER_SOUND phần tử khi thật sự phát chồng
+    let idleAudio = pool.find(a => a.paused || a.ended);
+    if (!idleAudio) {
+        if (pool.length < MAX_POOL_PER_SOUND) {
+            idleAudio = new Audio(wavUrlMap[key]);
+            idleAudio.preload = 'none';
+            idleAudio.setAttribute('playsinline', '');
+            pool.push(idleAudio);
+        } else {
+            const idx = (htmlAudioPoolIdx[key] || 0) % pool.length;
+            htmlAudioPoolIdx[key] = idx + 1;
+            idleAudio = pool[idx];
+        }
+    }
+    return idleAudio;
 }
 
 let sharedAudioCtx = null;
@@ -1336,52 +1370,27 @@ function getCachedWebAudioBuffer(ctx, type) {
 }
 
 function unlockAllAudio() {
+    if (audioUnlocked) return;
+    audioUnlocked = true;
+
     if (typeof navigator !== 'undefined' && navigator.audioSession) {
         try { navigator.audioSession.type = 'playback'; } catch (e) {}
     }
     const ctx = getAudioContext();
-    if (ctx && !audioUnlocked) {
+    if (ctx) {
         try {
             const silentBuf = ctx.createBuffer(1, 1, SOUND_SAMPLE_RATE);
             const src = ctx.createBufferSource();
             src.buffer = silentBuf;
             src.connect(ctx.destination);
             src.start(0);
-            for (const type of Object.keys(SOUND_PATTERNS)) {
-                getCachedWebAudioBuffer(ctx, type);
-            }
         } catch (e) {}
-    }
-    if (!audioUnlocked) {
-        audioUnlocked = true;
-        if (IS_IOS_DEVICE) {
-            ensureSoundPools();
-        }
-        if (soundPoolsInitialized) {
-            for (const pool of Object.values(htmlAudioPools)) {
-                for (const a of pool) {
-                    try {
-                        a.muted = true;
-                        const p = a.play();
-                        if (p && p.then) {
-                            p.then(() => { a.pause(); a.currentTime = 0; a.muted = false; }).catch(() => { a.muted = false; });
-                        } else {
-                            a.pause(); a.currentTime = 0; a.muted = false;
-                        }
-                    } catch (e) { a.muted = false; }
-                }
-            }
-        }
     }
 }
 
 function playHtmlWav(type) {
-    ensureSoundPools();
-    const pool = htmlAudioPools[type] || htmlAudioPools.ting || htmlAudioPools.nav;
-    if (!pool || !pool.length) return false;
-    const idx = (htmlAudioPoolIdx[type] || 0) % pool.length;
-    htmlAudioPoolIdx[type] = idx + 1;
-    const audio = pool[idx];
+    const audio = getOrCreateHtmlAudioForType(type);
+    if (!audio) return false;
     try {
         audio.muted = false;
         audio.volume = 1.0;
@@ -2090,6 +2099,18 @@ bindChildMap(activityRef, activityMap, (id, ev, eventType) => {
 
 // ─── MENU + THANH NHẢY NHANH THEO NHÓM MÓN ─────────────────────────────
 const SHORT_CAT_LABELS = ['Cơm / Mỳ', 'Hấp / Cháo', 'Món thêm', 'Nước uống', 'Bia'];
+let catPillEls = [];
+let catSectionEls = [];
+let activeCatIdx = 0;
+
+function setActiveCatPill(idx) {
+    if (!catPillEls.length) return;
+    const nextIdx = Math.max(0, Math.min(catPillEls.length - 1, Number(idx) || 0));
+    if (nextIdx === activeCatIdx) return;
+    catPillEls[activeCatIdx]?.classList.remove('active');
+    catPillEls[nextIdx]?.classList.add('active');
+    activeCatIdx = nextIdx;
+}
 
 function renderMenu() {
     const navParts = [];
@@ -2110,14 +2131,23 @@ function renderMenu() {
         });
     });
     const catNav = document.getElementById('menu-cat-nav');
-    if (catNav) catNav.innerHTML = navParts.join('');
-    document.getElementById('menu-list').innerHTML = parts.join('');
+    if (catNav) {
+        catNav.innerHTML = navParts.join('');
+        catPillEls = Array.from(catNav.querySelectorAll('.cat-pill'));
+    }
+    const menuListEl = document.getElementById('menu-list');
+    menuListEl.innerHTML = parts.join('');
+    catSectionEls = Array.from(menuListEl.querySelectorAll('.category-title'));
+    activeCatIdx = 0;
 }
 renderMenu();
 ALL_ITEMS.forEach(item => {
     ITEM_DOM.set(item.id, {
         row: document.getElementById(`row-${item.id}`),
-        qty: document.getElementById(`q-${item.id}`)
+        qty: document.getElementById(`q-${item.id}`),
+        qtyClass: '',
+        lastQty: 0,
+        flashTimer: 0
     });
 });
 
@@ -2125,30 +2155,32 @@ document.getElementById('menu-cat-nav')?.addEventListener('click', (e) => {
     const pill = e.target.closest('.cat-pill');
     if (!pill) return;
     triggerHaptic('nav');
-    const idx = pill.dataset.catIdx;
-    document.querySelectorAll('#menu-cat-nav .cat-pill').forEach(p => p.classList.toggle('active', p === pill));
-    document.getElementById(`cat-sec-${idx}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const idx = Number(pill.dataset.catIdx);
+    setActiveCatPill(idx);
+    catSectionEls[idx]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 });
 
-let catScrollTicking = false;
-window.addEventListener('scroll', () => {
-    if (!currentTab || data.locked?.[currentTab] || catScrollTicking) return;
-    catScrollTicking = true;
-    requestAnimationFrame(() => {
-        catScrollTicking = false;
-        const nav = document.getElementById('menu-cat-nav');
-        if (!nav) return;
-        const threshold = nav.getBoundingClientRect().bottom + 14;
-        let activeIdx = 0;
-        for (let i = 0; i < menu.length; i++) {
-            const sec = document.getElementById(`cat-sec-${i}`);
-            if (sec && sec.getBoundingClientRect().top <= threshold) activeIdx = i;
+// Dùng IntersectionObserver thay vì scroll + getBoundingClientRect() để loại bỏ layout thrashing
+if ('IntersectionObserver' in window && catSectionEls.length > 0) {
+    const catObserver = new IntersectionObserver((entries) => {
+        if (!currentTab || data.locked?.[currentTab]) return;
+        for (const entry of entries) {
+            const idx = Number(entry.target.dataset.catIdx);
+            if (!Number.isInteger(idx)) continue;
+            if (entry.isIntersecting) {
+                setActiveCatPill(idx);
+            } else if (entry.rootBounds && entry.boundingClientRect.top > entry.rootBounds.top) {
+                setActiveCatPill(idx - 1);
+            }
         }
-        nav.querySelectorAll('.cat-pill').forEach((p, idx) => p.classList.toggle('active', idx === activeIdx));
+    }, {
+        rootMargin: '-56px 0px -72% 0px',
+        threshold: 0
     });
-}, { passive: true });
+    catSectionEls.forEach(sec => catObserver.observe(sec));
+}
 
-// Mở khóa toàn bộ kênh âm thanh ngay từ chạm đầu tiên
+// Mở khóa nhẹ AudioContext ở chạm đầu tiên (không khởi tạo 28 Audio pool gây nghẽn INP)
 ['pointerdown', 'touchstart', 'keydown'].forEach(evt => {
     document.addEventListener(evt, unlockAllAudio, { once: true, passive: true, capture: true });
 });
@@ -2289,22 +2321,28 @@ function queueRemoteOrderFlashes(prevOrders, nextOrders, ignoredTables = null) {
     return queued;
 }
 
+function applyElementFlash(el, timerOwner, delta, durationMs) {
+    if (!el || !timerOwner) return;
+    if (timerOwner.flashTimer) clearTimeout(timerOwner.flashTimer);
+    const addCls = delta > 0 ? 'flash-add' : 'flash-sub';
+    const remCls = delta > 0 ? 'flash-sub' : 'flash-add';
+    el.classList.remove(remCls);
+    el.classList.add(addCls);
+    timerOwner.flashTimer = setTimeout(() => {
+        el.classList.remove(addCls);
+        timerOwner.flashTimer = 0;
+    }, durationMs);
+}
+
 function flushRemoteOrderFlashes() {
     if (!pendingRemoteOrderFlashes.length) return;
     const flashes = pendingRemoteOrderFlashes.splice(0);
 
     for (const { tableId, itemId, delta } of flashes) {
-        const cls = delta > 0 ? 'flash-add' : 'flash-sub';
-        const tableBtn = TABLE_DOM[tableId - 1]?.card;
-        const row = currentTab === tableId ? ITEM_DOM.get(itemId)?.row : null;
-
-        if (tableBtn) tableBtn.classList.add(cls);
-        if (row) row.classList.add(cls);
-
-        setTimeout(() => {
-            if (tableBtn) tableBtn.classList.remove(cls);
-            if (row) row.classList.remove(cls);
-        }, 400);
+        const dom = TABLE_DOM[tableId - 1];
+        const itemDom = currentTab === tableId ? ITEM_DOM.get(itemId) : null;
+        if (dom?.card) applyElementFlash(dom.card, dom, delta, 400);
+        if (itemDom?.row) applyElementFlash(itemDom.row, itemDom, delta, 400);
     }
 }
 
@@ -2424,18 +2462,54 @@ function handleSingleTableTimeSnapshot(rawKey, rawVal) {
 }
 
 function bindBranchWithInitialSync(branchRef, branchName, applyInitialVal, handleChildVal) {
+    let initialResolved = false;
+    let listenersAttached = false;
+    let skipInitialAddedKeys = null;
     let unsubInitial = null;
-    unsubInitial = onValue(branchRef, (initialSnap) => {
-        if (unsubInitial) {
-            unsubInitial();
-            unsubInitial = null;
-        }
-        applyInitialVal(initialSnap.val() || {});
-        markInitialBranchLoaded(branchName);
 
-        _fbOnChildAdded(branchRef, (snap) => handleChildVal(snap.key, snap.val()));
+    const attachChildListeners = () => {
+        if (listenersAttached) return;
+        listenersAttached = true;
+
+        _fbOnChildAdded(branchRef, (snap) => {
+            const key = snap.key;
+            if (!key) return;
+            if (skipInitialAddedKeys && skipInitialAddedKeys.has(key)) {
+                skipInitialAddedKeys.delete(key);
+                if (skipInitialAddedKeys.size === 0) skipInitialAddedKeys = null;
+                const val = snap.val();
+                const tableId = Number(key);
+                if (branchName === 'orders' && shallowRecordEqual(data.orders?.[tableId] || {}, val && typeof val === 'object' ? val : {})) return;
+                if (branchName === 'locked' && Boolean(data.locked?.[tableId]) === Boolean(val)) return;
+                if (branchName === 'times') {
+                    const parsedTs = Number(val);
+                    const nextTime = (val !== null && val !== undefined && Number.isFinite(parsedTs) && parsedTs > 0) ? parsedTs : null;
+                    const prevTime = data.times?.[tableId] !== undefined ? Number(data.times[tableId]) : null;
+                    if (prevTime === nextTime) return;
+                }
+            }
+            handleChildVal(key, snap.val());
+        });
         _fbOnChildChanged(branchRef, (snap) => handleChildVal(snap.key, snap.val()));
         _fbOnChildRemoved(branchRef, (snap) => handleChildVal(snap.key, null));
+    };
+
+    unsubInitial = onValue(branchRef, (initialSnap) => {
+        if (initialResolved) return;
+        initialResolved = true;
+        // Hủy đăng ký ở microtask kế tiếp để tránh race condition khi onValue bắn đồng bộ từ cache
+        queueMicrotask(() => {
+            if (unsubInitial) {
+                unsubInitial();
+                unsubInitial = null;
+            }
+        });
+
+        const initialVal = initialSnap.val() || {};
+        skipInitialAddedKeys = new Set(Object.keys(initialVal));
+        applyInitialVal(initialVal);
+        markInitialBranchLoaded(branchName);
+        attachChildListeners();
     });
 }
 
@@ -2595,7 +2669,6 @@ function commitPendingItem(tab, id, expectedVersion = null) {
         if (passCount === 1) initialLocalCur = current;
 
         if ((tableEpoch[tab] || 0) !== startEpoch || (current === 0 && deltaToSend < 0)) {
-            // Nếu Pass 1 từng áp dụng giá trị lạc quan và Pass >= 2 hủy bỏ, bù echo rollback chính xác
             if (prevOptimisticTarget !== null && prevOptimisticTarget !== current) {
                 recordLocalEchoDelta(tab, id, initialLocalCur - prevOptimisticTarget);
                 prevOptimisticTarget = current;
@@ -2723,7 +2796,6 @@ function cleanupStaleTimes(tableIds = null) {
     for (const tab of ids) {
         const startTs = Number(data.times?.[tab]);
         if (!startTs || data.locked?.[tab] || effectiveTableHasItems(tab)) continue;
-        // Chờ qua ngưỡng 15s để tránh máy khác xóa nhầm giờ vừa khởi tạo khi 2 gói tin tới lệch nhịp
         if ((now - startTs) < STALE_TIME_GRACE_MS) continue;
         remove(child(timesRef, String(tab))).catch(() => {});
     }
@@ -2757,17 +2829,25 @@ function scheduleOrphanedLockCheck(tableIds = null) {
     }
 }
 
-function applyMenuRowQtyClasses(row, qty) {
+function applyMenuRowQtyClasses(itemDom, qty) {
+    const row = itemDom?.row;
     if (!row) return;
-    const preserveRemoteFocus = row.classList.contains('remote-focus');
-    const preserveFlashAdd = row.classList.contains('flash-add');
-    const preserveFlashSub = row.classList.contains('flash-sub');
-    row.className = 'menu-item';
-    if (qty >= 5) row.classList.add('qty-5');
-    else if (qty > 0) row.classList.add('qty-' + qty);
-    if (preserveRemoteFocus) row.classList.add('remote-focus');
-    if (preserveFlashAdd) row.classList.add('flash-add');
-    if (preserveFlashSub) row.classList.add('flash-sub');
+    const nextClass = qty >= 5 ? 'qty-5' : (qty > 0 ? `qty-${qty}` : '');
+    if (itemDom.qtyClass === nextClass) return;
+    if (itemDom.qtyClass) row.classList.remove(itemDom.qtyClass);
+    if (nextClass) row.classList.add(nextClass);
+    itemDom.qtyClass = nextClass;
+}
+
+function updateItemRowQty(itemId, qty, bump = false) {
+    const itemDom = ITEM_DOM.get(itemId);
+    if (!itemDom) return;
+    if (itemDom.lastQty !== qty) {
+        itemDom.lastQty = qty;
+        if (itemDom.qty) itemDom.qty.textContent = String(qty);
+        applyMenuRowQtyClasses(itemDom, qty);
+    }
+    if (bump && itemDom.qty) playQtyBump(itemDom.qty);
 }
 
 function change(id, delta) {
@@ -2791,14 +2871,7 @@ function change(id, delta) {
     }
 
     const newQty = getEffectiveItemQty(tab, id);
-    const itemDom = ITEM_DOM.get(id);
-    const qSpan = itemDom?.qty;
-    const row = itemDom?.row;
-    if (qSpan) {
-        qSpan.textContent = newQty;
-        applyMenuRowQtyClasses(row, newQty);
-        playQtyBump(qSpan);
-    }
+    updateItemRowQty(id, newQty, true);
     renderTable(tab, getServerNow());
     renderCrowdStatus();
     flashRow(id, delta);
@@ -2812,9 +2885,10 @@ function change(id, delta) {
 }
 
 function flashRow(id, delta) {
-    const itemDom = ITEM_DOM.get(id), row = itemDom?.row, tabBtn = currentTab ? TABLE_DOM[currentTab - 1]?.card : null, cls = delta > 0 ? 'flash-add' : 'flash-sub';
-    if (row) row.classList.add(cls); if (tabBtn) tabBtn.classList.add(cls);
-    setTimeout(() => { if (row) row.classList.remove(cls); if (tabBtn) tabBtn.classList.remove(cls); }, 320);
+    const itemDom = ITEM_DOM.get(id);
+    const dom = currentTab ? TABLE_DOM[currentTab - 1] : null;
+    if (itemDom?.row) applyElementFlash(itemDom.row, itemDom, delta, 320);
+    if (dom?.card) applyElementFlash(dom.card, dom, delta, 320);
 }
 
 function changeBillLang(l) {
@@ -2864,12 +2938,7 @@ function renderCurrentOrder() {
 
     ALL_ITEMS.forEach(item => {
         const q = getEffectiveItemQty(currentTab, item.id);
-        const itemDom = ITEM_DOM.get(item.id);
-        const row = itemDom?.row, qSpan = itemDom?.qty;
-        if (row && qSpan && qSpan.textContent !== String(q)) {
-            qSpan.textContent = q;
-            applyMenuRowQtyClasses(row, q);
-        }
+        updateItemRowQty(item.id, q, false);
     });
 
     if (isLock) renderBillAsync(currentTab);
@@ -2903,42 +2972,64 @@ function renderTable(tableId, now = getServerNow()) {
     }
     if (dom.meta) {
         dom.meta.classList.remove('skeleton');
-        dom.meta.innerHTML = total > 0 ? `🍽 <span class="table-meta-count">${foodQty}</span> món · 🥤🍺 <span class="table-meta-count">${drinkQty}</span>` : '';
-        dom.meta.title = total > 0 ? `${foodQty} phần món ăn · ${drinkQty} nước/bia` : '';
+        const shouldShowMeta = total > 0;
+        if (shouldShowMeta) {
+            if (!dom.lastMetaVisible) {
+                dom.meta.hidden = false;
+                dom.meta.style.display = '';
+                dom.lastMetaVisible = true;
+            }
+            if (dom.lastFoodQty !== foodQty || dom.lastDrinkQty !== drinkQty) {
+                if (dom.foodSpan && dom.lastFoodQty !== foodQty) dom.foodSpan.textContent = String(foodQty);
+                if (dom.drinkSpan && dom.lastDrinkQty !== drinkQty) dom.drinkSpan.textContent = String(drinkQty);
+                dom.meta.title = `${foodQty} phần món ăn · ${drinkQty} nước/bia`;
+                dom.lastFoodQty = foodQty;
+                dom.lastDrinkQty = drinkQty;
+            }
+        } else if (dom.lastMetaVisible) {
+            dom.meta.hidden = true;
+            dom.meta.style.display = 'none';
+            dom.meta.title = '';
+            dom.lastMetaVisible = false;
+        }
     }
     renderTableTime(tableId, now);
 
     if (dom.card) {
-        const preserveViewer = dom.card.classList.contains('has-viewer');
-        const preserveRemotePaying = dom.card.classList.contains('is-remote-paying');
-        const preserveFlashAdd = dom.card.classList.contains('flash-add');
-        const preserveFlashSub = dom.card.classList.contains('flash-sub');
-        let className = tableId === 7 ? 'table-card full-width' : (tableId >= 8 ? 'table-card half-width' : 'table-card');
-        if (tableId === currentTab) className += ' active';
-        if (locked) className += ' is-locked';
-        else if (total > 0) className += ' has-guest';
-        if (dom.card.className !== className) {
-            dom.card.className = className;
-            if (preserveViewer) dom.card.classList.add('has-viewer');
-            if (preserveRemotePaying) dom.card.classList.add('is-remote-paying');
-            if (preserveFlashAdd) dom.card.classList.add('flash-add');
-            if (preserveFlashSub) dom.card.classList.add('flash-sub');
+        const isActive = tableId === currentTab;
+        const hasGuest = !locked && total > 0;
+        if (dom.lastActive !== isActive) {
+            dom.card.classList.toggle('active', isActive);
+            dom.lastActive = isActive;
+        }
+        if (dom.lastLocked !== locked) {
+            dom.card.classList.toggle('is-locked', locked);
+            dom.lastLocked = locked;
+        }
+        if (dom.lastHasGuest !== hasGuest) {
+            dom.card.classList.toggle('has-guest', hasGuest);
+            dom.lastHasGuest = hasGuest;
         }
     }
 }
 
+let lastCrowdTier = null;
 function renderCrowdStatus() {
     let activeTablesCount = 0;
     for (let i = 1; i <= 9; i++) {
         if (tableTotals[i] > 0 || data.locked?.[i]) activeTablesCount++;
     }
+    const nextTier = activeTablesCount <= 3 ? 'empty' : (activeTablesCount <= 6 ? 'normal' : 'crowded');
+    if (nextTier === lastCrowdTier) return;
+    lastCrowdTier = nextTier;
+
     const crowdEl = document.getElementById('crowd-status');
     const crowdTxt = document.getElementById('crowd-text');
     const crowdIcon = document.getElementById('crowd-icon');
     if (crowdEl && crowdTxt && crowdIcon) {
-        if (activeTablesCount <= 3) {
+        if (nextTier === 'empty') {
             crowdEl.className = 'status-badge status-empty'; crowdTxt.textContent = 'Vắng khách'; crowdIcon.textContent = '🟢';
-        } else if (activeTablesCount <= 6) {
+        } else if (nextTier === 'normal') {
             crowdEl.className = 'status-badge status-normal'; crowdTxt.textContent = 'Bình thường'; crowdIcon.textContent = '🟡';
         } else {
             crowdEl.className = 'status-badge status-crowded'; crowdTxt.textContent = 'ĐÔNG KHÁCH'; crowdIcon.textContent = '🚨';
