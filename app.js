@@ -2533,6 +2533,8 @@ function bindBranchWithInitialSync(branchRef, branchName, applyInitialVal, handl
     });
 }
 
+let lastCrowdTier = null; // phải khai báo TRƯỚC lần gọi refresh() đầu tiên (tránh TDZ)
+
 // Vẽ ngay từ bản nháp localStorage (nếu có) trước khi Firebase đồng bộ xong
 if (hydrateFromLocalStateCache()) {
     refresh(null, false);
@@ -3035,7 +3037,6 @@ function renderTable(tableId, now = getServerNow()) {
     }
 }
 
-let lastCrowdTier = null;
 function renderCrowdStatus() {
     let activeTablesCount = 0;
     for (let i = 1; i <= 9; i++) {
