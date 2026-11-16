@@ -21,8 +21,43 @@
     html.paper-flip-pending .flip-clock-container > .flip-unit,
     html.paper-flip-pending .flip-clock-container > .flip-colon { visibility: hidden !important; }
     </style>
-    <link rel="stylesheet" href="style.css">
-    <script>window.__paperFlipFailsafe = setTimeout(() => document.documentElement.classList.remove('paper-flip-pending'), 3000);</script>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <link rel="stylesheet" href="style.css?v=20261116">
+    <script>
+    window.__APP_BUILD_VERSION = '20261116';
+    window.__finishPaperFlipIntro = function() {
+        document.documentElement.classList.remove('paper-flip-pending');
+        clearTimeout(window.__paperFlipFailsafe);
+        document.querySelectorAll('.single-fold-active').forEach(function(el) {
+            el.classList.remove('single-fold-active');
+            el.style.removeProperty('visibility');
+            el.style.removeProperty('opacity');
+            el.style.removeProperty('transform-origin');
+        });
+        var ov = document.getElementById('paper-flip-overlay');
+        if (ov) ov.replaceChildren();
+    };
+    window.__paperFlipFailsafe = setTimeout(window.__finishPaperFlipIntro, 2800);
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(function(regs) {
+            if (!regs || !regs.length) return;
+            Promise.all(regs.map(function(r) { return r.unregister(); })).then(function() {
+                if ('caches' in window) {
+                    caches.keys().then(function(keys) {
+                        return Promise.all(keys.map(function(k) { return caches.delete(k); }));
+                    }).finally(function() {
+                        if (!sessionStorage.getItem('combetram_sw_cleaned')) {
+                            sessionStorage.setItem('combetram_sw_cleaned', '1');
+                            location.reload();
+                        }
+                    });
+                }
+            });
+        }).catch(function() {});
+    }
+    </script>
 </head>
 <body>
 
@@ -205,6 +240,6 @@
 </div>
 <div id="app-toast-container" class="app-toast-container" aria-live="polite"></div>
 
-<script type="module" src="app.js"></script>
+<script type="module" src="app.js?v=20261116"></script>
 </body>
 </html>

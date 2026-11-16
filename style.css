@@ -775,6 +775,8 @@ body.tab-hidden .is-locked::after,
 body.tab-hidden .total-container,
 body.tab-hidden .arrow-shaft::after,
 body.tab-hidden .arrow-head::after,
+
+
 /* TRẠNG THÁI ĐANG THU TIỀN TỪ THIẾT BỊ KHÁC */
 .table-card.is-remote-paying {
     opacity: 0.78;

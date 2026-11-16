@@ -15,7 +15,30 @@ import {
     runTransaction
 } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-database.js";
 
-import { menu } from "./menu.js";
+import { menu } from "./menu.js?v=20261116";
+
+const APP_BUILD_VERSION = '20261116';
+const APP_VERSION_STORAGE_KEY = 'combetram_app_version';
+(function ensureBuildConsistency() {
+    try {
+        const storedVer = localStorage.getItem(APP_VERSION_STORAGE_KEY);
+        if (storedVer !== APP_BUILD_VERSION) {
+            localStorage.removeItem('combetram_state_cache_v1');
+            localStorage.setItem(APP_VERSION_STORAGE_KEY, APP_BUILD_VERSION);
+        }
+    } catch (e) {}
+
+    if (window.__APP_BUILD_VERSION && window.__APP_BUILD_VERSION !== APP_BUILD_VERSION) {
+        try {
+            if (!sessionStorage.getItem('combetram_ver_reloaded')) {
+                sessionStorage.setItem('combetram_ver_reloaded', '1');
+                const url = new URL(window.location.href);
+                url.searchParams.set('v', APP_BUILD_VERSION);
+                window.location.replace(url.toString());
+            }
+        } catch (e) {}
+    }
+})();
 
 const firebaseConfig = {
     apiKey: "AIzaSyDVgtCsFzrPOqRWBqoncZrsZsRdCn7wTWo",
@@ -595,26 +618,55 @@ function scheduleSaveLocalStateCache() {
     }, 450);
 }
 
+function isPlainObject(val) {
+    return val !== null && typeof val === 'object' && !Array.isArray(val);
+}
+
 function hydrateFromLocalStateCache() {
     try {
         const raw = localStorage.getItem(STATE_CACHE_KEY);
         if (!raw) return false;
         const parsed = JSON.parse(raw);
-        if (!parsed || typeof parsed !== 'object') return false;
-        if (!Number.isFinite(parsed.savedAt) || (Date.now() - parsed.savedAt) > STATE_CACHE_MAX_AGE_MS) return false;
-        data.orders = parsed.orders && typeof parsed.orders === 'object' ? parsed.orders : {};
-        data.locked = parsed.locked && typeof parsed.locked === 'object' ? parsed.locked : {};
-        data.times = parsed.times && typeof parsed.times === 'object' ? parsed.times : {};
-        // Loại bỏ trạng thái khóa mồ côi nếu bàn trong cache không còn món (0đ)
-        for (let t = 1; t <= 9; t++) {
-            const ord = data.orders?.[t];
-            const hasAny = ord && typeof ord === 'object' && Object.values(ord).some(q => Number(q) > 0);
-            if (!hasAny && data.locked?.[t]) {
-                delete data.locked[t];
+        if (!isPlainObject(parsed)) {
+            localStorage.removeItem(STATE_CACHE_KEY);
+            return false;
+        }
+        if (!Number.isFinite(parsed.savedAt) || (Date.now() - parsed.savedAt) > STATE_CACHE_MAX_AGE_MS) {
+            localStorage.removeItem(STATE_CACHE_KEY);
+            return false;
+        }
+        const safeOrders = {};
+        if (isPlainObject(parsed.orders)) {
+            for (let t = 1; t <= 9; t++) {
+                const rawOrd = parsed.orders[t];
+                if (!isPlainObject(rawOrd)) continue;
+                const cleanOrd = {};
+                for (const [itemId, rawQty] of Object.entries(rawOrd)) {
+                    const qty = Math.max(0, Number(rawQty) || 0);
+                    if (qty > 0) cleanOrd[itemId] = qty;
+                }
+                if (Object.keys(cleanOrd).length > 0) safeOrders[t] = cleanOrd;
             }
         }
+        const safeLocked = {};
+        if (isPlainObject(parsed.locked)) {
+            for (let t = 1; t <= 9; t++) {
+                if (parsed.locked[t] && safeOrders[t]) safeLocked[t] = true;
+            }
+        }
+        const safeTimes = {};
+        if (isPlainObject(parsed.times)) {
+            for (let t = 1; t <= 9; t++) {
+                const ts = Number(parsed.times[t]);
+                if (Number.isFinite(ts) && ts > 0 && (safeOrders[t] || safeLocked[t])) safeTimes[t] = ts;
+            }
+        }
+        data.orders = safeOrders;
+        data.locked = safeLocked;
+        data.times = safeTimes;
         return true;
     } catch (e) {
+        try { localStorage.removeItem(STATE_CACHE_KEY); } catch (_) {}
         return false;
     }
 }
@@ -678,7 +730,7 @@ let billAssetsPreloaded = false;
 async function getLangData(lang) {
     if (dictCache[lang]) return dictCache[lang];
     if (!dictLoadPromise) {
-        dictLoadPromise = import('./dict.js').then(m => {
+        dictLoadPromise = import('./dict.js?v=20261116').then(m => {
             dictCache = m.dict;
         }).catch((err) => {
             console.error('[dict] Lỗi tải từ điển đa ngôn ngữ:', err);
@@ -2194,26 +2246,29 @@ if ('IntersectionObserver' in window && catSectionEls.length > 0) {
 
 // ─── EVENT DELEGATION TẬP TRUNG (THAY THẾ TOÀN BỘ INLINE ONCLICK) ──────
 document.addEventListener('click', (e) => {
-    const tableCard = e.target.closest('.table-card[data-table]');
+    const targetEl = e.target instanceof Element ? e.target : e.target?.parentElement;
+    if (!targetEl) return;
+
+    const tableCard = targetEl.closest('.table-card[data-table]');
     if (tableCard) {
         selectTable(Number(tableCard.dataset.table));
         return;
     }
 
-    const qtyBtn = e.target.closest('#menu-list .btn-qty[data-item-id]');
+    const qtyBtn = targetEl.closest('#menu-list .btn-qty[data-item-id]');
     if (qtyBtn) {
         const itemId = Number(qtyBtn.dataset.itemId);
         change(itemId, qtyBtn.classList.contains('btn-add') ? 1 : -1);
         return;
     }
 
-    const langBtn = e.target.closest('#lang-grid .lang-btn[data-lang]');
+    const langBtn = targetEl.closest('#lang-grid .lang-btn[data-lang]');
     if (langBtn) {
         changeBillLang(langBtn.dataset.lang);
         return;
     }
 
-    const actionEl = e.target.closest('[data-action]');
+    const actionEl = targetEl.closest('[data-action]');
     if (!actionEl) return;
 
     switch (actionEl.dataset.action) {
@@ -3444,26 +3499,30 @@ function animateSingleSheet(target, delay = 0, variant = 0, withWisp = false) {
 
         if (withWisp) spawnPaperWisp(target, variant);
 
-        const anim = target.animate([
-            { opacity: 0, transform: spec.start },
-            { opacity: .42, transform: spec.start, offset: .10 },
-            { opacity: 1, transform: spec.mid, offset: .78 },
-            { opacity: 1, transform: 'perspective(850px) translate3d(0,0,0) rotateX(0deg) rotateY(0deg) scale(1)' }
-        ], {
-            duration: SINGLE_FOLD_DURATION,
-            easing: 'cubic-bezier(.18,.78,.18,1)',
-            fill: 'forwards'
-        });
-        singleFoldAnimations.push(anim);
+        try {
+            const anim = target.animate([
+                { opacity: 0, transform: spec.start },
+                { opacity: .42, transform: spec.start, offset: .10 },
+                { opacity: 1, transform: spec.mid, offset: .78 },
+                { opacity: 1, transform: 'perspective(850px) translate3d(0,0,0) rotateX(0deg) rotateY(0deg) scale(1)' }
+            ], {
+                duration: SINGLE_FOLD_DURATION,
+                easing: 'cubic-bezier(.18,.78,.18,1)',
+                fill: 'forwards'
+            });
+            singleFoldAnimations.push(anim);
 
-        anim.onfinish = () => {
-            if (!target.isConnected) return;
-            target.style.setProperty('opacity', '1', 'important');
-            target.style.setProperty('visibility', 'visible', 'important');
-            target.classList.remove('single-fold-active');
-            target.style.removeProperty('transform-origin');
-            try { anim.cancel(); } catch (e) {}
-        };
+            anim.onfinish = () => {
+                if (!target.isConnected) return;
+                target.style.setProperty('opacity', '1', 'important');
+                target.style.setProperty('visibility', 'visible', 'important');
+                target.classList.remove('single-fold-active');
+                target.style.removeProperty('transform-origin');
+                try { anim.cancel(); } catch (e) {}
+            };
+        } catch (err) {
+            finishPaperFlipIntro();
+        }
     }, delay);
 }
 
@@ -3489,9 +3548,11 @@ function finishPaperFlipIntro() {
     document.getElementById('paper-flip-overlay')?.replaceChildren();
 }
 
+window.__finishPaperFlipIntro = finishPaperFlipIntro;
+
 function runPaperFlipIntro() {
     if (!document.documentElement.classList.contains('paper-flip-pending')) return;
-    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+    if (document.hidden || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
         finishPaperFlipIntro();
         return;
     }
@@ -3566,3 +3627,17 @@ if (document.readyState === 'complete') {
 }
 
 updateNetWidget();
+
+
+// Tương thích ngược nếu trình duyệt từng lưu cache HTML cũ dùng inline onclick
+Object.assign(window, {
+    selectTable,
+    change,
+    setLock,
+    doPay,
+    toggleBillQr,
+    changeBillLang,
+    toggleDarkMode,
+    toggleSoundMute,
+    scrollToCheckout
+});
