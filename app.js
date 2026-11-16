@@ -1875,6 +1875,25 @@ function positionCursorOnTable(id, el, rect, offsetIndex, color) {
     el.classList.add('visible');
 }
 
+const cachedTableRects = new Map();
+let tableRectsDirty = true;
+
+function measureAllTableRects() {
+    cachedTableRects.clear();
+    for (let t = 1; t <= 9; t++) {
+        const card = TABLE_DOM[t - 1]?.card;
+        cachedTableRects.set(t, card ? card.getBoundingClientRect() : null);
+    }
+    tableRectsDirty = false;
+}
+
+function getCachedTableRect(tableNum) {
+    if (tableRectsDirty || !cachedTableRects.has(tableNum)) {
+        measureAllTableRects();
+    }
+    return cachedTableRects.get(tableNum) || null;
+}
+
 function renderRemoteCursors(now = getServerNow()) {
     const entries = Object.entries(sessionsMap).filter(([id, s]) => {
         if (id === mySessionId || !s || !Number(s.table)) return false;
@@ -1892,14 +1911,9 @@ function renderRemoteCursors(now = getServerNow()) {
         }
     });
 
-    const tableRects = new Map();
     const countPerTable = {}, tableViewerColor = {};
     entries.forEach(([id, s]) => {
         const tableNum = Number(s.table);
-        if (!tableRects.has(tableNum)) {
-            const card = TABLE_DOM[tableNum - 1]?.card;
-            tableRects.set(tableNum, card ? card.getBoundingClientRect() : null);
-        }
         const idx = countPerTable[tableNum] || 0;
         countPerTable[tableNum] = idx + 1;
         if (!tableViewerColor[tableNum]) tableViewerColor[tableNum] = s.color || '#999';
@@ -1911,7 +1925,7 @@ function renderRemoteCursors(now = getServerNow()) {
             remoteCursorEls[id] = el;
         }
         el.style.background = s.color || '#999';
-        positionCursorOnTable(id, el, tableRects.get(tableNum), idx, s.color);
+        positionCursorOnTable(id, el, getCachedTableRect(tableNum), idx, s.color);
     });
 
     for (let t = 1; t <= 9; t++) {
@@ -1928,13 +1942,18 @@ function renderRemoteCursors(now = getServerNow()) {
 }
 
 let cursorRenderTicking = false;
-function scheduleRenderRemoteCursors() {
+function scheduleRenderRemoteCursors(remeasure = false) {
+    if (remeasure) tableRectsDirty = true;
     if (cursorRenderTicking) return;
     cursorRenderTicking = true;
-    requestAnimationFrame(() => { renderRemoteCursors(); cursorRenderTicking = false; });
+    requestAnimationFrame(() => {
+        if (tableRectsDirty) measureAllTableRects();
+        renderRemoteCursors();
+        cursorRenderTicking = false;
+    });
 }
-window.addEventListener('resize', scheduleRenderRemoteCursors);
-window.addEventListener('scroll', scheduleRenderRemoteCursors, { passive: true });
+window.addEventListener('resize', () => scheduleRenderRemoteCursors(true));
+window.addEventListener('scroll', () => scheduleRenderRemoteCursors(true), { passive: true });
 
 // ─── FOCUS MÓN ĂN & TRẠNG THÁI ĐANG THU TIỀN TỪ SESSIONS ───────────────
 const remoteFocusRows = {};
@@ -2089,17 +2108,23 @@ function renderRemotePaying(now = getServerNow()) {
     syncCurrentTableRemotePayingUi(currentTab ? (byTable.get(Number(currentTab)) || null) : null);
 }
 
+const REMOTE_SFX_THROTTLE_MS = 280;
+
 function handleRemoteSessionChange(id, sessionData, eventType) {
     const now = getServerNow();
+    const prevSession = sessionsMap[id];
 
     if (eventType === 'removed' || !sessionData || typeof sessionData !== 'object') {
+        const hadCursorTable = Boolean(prevSession && Number(prevSession.table));
         delete sessionsMap[id];
         delete lastHandledActivitySeq[id];
         clearRemoteFocusEntry(id);
         clearTimeout(remotePayingExpireTimers[id]);
         delete remotePayingExpireTimers[id];
         renderPresenceCount(now);
-        renderRemoteCursors(now);
+        if (hadCursorTable || remoteCursorEls[id]) {
+            renderRemoteCursors(now);
+        }
         renderRemotePaying(now);
         return;
     }
@@ -2112,14 +2137,30 @@ function handleRemoteSessionChange(id, sessionData, eventType) {
             lastHandledActivitySeq[id] = seqKey;
             const ts = Number(sessionData.ts);
             if (Number.isFinite(ts) && Math.abs(now - ts) <= 10000) {
-                lastRemoteSfxTs = Date.now();
-                playUiSound(sessionData.sfx);
+                const nowLocal = Date.now();
+                if ((nowLocal - lastRemoteSfxTs) >= REMOTE_SFX_THROTTLE_MS) {
+                    lastRemoteSfxTs = nowLocal;
+                    playUiSound(sessionData.sfx);
+                }
             }
         }
     }
 
+    const prevTable = Number(prevSession?.table) || 0;
+    const nextTable = Number(sessionData.table) || 0;
+    const prevColor = prevSession?.color || '';
+    const nextColor = sessionData.color || '';
+    const prevTs = Number(prevSession?.ts);
+    const wasCursorStale = !prevSession || !Number.isFinite(prevTs) || (now - prevTs) >= STALE_CURSOR_MS;
+    const isCursorActive = nextTable > 0;
+    const cursorChanged = (prevTable !== nextTable)
+        || (isCursorActive && prevColor !== nextColor)
+        || (isCursorActive && wasCursorStale && !remoteCursorEls[id]);
+
     renderPresenceCount(now);
-    renderRemoteCursors(now);
+    if (cursorChanged) {
+        renderRemoteCursors(now);
+    }
     renderRemoteFocus(now);
     renderRemotePaying(now);
     cleanupStaleSessions(now);
@@ -3413,6 +3454,7 @@ function finishPaperFlipIntro() {
     }
     singleFoldTargets.clear();
     document.getElementById('paper-flip-overlay')?.replaceChildren();
+    tableRectsDirty = true;
 }
 
 function runPaperFlipIntro() {
