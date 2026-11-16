@@ -2632,6 +2632,12 @@ function selectTable(n, options = {}) {
         if (isLockedTable) {
             preloadBillAssets();
             setTimeout(scrollBillIntoView, 350);
+        } else {
+            setTimeout(() => {
+                if (currentTab === n && !(data.locked && data.locked[n])) {
+                    section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            }, 120);
         }
     } else {
         section.classList.remove('section-visible');
