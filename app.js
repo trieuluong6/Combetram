@@ -366,12 +366,27 @@ let currentTab = null;
 let data = { orders: {}, locked: {}, times: {} };
 let billWasShown = false;
 
-// Chặn double-click / thao tác chồng chéo khi đang gửi lệnh thanh toán lên Firebase.
+// Chặn double-click / thao tác chồng chéo khi đang gửi lệnh thanh toán hoặc chốt/mở đơn lên Firebase.
 let paymentInProgress = false;
 let payingModalTable = null;
 let payingHeartbeatTimer = null;
 const payingTables = new Set();
 const localPaymentEchoTables = new Set();
+const lockInProgressTables = new Set();
+
+function syncLockButtonsState(tab = currentTab) {
+    const isBusy = Boolean(tab && lockInProgressTables.has(Number(tab)));
+    const checkoutBtn = document.getElementById('btn-checkout');
+    const unlockBtn = document.querySelector('#bill-area [data-action="unlock-bill"]');
+    if (checkoutBtn) {
+        checkoutBtn.disabled = isBusy;
+        checkoutBtn.style.opacity = isBusy ? '0.6' : '';
+    }
+    if (unlockBtn) {
+        unlockBtn.disabled = isBusy;
+        unlockBtn.style.opacity = isBusy ? '0.6' : '';
+    }
+}
 
 function clearTableLockAndTimeOnServer(tab) {
     const key = String(tab);
@@ -2771,7 +2786,7 @@ function applyMenuRowQtyClasses(row, qty) {
 }
 
 function change(id, delta) {
-    if (!currentTab || (data.locked && data.locked[currentTab])) return;
+    if (!currentTab || (data.locked && data.locked[currentTab]) || lockInProgressTables.has(Number(currentTab))) return;
     const sfxType = delta > 0 ? 'add' : 'sub';
     triggerHaptic(sfxType);
     broadcastActivity({ sfx: sfxType, tableId: currentTab, itemId: id, immediate: false });
@@ -2861,6 +2876,7 @@ function renderCurrentOrder() {
     }
     updateScrollCheckoutButton();
     syncCurrentTableRemotePayingUi(isTableRemotePaying(currentTab));
+    syncLockButtonsState(currentTab);
 
     ALL_ITEMS.forEach(item => {
         const q = getEffectiveItemQty(currentTab, item.id);
@@ -2991,31 +3007,48 @@ async function renderBillAsync(tab) {
     requestAnimationFrame(() => syncBillFlipHeight(false));
 }
 
-function setLock(v) {
+async function setLock(v) {
     if (!currentTab || paymentInProgress) return;
-    if (isTableRemotePaying(currentTab)) {
+    const tab = Number(currentTab);
+    if (payingTables.has(tab) || lockInProgressTables.has(tab)) return;
+    if (Boolean(data.locked?.[tab]) === Boolean(v)) return;
+
+    if (isTableRemotePaying(tab)) {
         showToast('Thiết bị khác đang thu tiền bàn này, vui lòng chờ!', 'warning', 2800);
         return;
     }
-    if (v && !effectiveTableHasItems(currentTab)) {
+    if (v && !effectiveTableHasItems(tab)) {
         showToast('Bàn chưa có món nào để chốt đơn!', 'warning', 2600);
         return;
     }
-    triggerHaptic(v ? 'lock' : 'unlock');
-    broadcastActivity({ sfx: v ? 'lock' : 'unlock', tableId: currentTab, itemId: null, immediate: true });
-    if (v) {
-        flushPendingForTable(currentTab);
-        preloadBillAssets();
-        resetBillQrView(true);
+
+    lockInProgressTables.add(tab);
+    syncLockButtonsState(tab);
+
+    try {
+        triggerHaptic(v ? 'lock' : 'unlock');
+        broadcastActivity({ sfx: v ? 'lock' : 'unlock', tableId: tab, itemId: null, immediate: true });
+        if (v) {
+            flushPendingForTable(tab);
+            preloadBillAssets();
+            resetBillQrView(true);
+        }
+        await set(child(lockedRef, String(tab)), v ? true : null);
+        if (!v) {
+            currentBillLang = 'vi';
+            syncActiveLangButton('vi');
+            resetBillQrView(true);
+        }
+        if (v && currentTab === tab) {
+            setTimeout(scrollBillIntoView, 100);
+        }
+    } catch (err) {
+        console.error('[lock] Lỗi ghi trạng thái khóa Firebase:', err);
+        showToast('Không thể cập nhật trạng thái bàn, vui lòng thử lại!', 'error', 2800);
+    } finally {
+        lockInProgressTables.delete(tab);
+        syncLockButtonsState(currentTab);
     }
-    set(child(lockedRef, String(currentTab)), v ? true : null)
-        .catch(err => console.error('[lock] Lỗi ghi trạng thái khóa Firebase:', err));
-    if (!v) {
-        currentBillLang = 'vi';
-        syncActiveLangButton('vi');
-        resetBillQrView(true);
-    }
-    if (v) setTimeout(scrollBillIntoView, 100);
 }
 
 async function doPay() {
