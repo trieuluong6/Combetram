@@ -12,7 +12,10 @@ import {
     onChildRemoved as _fbOnChildRemoved,
     push as _fbPush,
     onDisconnect,
-    runTransaction
+    runTransaction,
+    query,
+    orderByChild,
+    startAt
 } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-database.js";
 
 import { menu } from "./menu.js";
@@ -1033,7 +1036,18 @@ function stopClockInterval() {
 
 function handleAppBackgrounded() {
     flushAllPendingItems();
-    flushPendingActivity();
+    clearTimeout(pendingSessionSyncTimer);
+    pendingSessionSyncTimer = null;
+    pendingSessionPatch = null;
+    if (isFirebaseConnected) {
+        update(mySessionRef, {
+            table: 0,
+            itemId: null,
+            paying: false,
+            sfx: null,
+            ts: getServerNow()
+        }).catch(() => {});
+    }
 }
 
 document.addEventListener('visibilitychange', () => {
@@ -1045,7 +1059,11 @@ document.addEventListener('visibilitychange', () => {
     } else {
         startTickerInterval();
         startClockInterval();
-        refreshPresenceHeartbeat();
+        syncMySession({
+            table: currentTab || 0,
+            paying: Boolean(payingModalTable),
+            immediate: true
+        });
         runPeriodicMaintenance();
     }
 });
@@ -1082,17 +1100,14 @@ initSoundMute();
 
 // Tần số dải trung-cao tối ưu cho loa điện thoại + tiếng gõ nhạc cụ gỗ "leng keng" cho +- món
 const SOUND_PATTERNS = {
-    // Chạm bàn / chuyển tab: tiếng "tưng tưng" thủy tinh dải trung ấm áp (Bb5 -> Eb6), đỡ đanh, giữ nguyên âm lượng
     nav: [
         { freq: 932.33, dur: 0.155, delay: 0, instrument: 'glass', vol: 1.32 },
         { freq: 1244.51, dur: 0.22, delay: 0.066, instrument: 'glass', vol: 1.40 }
     ],
-    // Thêm món (+): Tiếng "Leng - Keng" đàn gõ gỗ (Marimba/Xylophone) đi lên C6 -> G6
     add: [
         { freq: 1046.50, dur: 0.16, instrument: 'wood', vol: 1.0 },
         { freq: 1567.98, dur: 0.24, delay: 0.068, instrument: 'wood', vol: 1.0 }
     ],
-    // Bớt món (-): Tiếng "Keng - Leng" đàn gõ gỗ đi xuống D6 -> A5
     sub: [
         { freq: 1174.66, dur: 0.15, instrument: 'wood', vol: 0.96 },
         { freq: 880.00, dur: 0.23, delay: 0.068, instrument: 'wood', vol: 0.96 }
@@ -1155,13 +1170,11 @@ function synthesizeSoundSamples(type, sampleRate = SOUND_SAMPLE_RATE) {
             const release = Math.min(1, (lenIdx - 1 - i) / releaseSamples);
 
             if (isGlass) {
-                // Cộng hưởng ly thủy tinh dày, dải trung ấm: tăng thân âm gốc, giảm họa âm cao để bớt đanh
                 const f0Env = Math.exp(-elapsedSec * 14.5);
                 const f2Env = Math.exp(-elapsedSec * 34.0);
                 const f3Env = Math.exp(-elapsedSec * 58.0);
                 const f4Env = Math.exp(-elapsedSec * 95.0);
 
-                // Xung chạm kính dịu gọn 3.2ms đầu (2.65kHz -> 2.0kHz) giữ độ nảy mà không chói tai
                 let clink = 0;
                 if (elapsedSec < 0.0032) {
                     const clinkFreq = 2650 - (elapsedSec / 0.0032) * 650;
@@ -1178,13 +1191,11 @@ function synthesizeSoundSamples(type, sampleRate = SOUND_SAMPLE_RATE) {
 
                 mix[startIdx + i] += glassSample * vol * attack * release;
             } else if (isSolidKnock) {
-                // Thân khối gỗ đặc (fundamental + các bậc cộng hưởng gỗ 1.48, 2.15, 2.85 nằm đúng dải nhạy loa điện thoại)
                 const bodyEnv = Math.exp(-elapsedSec * 26);
                 const overtone1Env = Math.exp(-elapsedSec * 38);
                 const overtone2Env = Math.exp(-elapsedSec * 58);
                 const overtone3Env = Math.exp(-elapsedSec * 90);
 
-                // Xung dùi gõ đanh 9ms đầu tạo độ "cộc" dứt khoát, xuyên tiếng ồn quán
                 let knock = 0;
                 if (elapsedSec < 0.009) {
                     const knockFreq = 1950 - (elapsedSec / 0.009) * 950;
@@ -1518,64 +1529,78 @@ function animateNumber(target, newValue, suffix = '') {
     requestAnimationFrame(updateAnim);
 }
 
-// ─── PRESENCE & TRẠNG THÁI MẠNG (TỐI ƯU CHILD LISTENERS + GỘP ACTIVITY) ──
+// ─── QUẢN LÝ PHIÊN REALTIME GỘP NHẤT (SESSIONS = PRESENCE + CURSORS + ACTIVITY) ──
 const RT_ROOT = 'combetram_v6_rt';
-const PRESENCE_STORAGE_KEY = 'combetram_presence_id';
-const STALE_PRESENCE_MS = 120000;
-const STALE_CURSOR_MS = 45000;
-const FOCUS_TTL_MS = 1500;
-const PAYING_TTL_MS = 45000;
+const STALE_SESSION_MS = 120000; // 2 phút không heartbeat -> coi như phiên đã chết
+const STALE_CURSOR_MS = 45000;   // 45 giây không tương tác -> tắt hiển thị con trỏ bàn
+const FOCUS_TTL_MS = 1500;       // Hiệu ứng viền món ăn đang sửa tự tắt sau 1.5s
+const PAYING_TTL_MS = 45000;     // Cảnh báo đang thu tiền tự hết hạn sau 45s nếu mất kết nối
 const USER_COLORS = ['#e53935', '#1e88e5', '#43a047', '#fb8c00', '#8e24aa', '#00acc1', '#d81b60', '#6d4c41', '#3949ab', '#c0ca33'];
 const myColor = USER_COLORS[Math.floor(Math.random() * USER_COLORS.length)];
+
 const onlineRef = ref(database, '.info/connected');
-const presenceListRef = ref(database, `${RT_ROOT}/presence`);
+const sessionsRef = ref(database, `${RT_ROOT}/sessions`);
 
-function getOrCreatePresenceRef() {
-    let storedId = null;
-    try {
-        storedId = sessionStorage.getItem(PRESENCE_STORAGE_KEY);
-    } catch (e) {}
-    if (storedId && /^[A-Za-z0-9_-]{6,64}$/.test(storedId)) {
-        return child(presenceListRef, storedId);
-    }
-    const createdRef = push(presenceListRef);
-    try {
-        if (createdRef.key) sessionStorage.setItem(PRESENCE_STORAGE_KEY, createdRef.key);
-    } catch (e) {}
-    return createdRef;
-}
-
-const myPresenceRef = getOrCreatePresenceRef();
-const myPresenceId = myPresenceRef.key;
-const cursorsRef = ref(database, `${RT_ROOT}/cursors`);
-const myCursorRef = child(cursorsRef, myPresenceId);
-// Gộp focus + sfx thành 1 node ephemeral duy nhất trên mỗi user, tự hết hạn cục bộ sau FOCUS_TTL_MS (bỏ lệnh remove() thứ 2)
-const activityRef = ref(database, `${RT_ROOT}/activity`);
-const myActivityRef = child(activityRef, myPresenceId);
+// Tạo ID phiên duy nhất trong RAM cho mỗi tab trình duyệt (không dùng sessionStorage để tránh đè nhau khi nhân bản tab)
+const mySessionRef = push(sessionsRef);
+const mySessionId = mySessionRef.key;
 
 let isFirebaseConnected = false;
 let hasEverConnected = false;
-const presenceMap = {};
-const cursorsMap = {};
-const activityMap = {};
-const cleanedStaleKeys = new Set();
+const sessionsMap = {};
+const cleanedStaleSessionKeys = new Set();
 
-function cleanupStaleRealtimeNodes(parentRef, prefix, snapVal, maxAgeMs) {
-    if (!isFirebaseConnected || !snapVal || typeof snapVal !== 'object') return;
-    const now = getServerNow();
-    for (const [id, entry] of Object.entries(snapVal)) {
-        if (id === myPresenceId) continue;
-        const ts = Number(entry?.ts);
-        if (Number.isFinite(ts) && (now - ts) >= maxAgeMs) {
-            const cacheKey = `${prefix}:${id}:${ts}`;
-            if (cleanedStaleKeys.has(cacheKey)) continue;
-            cleanedStaleKeys.add(cacheKey);
-            if (cleanedStaleKeys.size > 200) {
-                const oldest = cleanedStaleKeys.values().next().value;
-                cleanedStaleKeys.delete(oldest);
+let localActivitySeq = 0;
+let lastRemoteSfxTs = 0;
+let pendingSessionSyncTimer = null;
+let pendingSessionPatch = null;
+let lastCursorSentAt = 0;
+let lastCursorTableSent = 0;
+
+const lastHandledActivitySeq = {};
+const remoteFocusExpireTimers = {};
+const remotePayingExpireTimers = {};
+
+function getActiveSessionEntries(now = getServerNow()) {
+    const active = [];
+    for (const [id, s] of Object.entries(sessionsMap)) {
+        if (id === mySessionId) {
+            active.push([id, s]);
+            continue;
+        }
+        if (!s || typeof s !== 'object') continue;
+        const ts = Number(s.ts);
+        if (!Number.isFinite(ts) || (now - ts) < STALE_SESSION_MS) {
+            active.push([id, s]);
+        }
+    }
+    return active;
+}
+
+// Leader Election: Chỉ máy có sessionId nhỏ nhất (theo thứ tự từ điển) trong các máy đang online mới đi dọn rác
+function isSessionGarbageLeader(now = getServerNow()) {
+    if (!isFirebaseConnected || !mySessionId) return false;
+    const activeIds = getActiveSessionEntries(now).map(([id]) => id);
+    if (!activeIds.includes(mySessionId)) activeIds.push(mySessionId);
+    activeIds.sort();
+    return activeIds[0] === mySessionId;
+}
+
+function cleanupStaleSessions(now = getServerNow()) {
+    if (!isSessionGarbageLeader(now)) return;
+    for (const [id, s] of Object.entries(sessionsMap)) {
+        if (id === mySessionId) continue;
+        const ts = Number(s?.ts);
+        if (!s || (Number.isFinite(ts) && (now - ts) >= STALE_SESSION_MS)) {
+            const cacheKey = `${id}:${ts || 0}`;
+            if (cleanedStaleSessionKeys.has(cacheKey)) continue;
+            cleanedStaleSessionKeys.add(cacheKey);
+            if (cleanedStaleSessionKeys.size > 200) {
+                const oldest = cleanedStaleSessionKeys.values().next().value;
+                cleanedStaleSessionKeys.delete(oldest);
             }
-            remove(child(parentRef, id)).catch(() => {
-                cleanedStaleKeys.delete(cacheKey);
+            remove(child(sessionsRef, id)).catch(() => {
+                cleanedStaleSessionKeys.delete(cacheKey);
             });
         }
     }
@@ -1590,46 +1615,143 @@ function updateNetworkStatusBadge() {
 window.addEventListener('online', updateNetworkStatusBadge);
 window.addEventListener('offline', updateNetworkStatusBadge);
 
-function renderPresenceCount(snapVal) {
-    const now = getServerNow();
-    const entries = Object.entries(snapVal || {}).filter(([id, info]) => {
-        if (id === myPresenceId) return true;
-        const ts = Number(info?.ts);
-        return !Number.isFinite(ts) || (now - ts) < STALE_PRESENCE_MS;
-    });
+function renderPresenceCount(now = getServerNow()) {
+    const activeCount = getActiveSessionEntries(now).length;
     const el = document.getElementById('online-val');
-    if (el) el.textContent = Math.max(1, entries.length);
+    if (el) el.textContent = Math.max(1, activeCount);
 }
 
-function bindChildMap(parentRef, targetMap, onChanged) {
-    onChildAdded(parentRef, (snap) => {
-        if (!snap.key) return;
-        targetMap[snap.key] = snap.val();
-        onChanged(snap.key, targetMap[snap.key], 'added');
-    });
-    onChildChanged(parentRef, (snap) => {
-        if (!snap.key) return;
-        targetMap[snap.key] = snap.val();
-        onChanged(snap.key, targetMap[snap.key], 'changed');
-    });
-    onChildRemoved(parentRef, (snap) => {
-        if (!snap.key) return;
-        delete targetMap[snap.key];
-        onChanged(snap.key, null, 'removed');
+// Đồng bộ trạng thái của chính user hiện tại lên 1 node duy nhất: sessions/{mySessionId}
+function syncMySession({
+    table = undefined,
+    itemId = undefined,
+    sfx = undefined,
+    paying = undefined,
+    immediate = false,
+    throttleCursor = false
+} = {}) {
+    if (!isFirebaseConnected) return;
+
+    const nowMs = Date.now();
+    if (throttleCursor && table !== undefined && table === lastCursorTableSent && (nowMs - lastCursorSentAt) < 200) {
+        return;
+    }
+
+    const patch = { ...(pendingSessionPatch || {}) };
+    patch.color = myColor;
+    patch.ts = getServerNow();
+
+    if (table !== undefined) {
+        const cleanTable = Number(table) || 0;
+        patch.table = cleanTable;
+        lastCursorSentAt = nowMs;
+        lastCursorTableSent = cleanTable;
+        // Đóng bàn hoặc chuyển bàn thì xóa focus món cũ
+        if (itemId === undefined) patch.itemId = null;
+    }
+    if (itemId !== undefined) {
+        patch.itemId = itemId !== null ? Number(itemId) : null;
+    }
+    if (paying !== undefined) {
+        patch.paying = Boolean(paying);
+    }
+    if (sfx !== undefined) {
+        patch.sfx = sfx || null;
+        if (sfx) patch.seq = ++localActivitySeq;
+    }
+
+    // Cập nhật ngay vào bản đồ cục bộ để Leader Election và bộ đếm luôn chính xác
+    sessionsMap[mySessionId] = {
+        ...(sessionsMap[mySessionId] || {}),
+        ...patch
+    };
+
+    if (immediate) {
+        clearTimeout(pendingSessionSyncTimer);
+        pendingSessionSyncTimer = null;
+        pendingSessionPatch = null;
+        update(mySessionRef, patch).catch(() => {});
+        return;
+    }
+
+    pendingSessionPatch = patch;
+    if (!pendingSessionSyncTimer) {
+        pendingSessionSyncTimer = setTimeout(() => {
+            pendingSessionSyncTimer = null;
+            const toSend = pendingSessionPatch;
+            pendingSessionPatch = null;
+            if (toSend && isFirebaseConnected) {
+                update(mySessionRef, toSend).catch(() => {});
+            }
+        }, 80);
+    }
+}
+
+function broadcastCursor(tableNum) {
+    syncMySession({
+        table: Number(tableNum) || 0,
+        itemId: null,
+        sfx: null,
+        immediate: !tableNum,
+        throttleCursor: Boolean(tableNum)
     });
 }
 
-bindChildMap(presenceListRef, presenceMap, () => {
-    renderPresenceCount(presenceMap);
-    cleanupStaleRealtimeNodes(presenceListRef, 'presence', presenceMap, STALE_PRESENCE_MS);
-});
+function broadcastActivity({
+    sfx = null,
+    tableId = currentTab,
+    itemId = null,
+    paying = Boolean(payingModalTable),
+    immediate = false
+} = {}) {
+    syncMySession({
+        table: Number(tableId) || 0,
+        itemId,
+        sfx,
+        paying,
+        immediate
+    });
+}
+
+function startLocalPayingBroadcast(tab) {
+    const tableNum = Number(tab);
+    if (!tableNum) return;
+    payingModalTable = tableNum;
+    syncMySession({ table: tableNum, itemId: null, paying: true, immediate: true });
+    clearInterval(payingHeartbeatTimer);
+    payingHeartbeatTimer = setInterval(() => {
+        if (!payingModalTable) {
+            clearInterval(payingHeartbeatTimer);
+            payingHeartbeatTimer = null;
+            return;
+        }
+        syncMySession({ table: payingModalTable, paying: true, immediate: true });
+    }, 15000);
+}
+
+function stopLocalPayingBroadcast(sfx = null, tableId = currentTab || 0) {
+    const hadPaying = payingModalTable !== null;
+    payingModalTable = null;
+    clearInterval(payingHeartbeatTimer);
+    payingHeartbeatTimer = null;
+    if (hadPaying || sfx) {
+        syncMySession({
+            table: Number(tableId) || 0,
+            itemId: null,
+            sfx,
+            paying: false,
+            immediate: true
+        });
+    }
+}
 
 function refreshPresenceHeartbeat() {
-    if (!isFirebaseConnected) return;
-    update(myPresenceRef, { ts: getServerNow() }).catch(() => {});
-    if (currentTab) {
-        set(myCursorRef, { table: currentTab, color: myColor, ts: getServerNow() }).catch(() => {});
-    }
+    if (!isFirebaseConnected || document.hidden) return;
+    syncMySession({
+        table: currentTab || 0,
+        paying: Boolean(payingModalTable),
+        immediate: true
+    });
 }
 
 function runPeriodicMaintenance() {
@@ -1637,36 +1759,13 @@ function runPeriodicMaintenance() {
     const now = getServerNow();
     for (let i = 1; i <= 9; i++) renderTableTime(i, now);
     refreshPresenceHeartbeat();
-    renderPresenceCount(presenceMap);
-    cleanupStaleRealtimeNodes(presenceListRef, 'presence', presenceMap, STALE_PRESENCE_MS);
-    renderRemoteCursors(cursorsMap);
-    cleanupStaleRealtimeNodes(cursorsRef, 'cursors', cursorsMap, STALE_CURSOR_MS);
-    renderRemoteFocus(activityMap);
-    renderRemotePaying(activityMap);
-    cleanupStaleRealtimeNodes(activityRef, 'activity', activityMap, STALE_CURSOR_MS);
+    renderPresenceCount(now);
+    renderRemoteCursors(now);
+    renderRemoteFocus(now);
+    renderRemotePaying(now);
+    cleanupStaleSessions(now);
 }
 setInterval(runPeriodicMaintenance, 30000);
-
-onValue(onlineRef, (snap) => {
-    isFirebaseConnected = snap.val() === true;
-    if (isFirebaseConnected) {
-        hasEverConnected = true;
-        updateNetworkStatusBadge();
-        onDisconnect(myPresenceRef).remove().catch(() => {});
-        onDisconnect(myCursorRef).remove().catch(() => {});
-        onDisconnect(myActivityRef).remove().catch(() => {});
-        set(myPresenceRef, { color: myColor, ts: getServerNow() })
-            .catch(e => console.error('[presence] LỖI GHI PRESENCE:', e.message));
-        if (currentTab) {
-            set(myCursorRef, { table: currentTab, color: myColor, ts: getServerNow() }).catch(() => {});
-        }
-        cleanupStaleRealtimeNodes(presenceListRef, 'presence', presenceMap, STALE_PRESENCE_MS);
-        cleanupStaleRealtimeNodes(cursorsRef, 'cursors', cursorsMap, STALE_CURSOR_MS);
-        cleanupStaleRealtimeNodes(activityRef, 'activity', activityMap, STALE_CURSOR_MS);
-    } else {
-        updateNetworkStatusBadge();
-    }
-});
 
 // ─── Object pool cho cursor trail dùng Web Animations API (0 reflow) ───
 const TRAIL_POOL_SIZE = 20;
@@ -1776,11 +1875,10 @@ function positionCursorOnTable(id, el, rect, offsetIndex, color) {
     el.classList.add('visible');
 }
 
-function renderRemoteCursors(snapVal) {
-    const now = getServerNow();
-    const entries = Object.entries(snapVal || {}).filter(([id, c]) => {
-        if (id === myPresenceId || !c || !c.table) return false;
-        const ts = Number(c.ts);
+function renderRemoteCursors(now = getServerNow()) {
+    const entries = Object.entries(sessionsMap).filter(([id, s]) => {
+        if (id === mySessionId || !s || !Number(s.table)) return false;
+        const ts = Number(s.ts);
         return !Number.isFinite(ts) || (now - ts) < STALE_CURSOR_MS;
     });
 
@@ -1796,15 +1894,15 @@ function renderRemoteCursors(snapVal) {
 
     const tableRects = new Map();
     const countPerTable = {}, tableViewerColor = {};
-    entries.forEach(([id, c]) => {
-        const tableNum = Number(c.table);
+    entries.forEach(([id, s]) => {
+        const tableNum = Number(s.table);
         if (!tableRects.has(tableNum)) {
             const card = TABLE_DOM[tableNum - 1]?.card;
             tableRects.set(tableNum, card ? card.getBoundingClientRect() : null);
         }
         const idx = countPerTable[tableNum] || 0;
         countPerTable[tableNum] = idx + 1;
-        if (!tableViewerColor[tableNum]) tableViewerColor[tableNum] = c.color || '#999';
+        if (!tableViewerColor[tableNum]) tableViewerColor[tableNum] = s.color || '#999';
         let el = remoteCursorEls[id];
         if (!el) {
             el = document.createElement('div');
@@ -1812,8 +1910,8 @@ function renderRemoteCursors(snapVal) {
             document.body.appendChild(el);
             remoteCursorEls[id] = el;
         }
-        el.style.background = c.color || '#999';
-        positionCursorOnTable(id, el, tableRects.get(tableNum), idx, c.color);
+        el.style.background = s.color || '#999';
+        positionCursorOnTable(id, el, tableRects.get(tableNum), idx, s.color);
     });
 
     for (let t = 1; t <= 9; t++) {
@@ -1829,99 +1927,16 @@ function renderRemoteCursors(snapVal) {
     }
 }
 
-bindChildMap(cursorsRef, cursorsMap, () => {
-    renderRemoteCursors(cursorsMap);
-    cleanupStaleRealtimeNodes(cursorsRef, 'cursors', cursorsMap, STALE_CURSOR_MS);
-});
-
 let cursorRenderTicking = false;
 function scheduleRenderRemoteCursors() {
     if (cursorRenderTicking) return;
     cursorRenderTicking = true;
-    requestAnimationFrame(() => { renderRemoteCursors(cursorsMap); cursorRenderTicking = false; });
+    requestAnimationFrame(() => { renderRemoteCursors(); cursorRenderTicking = false; });
 }
 window.addEventListener('resize', scheduleRenderRemoteCursors);
 window.addEventListener('scroll', scheduleRenderRemoteCursors, { passive: true });
 
-// ─── Throttle cursor broadcast 200ms ───────────────────────────────────
-let lastCursorBroadcastTs = 0;
-function broadcastCursor(tableNum) {
-    const now = Date.now();
-    if (tableNum && now - lastCursorBroadcastTs < 200) return;
-    lastCursorBroadcastTs = now;
-    if (tableNum) set(myCursorRef, { table: tableNum, color: myColor, ts: getServerNow() }).catch(() => {});
-    else remove(myCursorRef).catch(() => {});
-}
-
-// ─── GỘP FOCUS + SFX VÀO 1 GÓI TIN EPHEMERAL DUY NHẤT (TIẾT KIỆM WRITE) ─
-let localActivitySeq = 0;
-let lastRemoteSfxTs = 0;
-let pendingActivityTimer = null;
-let pendingActivityPayload = null;
-const lastHandledActivitySeq = {};
-const remoteFocusExpireTimers = {};
-const remotePayingExpireTimers = {};
-
-function flushPendingActivity() {
-    clearTimeout(pendingActivityTimer);
-    pendingActivityTimer = null;
-    const toSend = pendingActivityPayload;
-    pendingActivityPayload = null;
-    if (toSend && isFirebaseConnected) {
-        set(myActivityRef, toSend).catch(() => {});
-    }
-}
-
-function broadcastActivity({ sfx = null, tableId = currentTab, itemId = null, paying = Boolean(payingModalTable), immediate = false } = {}) {
-    if (!isFirebaseConnected) return;
-    const payload = {
-        table: Number(tableId) || 0,
-        itemId: itemId !== null && itemId !== undefined ? Number(itemId) : null,
-        color: myColor,
-        sfx: sfx || null,
-        paying: Boolean(paying),
-        seq: ++localActivitySeq,
-        ts: getServerNow()
-    };
-    if (immediate) {
-        clearTimeout(pendingActivityTimer);
-        pendingActivityTimer = null;
-        pendingActivityPayload = null;
-        set(myActivityRef, payload).catch(() => {});
-        return;
-    }
-    pendingActivityPayload = payload;
-    if (!pendingActivityTimer) {
-        pendingActivityTimer = setTimeout(flushPendingActivity, 80);
-    }
-}
-
-function startLocalPayingBroadcast(tab) {
-    const tableNum = Number(tab);
-    if (!tableNum) return;
-    payingModalTable = tableNum;
-    broadcastActivity({ tableId: tableNum, paying: true, immediate: true });
-    clearInterval(payingHeartbeatTimer);
-    payingHeartbeatTimer = setInterval(() => {
-        if (!payingModalTable) {
-            clearInterval(payingHeartbeatTimer);
-            payingHeartbeatTimer = null;
-            return;
-        }
-        broadcastActivity({ tableId: payingModalTable, paying: true, immediate: true });
-    }, 15000);
-}
-
-function stopLocalPayingBroadcast(sfx = null, tableId = currentTab || 0) {
-    const hadPaying = payingModalTable !== null;
-    payingModalTable = null;
-    clearInterval(payingHeartbeatTimer);
-    payingHeartbeatTimer = null;
-    if (hadPaying || sfx) {
-        broadcastActivity({ sfx, tableId, itemId: null, paying: false, immediate: true });
-    }
-}
-
+// ─── FOCUS MÓN ĂN & TRẠNG THÁI ĐANG THU TIỀN TỪ SESSIONS ───────────────
 const remoteFocusRows = {};
 function clearRemoteFocusEntry(id) {
     clearTimeout(remoteFocusExpireTimers[id]);
@@ -1936,26 +1951,25 @@ function clearRemoteFocusEntry(id) {
     delete remoteFocusRows[id];
 }
 
-function renderRemoteFocus(snapVal) {
-    const now = getServerNow();
-    const entries = Object.entries(snapVal || {}).filter(([id, f]) => {
-        if (id === myPresenceId || !f || !f.itemId) return false;
-        const ts = Number(f.ts);
+function renderRemoteFocus(now = getServerNow()) {
+    const entries = Object.entries(sessionsMap).filter(([id, s]) => {
+        if (id === mySessionId || !s || !s.itemId || !Number(s.table)) return false;
+        const ts = Number(s.ts);
         return Number.isFinite(ts) && (now - ts) < FOCUS_TTL_MS;
     });
 
     const activeIds = new Set(entries.map(([id]) => id));
     Object.keys(remoteFocusRows).forEach(id => {
         const entry = entries.find(([eid]) => eid === id)?.[1];
-        if (!activeIds.has(id) || !entry || entry.table !== currentTab) {
+        if (!activeIds.has(id) || !entry || Number(entry.table) !== currentTab) {
             clearRemoteFocusEntry(id);
         }
     });
 
     if (!currentTab) return;
-    entries.forEach(([id, f]) => {
-        if (f.table !== currentTab) return;
-        const row = ITEM_DOM.get(Number(f.itemId))?.row;
+    entries.forEach(([id, s]) => {
+        if (Number(s.table) !== currentTab) return;
+        const row = ITEM_DOM.get(Number(s.itemId))?.row;
         if (!row) return;
         const prev = remoteFocusRows[id];
         if (prev && prev.rowEl && prev.rowEl !== row) {
@@ -1964,7 +1978,7 @@ function renderRemoteFocus(snapVal) {
             if (prev.tagEl) prev.tagEl.remove();
         }
         row.classList.add('remote-focus');
-        row.style.setProperty('--focus-color', f.color || '#999');
+        row.style.setProperty('--focus-color', s.color || '#999');
         let tag = (prev && prev.rowEl === row) ? prev.tagEl : null;
         if (!tag) {
             tag = document.createElement('span');
@@ -1973,10 +1987,10 @@ function renderRemoteFocus(snapVal) {
             row.appendChild(tag);
             requestAnimationFrame(() => tag.classList.add('visible'));
         }
-        tag.style.background = f.color || '#999';
+        tag.style.background = s.color || '#999';
         remoteFocusRows[id] = { rowEl: row, tagEl: tag };
 
-        const remainingMs = Math.max(80, FOCUS_TTL_MS - Math.max(0, now - Number(f.ts)));
+        const remainingMs = Math.max(80, FOCUS_TTL_MS - Math.max(0, now - Number(s.ts)));
         clearTimeout(remoteFocusExpireTimers[id]);
         remoteFocusExpireTimers[id] = setTimeout(() => {
             clearRemoteFocusEntry(id);
@@ -1984,18 +1998,17 @@ function renderRemoteFocus(snapVal) {
     });
 }
 
-function getActiveRemotePayingByTable(snapVal = activityMap) {
-    const now = getServerNow();
+function getActiveRemotePayingByTable(now = getServerNow()) {
     const byTable = new Map();
-    for (const [id, f] of Object.entries(snapVal || {})) {
-        if (id === myPresenceId || !f || f.paying !== true || !f.table) continue;
-        const ts = Number(f.ts);
+    for (const [id, s] of Object.entries(sessionsMap)) {
+        if (id === mySessionId || !s || s.paying !== true || !s.table) continue;
+        const ts = Number(s.ts);
         if (!Number.isFinite(ts) || (now - ts) >= PAYING_TTL_MS) continue;
-        const tableNum = Number(f.table);
+        const tableNum = Number(s.table);
         if (!Number.isInteger(tableNum) || tableNum < 1 || tableNum > 9) continue;
         const prev = byTable.get(tableNum);
         if (!prev || ts > prev.ts) {
-            byTable.set(tableNum, { id, table: tableNum, color: f.color || '#f59e0b', ts });
+            byTable.set(tableNum, { id, table: tableNum, color: s.color || '#f59e0b', ts });
         }
     }
     return byTable;
@@ -2004,7 +2017,7 @@ function getActiveRemotePayingByTable(snapVal = activityMap) {
 function isTableRemotePaying(tableId) {
     const num = Number(tableId);
     if (!num) return null;
-    return getActiveRemotePayingByTable(activityMap).get(num) || null;
+    return getActiveRemotePayingByTable().get(num) || null;
 }
 
 function syncCurrentTableRemotePayingUi(info) {
@@ -2032,21 +2045,20 @@ function syncCurrentTableRemotePayingUi(info) {
     if (payBtn) payBtn.classList.toggle('is-remote-paying-disabled', Boolean(info));
 }
 
-function renderRemotePaying(snapVal = activityMap) {
-    const now = getServerNow();
-    const byTable = getActiveRemotePayingByTable(snapVal);
+function renderRemotePaying(now = getServerNow()) {
+    const byTable = getActiveRemotePayingByTable(now);
 
     const activeIds = new Set();
-    for (const [id, f] of Object.entries(snapVal || {})) {
-        if (id === myPresenceId || !f || f.paying !== true || !f.table) continue;
-        const ts = Number(f.ts);
+    for (const [id, s] of Object.entries(sessionsMap)) {
+        if (id === mySessionId || !s || s.paying !== true || !s.table) continue;
+        const ts = Number(s.ts);
         if (!Number.isFinite(ts) || (now - ts) >= PAYING_TTL_MS) continue;
         activeIds.add(id);
         const remainingMs = Math.max(120, PAYING_TTL_MS - Math.max(0, now - ts));
         clearTimeout(remotePayingExpireTimers[id]);
         remotePayingExpireTimers[id] = setTimeout(() => {
             delete remotePayingExpireTimers[id];
-            renderRemotePaying(activityMap);
+            renderRemotePaying();
         }, remainingMs);
     }
     for (const id of Object.keys(remotePayingExpireTimers)) {
@@ -2077,30 +2089,85 @@ function renderRemotePaying(snapVal = activityMap) {
     syncCurrentTableRemotePayingUi(currentTab ? (byTable.get(Number(currentTab)) || null) : null);
 }
 
-bindChildMap(activityRef, activityMap, (id, ev, eventType) => {
-    if (eventType === 'removed') {
+function handleRemoteSessionChange(id, sessionData, eventType) {
+    const now = getServerNow();
+
+    if (eventType === 'removed' || !sessionData || typeof sessionData !== 'object') {
+        delete sessionsMap[id];
         delete lastHandledActivitySeq[id];
         clearRemoteFocusEntry(id);
         clearTimeout(remotePayingExpireTimers[id]);
         delete remotePayingExpireTimers[id];
-        renderRemotePaying(activityMap);
+        renderPresenceCount(now);
+        renderRemoteCursors(now);
+        renderRemotePaying(now);
         return;
     }
-    if (!ev || id === myPresenceId) return;
 
-    const seqKey = `${ev.seq || 0}_${ev.ts || 0}`;
-    if (seqKey !== lastHandledActivitySeq[id]) {
-        lastHandledActivitySeq[id] = seqKey;
-        const ts = Number(ev.ts);
-        if (ev.sfx && Number.isFinite(ts) && Math.abs(getServerNow() - ts) <= 10000) {
-            lastRemoteSfxTs = Date.now();
-            playUiSound(ev.sfx);
+    sessionsMap[id] = sessionData;
+
+    if (id !== mySessionId && sessionData.sfx) {
+        const seqKey = `${sessionData.seq || 0}_${sessionData.ts || 0}`;
+        if (seqKey !== lastHandledActivitySeq[id]) {
+            lastHandledActivitySeq[id] = seqKey;
+            const ts = Number(sessionData.ts);
+            if (Number.isFinite(ts) && Math.abs(now - ts) <= 10000) {
+                lastRemoteSfxTs = Date.now();
+                playUiSound(sessionData.sfx);
+            }
         }
     }
 
-    renderRemoteFocus(activityMap);
-    renderRemotePaying(activityMap);
-    cleanupStaleRealtimeNodes(activityRef, 'activity', activityMap, STALE_CURSOR_MS);
+    renderPresenceCount(now);
+    renderRemoteCursors(now);
+    renderRemoteFocus(now);
+    renderRemotePaying(now);
+    cleanupStaleSessions(now);
+}
+
+// Lọc phía server chỉ lấy các session hoạt động trong vòng 2 phút gần nhất -> chặn tải node rác khi F5/mở app
+const activeSessionsQuery = query(
+    sessionsRef,
+    orderByChild('ts'),
+    startAt(Date.now() - STALE_SESSION_MS)
+);
+
+onChildAdded(activeSessionsQuery, (snap) => {
+    if (snap.key) handleRemoteSessionChange(snap.key, snap.val(), 'added');
+});
+onChildChanged(activeSessionsQuery, (snap) => {
+    if (snap.key) handleRemoteSessionChange(snap.key, snap.val(), 'changed');
+});
+onChildRemoved(activeSessionsQuery, (snap) => {
+    if (snap.key) handleRemoteSessionChange(snap.key, null, 'removed');
+});
+
+onValue(onlineRef, (snap) => {
+    isFirebaseConnected = snap.val() === true;
+    if (isFirebaseConnected) {
+        hasEverConnected = true;
+        updateNetworkStatusBadge();
+        // Chỉ cần 1 onDisconnect duy nhất cho toàn bộ phiên làm việc
+        onDisconnect(mySessionRef).remove().catch(() => {});
+
+        const initialSessionPayload = {
+            color: myColor,
+            table: document.hidden ? 0 : (Number(currentTab) || 0),
+            itemId: null,
+            sfx: null,
+            paying: Boolean(payingModalTable),
+            seq: localActivitySeq,
+            ts: getServerNow()
+        };
+        sessionsMap[mySessionId] = initialSessionPayload;
+        set(mySessionRef, initialSessionPayload)
+            .catch(e => console.error('[sessions] LỖI GHI SESSION:', e.message));
+
+        renderPresenceCount();
+        cleanupStaleSessions();
+    } else {
+        updateNetworkStatusBadge();
+    }
 });
 
 // ─── MENU + THANH NHẢY NHANH THEO NHÓM MÓN ─────────────────────────────
@@ -2262,7 +2329,6 @@ function consumeLocalEchoDelta(tableId, itemId, observedDelta) {
         if (Object.keys(localEchoDeltas[tableId]).length === 0) delete localEchoDeltas[tableId];
         return true;
     }
-    // Trường hợp gộp với thay đổi từ máy khác trong cùng frame
     if ((expected > 0 && observedDelta > 0) || (expected < 0 && observedDelta < 0)) {
         const remaining = expected - observedDelta;
         if (remaining === 0) {
@@ -2454,7 +2520,6 @@ function bindBranchWithInitialSync(branchRef, branchName, applyInitialVal, handl
     });
 }
 
-// Vẽ ngay từ bản nháp localStorage (nếu có) trước khi Firebase đồng bộ xong
 if (hydrateFromLocalStateCache()) {
     refresh(null, false);
 }
@@ -2514,8 +2579,8 @@ function selectTable(n, options = {}) {
     syncActiveLangButton('vi');
     billWasShown = false;
     broadcastCursor(currentTab);
-    renderRemoteFocus(activityMap);
-    renderRemotePaying(activityMap);
+    renderRemoteFocus();
+    renderRemotePaying();
     const section = document.getElementById('order-section');
     if (currentTab) {
         document.getElementById('table-title').textContent = getTableDisplayName(n);
@@ -2587,7 +2652,6 @@ function commitPendingItem(tab, id, expectedVersion = null) {
 
     const startEpoch = tableEpoch[tab] || 0;
 
-    // Trừ delta khỏi pendingDeltas trước khi gọi transaction() vì Firebase SDK áp dụng latency compensation cục bộ
     delete pendingDeltas[tab][id];
     if (Object.keys(pendingDeltas[tab]).length === 0) delete pendingDeltas[tab];
 
@@ -2610,7 +2674,6 @@ function commitPendingItem(tab, id, expectedVersion = null) {
         if (passCount === 1) initialLocalCur = current;
 
         if ((tableEpoch[tab] || 0) !== startEpoch || (current === 0 && deltaToSend < 0)) {
-            // Nếu Pass 1 từng áp dụng giá trị lạc quan và Pass >= 2 hủy bỏ, bù echo rollback chính xác
             if (prevOptimisticTarget !== null && prevOptimisticTarget !== current) {
                 recordLocalEchoDelta(tab, id, initialLocalCur - prevOptimisticTarget);
                 prevOptimisticTarget = current;
@@ -2738,13 +2801,11 @@ function cleanupStaleTimes(tableIds = null) {
     for (const tab of ids) {
         const startTs = Number(data.times?.[tab]);
         if (!startTs || data.locked?.[tab] || effectiveTableHasItems(tab)) continue;
-        // Chờ qua ngưỡng 15s để tránh máy khác xóa nhầm giờ vừa khởi tạo khi 2 gói tin tới lệch nhịp
         if ((now - startTs) < STALE_TIME_GRACE_MS) continue;
         remove(child(timesRef, String(tab))).catch(() => {});
     }
 }
 
-// Tự động giải phóng trạng thái khóa mồ côi (bàn 0đ nhưng vẫn sáng viền LED chốt đơn)
 const orphanedLockTimers = {};
 function scheduleOrphanedLockCheck(tableIds = null) {
     if (!initialDataReady) return;
@@ -2795,7 +2856,6 @@ function change(id, delta) {
     const currentQty = getEffectiveItemQty(tab, id);
     if (delta < 0 && currentQty <= 0) return;
 
-    // Cộng dồn delta cục bộ để tránh lost-update khi nhiều thiết bị bấm cùng lúc
     if (!pendingDeltas[tab]) pendingDeltas[tab] = {};
     const nextDelta = (pendingDeltas[tab][id] || 0) + delta;
     if (nextDelta === 0) {
@@ -2818,7 +2878,6 @@ function change(id, delta) {
     renderCrowdStatus();
     flashRow(id, delta);
 
-    // Debounce ghi Firebase
     const key = `${tab}_${id}`;
     const version = (debounceVersions[key] || 0) + 1;
     debounceVersions[key] = version;
@@ -2841,7 +2900,6 @@ function changeBillLang(l) {
     scrollBillIntoView();
 }
 
-// ─── Tính tổng tiền + số món ăn / nước uống (gộp cả pendingDeltas) ───────
 function calculateTableStats(tableId) {
     let total = 0, foodQty = 0, drinkQty = 0;
     const mergedOrder = getMergedOrder(tableId);
@@ -2972,7 +3030,6 @@ function refresh(tableIds = null, updateCurrentOrder = true) {
     flushRemoteOrderFlashes();
 }
 
-// ─── Async bill render với kiểm tra trạng thái khóa sau await ──────────
 async function renderBillAsync(tab) {
     const targetLang = currentBillLang;
     const langData = await getLangData(targetLang);
@@ -3086,7 +3143,6 @@ async function doPay() {
         return;
     }
 
-    // Kiểm tra xem máy khác có vừa mở khóa hoặc sửa đơn trong lúc hộp thoại xác nhận đang mở không
     const lockedAfterConfirm = !!data.locked?.[tab];
     const expectedOrder = normalizeOrderMap(getMergedOrder(tab));
     if ((lockedBeforeConfirm && !lockedAfterConfirm) || !areOrdersEqual(orderBeforeConfirm, expectedOrder)) {
@@ -3096,7 +3152,6 @@ async function doPay() {
         return;
     }
 
-    // Sao lưu trạng thái bàn để hoàn tác (rollback) nếu giao dịch Firebase gặp lỗi kết nối
     const backupOrder = data.orders?.[tab] ? { ...data.orders[tab] } : { ...expectedOrder };
     const backupLocked = data.locked?.[tab] !== undefined ? data.locked[tab] : null;
     const backupTime = data.times?.[tab] !== undefined ? data.times[tab] : null;
@@ -3155,7 +3210,6 @@ async function doPay() {
     let orderDeletedOnServer = false;
 
     try {
-        // 1. Kiểm tra & xóa nguyên tử orders/${tab}
         const txResult = await transaction(tableOrderRef, (serverOrder) => {
             if (!areOrdersEqual(serverOrder, expectedOrder)) {
                 return undefined;
@@ -3190,7 +3244,6 @@ async function doPay() {
 
         orderDeletedOnServer = true;
 
-        // 2. Xóa trực tiếp từng nhánh con locked/${tab} và times/${tab} (tránh ghi ở node cha dbRef)
         await clearTableLockAndTimeOnServer(tab);
         localPaymentEchoTables.delete(tab);
 
