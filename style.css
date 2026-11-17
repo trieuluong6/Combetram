@@ -602,7 +602,7 @@ body.dark-mode .lang-btn.active-lang {
     filter: none;
 }
 
-/* Hàng ngang 2 nút phụ (Mã QR & Gọi thêm món): 2.5D nhẹ (đế xám 3px, lún 2px khi nhấn) */
+/* Hàng ngang 2 nút phụ (Mã QR & Gọi thêm món): 2.5D nhẹ tông xanh dương pastel */
 .bill-secondary-actions {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -630,58 +630,48 @@ body.dark-mode .lang-btn.active-lang {
 }
 .btn-qr-paper,
 .btn-add-more {
-    background: #ffffff;
-    border: 1.5px solid #cbd5e1;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 3px 0 #cbd5e1, 0 5px 10px rgba(15, 23, 42, 0.06);
-}
-.btn-qr-paper {
-    color: #334155;
-}
-.btn-add-more {
+    background: linear-gradient(180deg, #f0f7ff 0%, #e1effe 100%);
     color: #1565c0;
+    border: 1.5px solid #93c5fd;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 3px 0 #7fb3f5, 0 5px 10px rgba(21, 101, 192, 0.10);
 }
 .btn-qr-paper:active,
 .btn-add-more:active {
     transform: translateY(2px);
     filter: none;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 1px 0 #cbd5e1, 0 2px 4px rgba(15, 23, 42, 0.05);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 1px 0 #7fb3f5, 0 2px 4px rgba(21, 101, 192, 0.08);
 }
 .btn-qr-paper.is-qr-active {
-    background: #f1f5f9;
-    border-color: #94a3b8;
-    color: #0f172a;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 3px 0 #94a3b8, 0 5px 10px rgba(15, 23, 42, 0.08);
+    background: linear-gradient(180deg, #dbeafe 0%, #bfdbfe 100%);
+    border-color: #60a5fa;
+    color: #1e3a8a;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85), 0 3px 0 #60a5fa, 0 5px 10px rgba(30, 58, 138, 0.12);
 }
 .btn-qr-paper.is-qr-active:active {
     transform: translateY(2px);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), 0 1px 0 #94a3b8, 0 2px 4px rgba(15, 23, 42, 0.06);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65), 0 1px 0 #60a5fa, 0 2px 4px rgba(30, 58, 138, 0.10);
 }
 body.dark-mode .btn-qr-paper,
 body.dark-mode .btn-add-more {
-    background: #242e3a;
-    border-color: #3b4b5e;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 3px 0 #131920, 0 5px 10px rgba(0, 0, 0, 0.32);
-}
-body.dark-mode .btn-qr-paper {
-    color: #e2e8f0;
-}
-body.dark-mode .btn-add-more {
-    color: #90caf9;
+    background: linear-gradient(180deg, #21354a 0%, #1a2b3d 100%);
+    color: #93c5fd;
+    border-color: #38587a;
+    box-shadow: inset 0 1px 0 rgba(147, 197, 253, 0.14), 0 3px 0 #101b27, 0 5px 10px rgba(0, 0, 0, 0.34);
 }
 body.dark-mode .btn-qr-paper:active,
 body.dark-mode .btn-add-more:active {
     transform: translateY(2px);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 1px 0 #131920, 0 2px 4px rgba(0, 0, 0, 0.28);
+    box-shadow: inset 0 1px 0 rgba(147, 197, 253, 0.08), 0 1px 0 #101b27, 0 2px 4px rgba(0, 0, 0, 0.28);
 }
 body.dark-mode .btn-qr-paper.is-qr-active {
-    background: #2d3948;
-    border-color: #52667d;
-    color: #f8fafc;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.09), 0 3px 0 #131920, 0 5px 10px rgba(0, 0, 0, 0.36);
+    background: linear-gradient(180deg, #29435e 0%, #20364d 100%);
+    border-color: #4d78a6;
+    color: #dbeafe;
+    box-shadow: inset 0 1px 0 rgba(219, 234, 254, 0.18), 0 3px 0 #101b27, 0 5px 10px rgba(0, 0, 0, 0.38);
 }
 body.dark-mode .btn-qr-paper.is-qr-active:active {
     transform: translateY(2px);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 1px 0 #131920, 0 2px 4px rgba(0, 0, 0, 0.3);
+    box-shadow: inset 0 1px 0 rgba(219, 234, 254, 0.10), 0 1px 0 #101b27, 0 2px 4px rgba(0, 0, 0, 0.30);
 }
 
 /* Nút chính (Xác nhận thanh toán): 2.5D đậm nét (đế xanh đậm 5px, lún 3px khi nhấn) */
