@@ -412,15 +412,13 @@ body.dark-mode .flash-sub { background-color: #5e2424 !important; transition: no
     transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
 }
 .cat-pill:active { transform: scale(0.94); }
-.cat-pill.active,
-.cat-pill.is-current {
+.cat-pill.active {
     background: #1565c0 !important;
     color: #ffffff !important;
     border-color: #1565c0 !important;
     box-shadow: 0 2px 6px rgba(21, 101, 192, 0.35);
 }
-body.dark-mode .cat-pill.active,
-body.dark-mode .cat-pill.is-current {
+body.dark-mode .cat-pill.active {
     background: #2196f3 !important;
     color: #ffffff !important;
     border-color: #42a5f5 !important;
@@ -570,20 +568,6 @@ body.dark-mode .lang-btn.active-lang {
     color: var(--text-muted);
     margin-bottom: 14px;
 }
-.app-modal-input {
-    width: 100%;
-    box-sizing: border-box;
-    padding: 11px 12px;
-    margin-bottom: 14px;
-    border-radius: 10px;
-    border: 1.5px solid var(--border-card);
-    background: var(--bg-body);
-    color: var(--text-main);
-    font-size: 1em;
-    outline: none;
-}
-.app-modal-input:focus { border-color: var(--blue); }
-.app-modal-input.hidden { display: none; }
 .app-modal-actions {
     display: flex;
     gap: 10px;
@@ -606,9 +590,6 @@ body.dark-mode .lang-btn.active-lang {
 .app-modal-btn-confirm {
     background: var(--success-green);
     color: #fff;
-}
-.app-modal-btn-confirm.is-danger {
-    background: var(--primary-red);
 }
 
 .app-toast-container {

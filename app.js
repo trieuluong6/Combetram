@@ -305,8 +305,7 @@ function showAppModal({
     message = '',
     type = 'alert',
     confirmText = 'Xác nhận',
-    cancelText = 'Hủy',
-    danger = false
+    cancelText = 'Hủy'
 } = {}) {
     const backdrop = document.getElementById('app-modal-backdrop');
     const titleEl = document.getElementById('app-modal-title');
@@ -328,7 +327,6 @@ function showAppModal({
     msgEl.textContent = message;
     confirmBtn.textContent = confirmText;
     cancelBtn.textContent = cancelText;
-    confirmBtn.classList.toggle('is-danger', Boolean(danger));
     cancelBtn.classList.toggle('hidden', type === 'alert');
     backdrop.classList.remove('hidden');
 
@@ -491,30 +489,23 @@ function animateScrollToQrCenter(targetHeight) {
     billScrollAnimation = requestAnimationFrame(step);
 }
 
-function resetBillQrView(instant = true) {
+function resetBillQrView() {
     stopBillScrollAnimation();
     billViewMode = 'bill';
     const { shell, back, button } = getBillFlipDom();
     if (!shell) return;
 
-    if (instant) {
-        shell.style.transition = 'none';
-        const flipper = document.getElementById('bill-flipper');
-        if (flipper) flipper.style.transition = 'none';
-        shell.classList.remove('is-qr');
-        if (back) back.setAttribute('aria-hidden', 'true');
-        if (button) button.textContent = 'MÃ QR';
-        shell.style.height = '';
-        void shell.offsetHeight;
-        shell.style.transition = '';
-        if (flipper) flipper.style.transition = '';
-        requestAnimationFrame(() => syncBillFlipHeight(false));
-    } else {
-        shell.classList.remove('is-qr');
-        if (back) back.setAttribute('aria-hidden', 'true');
-        if (button) button.textContent = 'MÃ QR';
-        syncBillFlipHeight(true);
-    }
+    shell.style.transition = 'none';
+    const flipper = document.getElementById('bill-flipper');
+    if (flipper) flipper.style.transition = 'none';
+    shell.classList.remove('is-qr');
+    if (back) back.setAttribute('aria-hidden', 'true');
+    if (button) button.textContent = 'MÃ QR';
+    shell.style.height = '';
+    void shell.offsetHeight;
+    shell.style.transition = '';
+    if (flipper) flipper.style.transition = '';
+    requestAnimationFrame(() => syncBillFlipHeight(false));
 }
 
 function scrollBillIntoView() {
@@ -1161,26 +1152,21 @@ function synthesizeSoundSamples(type, sampleRate = SOUND_SAMPLE_RATE) {
         const delay = n.delay || 0;
         const dur = n.dur || 0.12;
         const f0 = n.freq;
-        const f1 = n.endFreq || f0;
         const vol = n.vol || 1.0;
         const wave = n.wave || 'sine';
         const isWood = n.instrument === 'wood';
-        const isSolidKnock = n.instrument === 'solid_knock';
         const isGlass = n.instrument === 'glass';
         const startIdx = Math.floor(delay * sampleRate);
         const lenIdx = Math.max(1, Math.floor(dur * sampleRate));
-        const attackSamples = Math.max(1, Math.floor((isWood ? 0.0015 : (isGlass ? 0.0018 : (isSolidKnock ? 0.0012 : 0.004))) * sampleRate));
-        const releaseSamples = Math.max(1, Math.floor((isSolidKnock ? 0.012 : 0.015) * sampleRate));
+        const attackSamples = Math.max(1, Math.floor((isWood ? 0.0015 : (isGlass ? 0.0018 : 0.004)) * sampleRate));
+        const releaseSamples = Math.max(1, Math.floor(0.015 * sampleRate));
         let phase = 0;
         let malletPhase = 0;
 
         for (let i = 0; i < lenIdx && (startIdx + i) < numSamples; i++) {
             const t = lenIdx > 1 ? i / (lenIdx - 1) : 0;
             const elapsedSec = i / sampleRate;
-            const freq = isSolidKnock
-                ? (f1 + (f0 - f1) * Math.exp(-elapsedSec * 65))
-                : (f1 !== f0 ? f0 * Math.pow(f1 / f0, t) : f0);
-            phase += (2 * Math.PI * freq) / sampleRate;
+            phase += (2 * Math.PI * f0) / sampleRate;
 
             const attack = Math.min(1, i / attackSamples);
             const release = Math.min(1, (lenIdx - 1 - i) / releaseSamples);
@@ -1206,27 +1192,6 @@ function synthesizeSoundSamples(type, sampleRate = SOUND_SAMPLE_RATE) {
                     clink;
 
                 mix[startIdx + i] += glassSample * vol * attack * release;
-            } else if (isSolidKnock) {
-                const bodyEnv = Math.exp(-elapsedSec * 26);
-                const overtone1Env = Math.exp(-elapsedSec * 38);
-                const overtone2Env = Math.exp(-elapsedSec * 58);
-                const overtone3Env = Math.exp(-elapsedSec * 90);
-
-                let knock = 0;
-                if (elapsedSec < 0.009) {
-                    const knockFreq = 1950 - (elapsedSec / 0.009) * 950;
-                    malletPhase += (2 * Math.PI * knockFreq) / sampleRate;
-                    knock = 1.15 * Math.sin(malletPhase) * Math.exp(-elapsedSec * 260);
-                }
-
-                const solidKnockSample =
-                    1.25 * Math.sin(phase) * bodyEnv +
-                    0.72 * Math.sin(1.48 * phase) * overtone1Env +
-                    0.48 * Math.sin(2.15 * phase) * overtone2Env +
-                    0.26 * Math.sin(2.85 * phase) * overtone3Env +
-                    knock;
-
-                mix[startIdx + i] += solidKnockSample * vol * attack * release;
             } else if (isWood) {
                 const bodyEnv = Math.exp(-elapsedSec * 16.5);
                 const overtone2Env = Math.exp(-elapsedSec * 34);
@@ -2423,7 +2388,6 @@ if (checkoutBtnEl && 'IntersectionObserver' in window) {
 const pendingDeltas = {};
 const localEchoDeltas = {};
 const tableEpoch = Array(10).fill(0);
-let firstOrdersLoad = true;
 const initialBranchesLoaded = new Set();
 let initialDataReady = false;
 const pendingRemoteOrderFlashes = [];
@@ -2538,21 +2502,19 @@ function handleSingleTableOrderSnapshot(rawKey, tableVal) {
     }
 
     const changed = new Set([tableId]);
-    if (!firstOrdersLoad) {
-        const ignoredTables = wasLocalPay ? new Set([tableId]) : null;
-        const remoteChanges = queueRemoteOrderFlashes(
-            { [tableId]: prevTableOrder },
-            { [tableId]: nextTableOrder },
-            ignoredTables
-        );
-        if (remoteChanges > 0 && (Date.now() - lastRemoteSfxTs) > 1200) {
-            playUiSound('ting');
-        }
-        if (!wasLocalPay && prevHadItems && !nextHasItems && currentTab === tableId) {
-            currentBillLang = 'vi';
-            syncActiveLangButton('vi');
-            showToast(`${getTableDisplayName(tableId)} vừa được thanh toán ở thiết bị khác!`, 'info', 3500);
-        }
+    const ignoredTables = wasLocalPay ? new Set([tableId]) : null;
+    const remoteChanges = queueRemoteOrderFlashes(
+        { [tableId]: prevTableOrder },
+        { [tableId]: nextTableOrder },
+        ignoredTables
+    );
+    if (remoteChanges > 0 && (Date.now() - lastRemoteSfxTs) > 1200) {
+        playUiSound('ting');
+    }
+    if (!wasLocalPay && prevHadItems && !nextHasItems && currentTab === tableId) {
+        currentBillLang = 'vi';
+        syncActiveLangButton('vi');
+        showToast(`${getTableDisplayName(tableId)} vừa được thanh toán ở thiết bị khác!`, 'info', 3500);
     }
 
     if (nextHasItems) {
@@ -2653,7 +2615,6 @@ bindBranchWithInitialSync(
             }
         }
         data.orders = reconciled;
-        firstOrdersLoad = false;
     },
     handleSingleTableOrderSnapshot
 );
@@ -2688,7 +2649,7 @@ bindBranchWithInitialSync(
 function selectTable(n, options = {}) {
     if ((paymentInProgress || payingTables.has(Number(n))) && !options.allowDuringPayment) return;
     if (options.haptic !== false) triggerHaptic('nav');
-    resetBillQrView(true);
+    resetBillQrView();
     const previousTab = currentTab;
     const wasOpenForSameTable = (currentTab === n);
     currentTab = wasOpenForSameTable ? null : n;
@@ -3088,7 +3049,7 @@ function renderCurrentOrder() {
     } else if (!isLock) {
         billWasShown = false;
         billArea.classList.remove('printing-out');
-        if (billViewMode !== 'bill') resetBillQrView(true);
+        if (billViewMode !== 'bill') resetBillQrView();
     }
     updateScrollCheckoutButton();
     syncCurrentTableRemotePayingUi(isTableRemotePaying(currentTab));
@@ -3255,13 +3216,13 @@ async function setLock(v) {
                 return;
             }
             preloadBillAssets();
-            resetBillQrView(true);
+            resetBillQrView();
         }
         await set(child(lockedRef, String(tab)), v ? true : null);
         if (!v) {
             currentBillLang = 'vi';
             syncActiveLangButton('vi');
-            resetBillQrView(true);
+            resetBillQrView();
         }
         if (v && currentTab === tab) {
             setTimeout(scrollBillIntoView, 100);
