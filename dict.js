@@ -132,17 +132,19 @@ const nlItems = {
 };
 
 export const dict = {
-  vi: { flag: "🇻🇳", total: "TỔNG", items: {} },
+  vi: { flag: "🇻🇳", total: "TỔNG", thanks: "Cảm ơn quý khách & hẹn gặp lại!", items: {} },
 
   en: {
     flag: "🇺🇸",
     total: "TOTAL",
+    thanks: "Thank you & see you again!",
     items: enItems
   },
 
   fr: {
     flag: "🇫🇷",
     total: "TOTAL",
+    thanks: "Merci et à très bientôt !",
     items: {
       1: "Riz aux côtes de porc grillées et œuf",
       2: "Riz au poulet émincé",
@@ -191,6 +193,7 @@ export const dict = {
   kr: {
     flag: "🇰🇷",
     total: "합계",
+    thanks: "감사합니다. 또 오세요!",
     items: {
       1: "돼지갈비 구이와 계란후라이 덮밥",
       2: "닭고기 찢음 덮밥",
@@ -239,6 +242,7 @@ export const dict = {
   jp: {
     flag: "🇯🇵",
     total: "合計",
+    thanks: "ありがとうございました。またお越しください！",
     items: {
       1: "豚リブ焼きと目玉焼きご飯",
       2: "ほぐし鶏肉ご飯",
@@ -287,6 +291,7 @@ export const dict = {
   th: {
     flag: "🇹🇭",
     total: "รวม",
+    thanks: "ขอบคุณค่ะ แล้วพบกันใหม่นะคะ!",
     items: {
       1: "ข้าวหน้าซี่โครงหมูย่างและไข่ดาว",
       2: "ข้าวหน้าไก่ฉีก",
@@ -335,6 +340,7 @@ export const dict = {
   it: {
     flag: "🇮🇹",
     total: "TOTALE",
+    thanks: "Grazie e arrivederci a presto!",
     items: {
       1: "Riso con costolette di maiale alla griglia e uovo",
       2: "Riso con pollo sfilacciato",
@@ -383,6 +389,7 @@ export const dict = {
   pt: {
     flag: "🇵🇹",
     total: "TOTAL",
+    thanks: "Obrigado e volte sempre!",
     items: {
       1: "Arroz com costeletas de porco grelhadas e ovo",
       2: "Arroz com frango desfiado",
@@ -431,6 +438,7 @@ export const dict = {
   es: {
     flag: "🇪🇸",
     total: "TOTAL",
+    thanks: "¡Gracias y vuelva pronto!",
     items: {
       1: "Arroz con chuletas de cerdo a la parrilla y huevo",
       2: "Arroz con pollo desmenuzado",
@@ -479,6 +487,7 @@ export const dict = {
   cn: {
     flag: "🇨🇳",
     total: "总计",
+    thanks: "谢谢光临，欢迎再来！",
     items: {
       1: "烤猪排加煎蛋饭",
       2: "鸡丝饭",
@@ -527,12 +536,14 @@ export const dict = {
   de: {
     flag: "🇩🇪",
     total: "GESAMT",
+    thanks: "Vielen Dank & auf Wiedersehen!",
     items: deItems
   },
 
   ru: {
     flag: "🇷🇺",
     total: "ИТОГО",
+    thanks: "Спасибо за визит! Ждём вас снова!",
     items: {
       1: "Рис с свиными ребрышками гриль и яйцом",
       2: "Рис с измельченной курицей",
@@ -581,6 +592,7 @@ export const dict = {
   be: {
     flag: "🇧🇪",
     total: "TOTAAL",
+    thanks: "Dank u en tot ziens!",
     items: {
       ...nlItems,
       1: "Rijst met gegrilde varkensribben en ei",
@@ -607,6 +619,7 @@ export const dict = {
   hu: {
     flag: "🇭🇺",
     total: "ÖSSZESEN",
+    thanks: "Köszönjük, várjuk vissza!",
     items: {
       1: "Rizs grillezett sertésbordával és tojással",
       2: "Rizs tépett csirkehússal",
@@ -655,6 +668,7 @@ export const dict = {
   at: {
     flag: "🇦🇹",
     total: "GESAMT",
+    thanks: "Vielen Dank & bis zum nächsten Mal!",
     items: {
       ...deItems,
       1: "Reis mit gegrillten Koteletts und Ei",
@@ -688,6 +702,7 @@ export const dict = {
   tw: {
     flag: "🇹🇼",
     total: "總計",
+    thanks: "謝謝光臨，歡迎再來！",
     items: {
       1: "烤豬排加煎蛋飯",
       2: "雞絲飯",
@@ -736,6 +751,7 @@ export const dict = {
   sg: {
     flag: "🇸🇬",
     total: "TOTAL",
+    thanks: "Thank you & see you again!",
     items: {
       ...enItems,
       1: "Grilled pork chop with egg rice",
@@ -764,6 +780,7 @@ export const dict = {
   id: {
     flag: "🇮🇩",
     total: "TOTAL",
+    thanks: "Terima kasih & sampai jumpa lagi!",
     items: {
       1: "Nasi iga babi bakar dengan telur",
       2: "Nasi ayam suwir",
@@ -812,6 +829,7 @@ export const dict = {
   my: {
     flag: "🇲🇾",
     total: "TOTAL",
+    thanks: "Terima kasih & sila datang lagi!",
     items: {
       1: "Nasi rusuk babi bakar dengan telur",
       2: "Nasi ayam siat",
@@ -860,6 +878,7 @@ export const dict = {
   in: {
     flag: "🇮🇳",
     total: "TOTAL",
+    thanks: "धन्यवाद, फिर पधारें!",
     items: {
       1: "ग्रिल्ड पोर्क चॉप्स और अंडा चावल (Rice with Pork & Egg)",
       2: "कटे हुए चिकन के साथ चावल (Shredded Chicken Rice)",
@@ -908,6 +927,7 @@ export const dict = {
   fi: {
     flag: "🇫🇮",
     total: "YHTEENSÄ",
+    thanks: "Kiitos ja tervetuloa uudelleen!",
     items: {
       1: "Riisiä, grillattua porsaankylkeä ja kananmuna",
       2: "Riisiä ja revittyä kanaa",
@@ -956,12 +976,14 @@ export const dict = {
   nl: {
     flag: "🇳🇱",
     total: "TOTAAL",
+    thanks: "Bedankt en graag tot ziens!",
     items: nlItems
   },
 
   se: {
     flag: "🇸🇪",
     total: "TOTALT",
+    thanks: "Tack och välkommen åter!",
     items: {
       1: "Ris med grillade fläskkotletter och ägg",
       2: "Ris med strimlad kyckling",
@@ -1010,6 +1032,7 @@ export const dict = {
   ch: {
     flag: "🇨🇭",
     total: "GESAMT",
+    thanks: "Herzlichen Dank & auf Wiedersehen!",
     items: {
       ...deItems,
       1: "Reis mit gegrillten Schweinsrippli und Ei",

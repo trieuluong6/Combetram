@@ -647,7 +647,7 @@ function scheduleRefresh(tableIds = null, updateCurrentOrder = false) {
 }
 
 // ─── Lazy-load dict theo ngôn ngữ + Preload bill assets ─────────────────
-let dictCache = { vi: { flag: "🇻🇳", total: "TỔNG", items: {} } };
+let dictCache = { vi: { flag: "🇻🇳", total: "TỔNG", thanks: "Cảm ơn quý khách & hẹn gặp lại!", items: {} } };
 let dictLoadPromise = null;
 let billAssetsPreloaded = false;
 
@@ -1924,7 +1924,13 @@ function scheduleRenderRemoteCursors(remeasure = false) {
     });
 }
 let scrollTicking = false;
-window.addEventListener('resize', () => scheduleRenderRemoteCursors(true));
+window.addEventListener('resize', () => {
+    scheduleRenderRemoteCursors(true);
+    if (currentTab && data.locked?.[currentTab] && billViewMode === 'bill') {
+        fitBillThanksText();
+        syncBillFlipHeight(false);
+    }
+});
 window.addEventListener('scroll', () => {
     tableRectsDirty = true;
     if (scrollTicking) return;
@@ -3148,6 +3154,29 @@ function refresh(tableIds = null, updateCurrentOrder = true) {
     flushRemoteOrderFlashes();
 }
 
+function fitBillThanksText() {
+    const el = document.getElementById('bill-thanks');
+    if (!el) return;
+    const availableWidth = el.clientWidth;
+    if (!availableWidth) return;
+
+    const maxFontPx = 17.5;
+    const minFontPx = 12;
+    el.style.whiteSpace = 'nowrap';
+    el.style.fontSize = `${maxFontPx}px`;
+
+    const textWidth = el.scrollWidth;
+    if (textWidth > availableWidth) {
+        const fittedSize = Math.floor((availableWidth / textWidth) * maxFontPx * 10) / 10;
+        if (fittedSize >= minFontPx) {
+            el.style.fontSize = `${fittedSize}px`;
+        } else {
+            el.style.fontSize = '12.5px';
+            el.style.whiteSpace = 'normal';
+        }
+    }
+}
+
 async function renderBillAsync(tab) {
     const targetLang = currentBillLang;
     const langData = await getLangData(targetLang);
@@ -3156,6 +3185,10 @@ async function renderBillAsync(tab) {
     let h = "", t = 0, my = getMergedOrder(tab);
     document.getElementById('txt-total-label').textContent = langData.total;
     document.getElementById('txt-lang-flag').textContent = langData.flag;
+    const thanksEl = document.getElementById('bill-thanks');
+    if (thanksEl) {
+        thanksEl.textContent = langData.thanks || dictCache.vi.thanks;
+    }
     let idx = 0;
     for (let id in my) {
         const itm = ITEM_MAP.get(Number(id));
@@ -3179,7 +3212,11 @@ async function renderBillAsync(tab) {
         setTimeout(() => tBox.classList.remove('total-pop'), 400);
     }
     updateDynamicVietQr(tab, t);
-    requestAnimationFrame(() => syncBillFlipHeight(false));
+    fitBillThanksText();
+    requestAnimationFrame(() => {
+        fitBillThanksText();
+        syncBillFlipHeight(false);
+    });
 }
 
 async function setLock(v) {
