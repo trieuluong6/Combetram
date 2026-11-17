@@ -669,16 +669,6 @@ function preloadBillAssets() {
     if (billAssetsPreloaded) return;
     billAssetsPreloaded = true;
     getLangData('en').catch(() => {});
-    const qrImg = document.getElementById('payment-qr');
-    if (qrImg) {
-        if (qrImg.complete) {
-            qrImg.decode?.().catch(() => {});
-        } else {
-            const pre = new Image();
-            pre.src = qrImg.currentSrc || qrImg.src;
-            pre.decode?.().catch(() => {});
-        }
-    }
 }
 
 function syncActiveLangButton(lang) {
@@ -1045,11 +1035,6 @@ document.addEventListener('visibilitychange', () => {
     } else {
         startTickerInterval();
         startClockInterval();
-        syncMySession({
-            table: currentTab || 0,
-            paying: Boolean(payingModalTable),
-            immediate: true
-        });
         runPeriodicMaintenance();
     }
 });
@@ -3347,6 +3332,14 @@ async function doPay() {
 
     const tableOrderRef = child(ordersRef, String(tab));
     let orderDeletedOnServer = false;
+    const finalizeSuccessfulPayment = async (awaitCleanup = true) => {
+        const cleanupPromise = clearTableLockAndTimeOnServer(tab);
+        if (awaitCleanup) await cleanupPromise;
+        localPaymentEchoTables.delete(tab);
+        if (hasItems) {
+            showToast(`Đã thanh toán ${getTableDisplayName(tab)} • ${totalAmount.toLocaleString()}đ`, 'info', 2800);
+        }
+    };
 
     try {
         const txResult = await transaction(tableOrderRef, (serverOrder) => {
@@ -3378,21 +3371,12 @@ async function doPay() {
         }
 
         orderDeletedOnServer = true;
-
-        await clearTableLockAndTimeOnServer(tab);
-        localPaymentEchoTables.delete(tab);
-
-        if (hasItems) {
-            showToast(`Đã thanh toán ${getTableDisplayName(tab)} • ${totalAmount.toLocaleString()}đ`, 'info', 2800);
-        }
+        await finalizeSuccessfulPayment(true);
     } catch (err) {
         localPaymentEchoTables.delete(tab);
         console.error('[payment] Lỗi thanh toán Firebase:', err);
         if (orderDeletedOnServer) {
-            clearTableLockAndTimeOnServer(tab);
-            if (hasItems) {
-                showToast(`Đã thanh toán ${getTableDisplayName(tab)} • ${totalAmount.toLocaleString()}đ`, 'info', 2800);
-            }
+            finalizeSuccessfulPayment(false);
         } else {
             restoreTableState();
             showToast('Mất kết nối! Thanh toán chưa lưu được, dữ liệu bàn đã được khôi phục.', 'error', 4500);
