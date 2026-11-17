@@ -84,7 +84,7 @@ button, .table-card, .btn-qty, .btn-action, .lang-btn, .cat-pill {
 body.dark-mode #weather-hub.wind-warning { background: rgba(93,64,55,0.35); color: #ffe0b2; }
 body.dark-mode #weather-hub.wind-danger { background: rgba(183,28,28,0.3); color: #ffcdd2; }
 @keyframes blinkDangerBorder { 0%, 100% { opacity: 1; } 50% { opacity: 0.65; } }
-.weather-divider { width: 1px; height: 12px; background: #cbd5e1; margin: 0 2px; }
+.weather-divider { width: 1px; height: 12px; background: #cbd5e1; }
 .weather-group { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
 
 #offline-badge {
@@ -475,7 +475,7 @@ body.dark-mode .btn-add { background: #1f3a23; color: #81c784; }
 }
 .bill-flip-shell { position: relative; perspective: 1200px; transform-style: preserve-3d; overflow: visible; overflow-anchor: none; transition: height 0.56s cubic-bezier(0.22, 0.61, 0.36, 1); }
 .bill-flipper { position: relative; width: 100%; transform-style: preserve-3d; transition: transform 0.56s cubic-bezier(0.22, 0.61, 0.36, 1); will-change: transform; }
-.bill-flip-shell.is-qr .bill-flipper { transform: rotateY(180deg); height: 100%; }
+.bill-flip-shell.is-qr .bill-flipper { transform: rotateY(180deg); }
 .bill-face { width: 100%; backface-visibility: hidden; -webkit-backface-visibility: hidden; }
 .bill-front { position: relative; transform: rotateY(0deg); }
 .bill-back { position: absolute; inset: 0 0 auto 0; transform: rotateY(180deg); visibility: hidden; opacity: 0; }
@@ -525,7 +525,7 @@ body.dark-mode .lang-btn.active-lang {
 .arrow-container { flex-grow: 1; display: flex; align-items: center; position: relative; height: 35px; min-width: 20px; }
 .arrow-shaft { height: 10px; background: rgba(0,0,0,0.05); flex-grow: 1; position: relative; border-radius: 5px 0 0 5px; overflow: hidden; }
 .arrow-shaft::after { content: ''; position: absolute; top: 0; left: -100%; height: 100%; width: 100%; background: linear-gradient(to right, transparent, var(--primary-red), var(--primary-red)); animation: shaftFlow 1.2s infinite cubic-bezier(0.4, 0, 0.2, 1); }
-.arrow-head { width: 22px; height: 26px; background: rgba(0,0,0,0.05); clip-path: polygon(0% 0%, 100% 50%, 0% 100%); margin-left: -2px; position: relative; display: flex; align-items: center; flex-shrink: 0; }
+.arrow-head { width: 22px; height: 26px; background: rgba(0,0,0,0.05); clip-path: polygon(0% 0%, 100% 50%, 0% 100%); margin-left: -2px; position: relative; flex-shrink: 0; }
 .arrow-head::after { content: ''; position: absolute; inset: 0; background: var(--primary-red); opacity: 0; animation: headGlowRed 1.2s infinite cubic-bezier(0.4, 0, 0.2, 1); filter: drop-shadow(0 0 8px var(--primary-red)); }
 @keyframes shaftFlow { 0% { left: -100%; } 60%, 100% { left: 100%; } }
 @keyframes headGlowRed { 0%, 50% { opacity: 0; transform: scale(0.9); } 65% { opacity: 1; transform: scale(1.1); } 85%, 100% { opacity: 0; transform: scale(1); } }
@@ -715,7 +715,7 @@ body.dark-mode .remote-cursor { border-color: #1c232b; }
 .remote-focus-tag.visible { opacity: 1; transform: translateY(0); }
 
 /* NÚT CUỘN XUỐNG */
-#scroll-to-checkout { position: fixed; right: 16px; bottom: calc(130px + env(safe-area-inset-bottom, 0px)); top: auto; left: auto; transform: none; width: 38px; height: 38px; border-radius: 50%; border: none; background: var(--warning-orange); color: #fff; font-size: 1.3em; font-weight: 900; line-height: 1; display: flex; align-items: center; justify-content: center; cursor: pointer; opacity: 0.85; box-shadow: 0 4px 12px rgba(0,0,0,0.25); z-index: 50; animation: bobArrow 1.6s ease-in-out infinite; transition: opacity 0.25s ease, transform 0.15s ease; }
+#scroll-to-checkout { position: fixed; right: 16px; bottom: calc(130px + env(safe-area-inset-bottom, 0px)); width: 38px; height: 38px; border-radius: 50%; border: none; background: var(--warning-orange); color: #fff; font-size: 1.3em; font-weight: 900; line-height: 1; display: flex; align-items: center; justify-content: center; cursor: pointer; opacity: 0.85; box-shadow: 0 4px 12px rgba(0,0,0,0.25); z-index: 50; animation: bobArrow 1.6s ease-in-out infinite; transition: opacity 0.25s ease, transform 0.15s ease; }
 #scroll-to-checkout:active { opacity: 1; transform: scale(0.9); }
 #scroll-to-checkout.hidden { display: none; }
 @keyframes bobArrow { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(6px); } }
@@ -784,21 +784,6 @@ body.dark-mode .ticker-item { background: linear-gradient(180deg, rgba(39,49,60,
 body.dark-mode .single-paper-wisp {
     background: #F8FAFC;
     border-color: rgba(180, 195, 208, .22);
-}
-
-html.paper-flip-pending #weather-hub,
-html.paper-flip-pending #presence-count,
-html.paper-flip-pending #sound-toggle,
-html.paper-flip-pending #dark-toggle,
-html.paper-flip-pending #load-speed-widget,
-html.paper-flip-pending #crowd-status,
-html.paper-flip-pending .header-title,
-html.paper-flip-pending #net-speed-widget,
-html.paper-flip-pending #btc-ticker,
-html.paper-flip-pending #oil-ticker,
-html.paper-flip-pending .flip-clock-container > .flip-unit,
-html.paper-flip-pending .flip-clock-container > .flip-colon {
-    opacity: 0;
 }
 
 .single-fold-active {
@@ -910,6 +895,5 @@ body.tab-hidden #scroll-to-checkout {
     html.paper-flip-pending .flip-clock-container > .flip-unit,
     html.paper-flip-pending .flip-clock-container > .flip-colon {
         visibility: visible !important;
-        opacity: 1;
     }
 }

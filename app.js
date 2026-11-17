@@ -46,7 +46,6 @@ const VIETQR_CONFIG = {
 };
 
 let initialStaticQrSrc = '';
-let parsedStaticVietQr = null;
 let currentAppliedQrUrl = '';
 let latestRequestedQrUrl = '';
 
@@ -54,20 +53,6 @@ let latestRequestedQrUrl = '';
     const qrImg = document.getElementById('payment-qr');
     if (!qrImg) return;
     initialStaticQrSrc = qrImg.getAttribute('src') || qrImg.src || '';
-    const match = initialStaticQrSrc.match(/img\.vietqr\.io\/image\/([^-/?#]+)-([^-/?#]+)-([^.?#]+)\.(?:png|jpg|jpeg)/i);
-    if (match) {
-        let existingAccountName = '';
-        try {
-            const u = new URL(initialStaticQrSrc, window.location.href);
-            existingAccountName = u.searchParams.get('accountName') || '';
-        } catch (e) {}
-        parsedStaticVietQr = {
-            bankId: decodeURIComponent(match[1]),
-            accountNo: decodeURIComponent(match[2]),
-            template: decodeURIComponent(match[3]),
-            accountName: existingAccountName
-        };
-    }
 })();
 
 function formatVietQrAddInfo(tab) {
@@ -87,10 +72,10 @@ function buildDynamicVietQrUrl(tab, amount, overrideAccountNo = '') {
     const cleanAmount = Math.max(0, Math.round(Number(amount) || 0));
     if (cleanAmount <= 0) return '';
 
-    const bankId = (VIETQR_CONFIG.bankId || parsedStaticVietQr?.bankId || '').trim();
-    const accountNo = (overrideAccountNo || VIETQR_CONFIG.accountNo || parsedStaticVietQr?.accountNo || '').trim();
-    const template = (VIETQR_CONFIG.template || parsedStaticVietQr?.template || 'compact2').trim();
-    const accountName = (VIETQR_CONFIG.accountName || parsedStaticVietQr?.accountName || '').trim();
+    const bankId = (VIETQR_CONFIG.bankId || '').trim();
+    const accountNo = (overrideAccountNo || VIETQR_CONFIG.accountNo || '').trim();
+    const template = (VIETQR_CONFIG.template || 'compact2').trim();
+    const accountName = (VIETQR_CONFIG.accountName || '').trim();
 
     if (!bankId || !accountNo) return '';
 
@@ -609,7 +594,6 @@ const TABLE_DOM = Array.from({ length: 9 }, (_, idx) => {
 const ITEM_DOM = new Map();
 const tableTotals = Array(10).fill(0);
 
-try { localStorage.removeItem('combetram_state_cache_v1'); } catch (e) {}
 
 function shallowRecordEqual(a, b) {
     if (a === b) return true;
@@ -1266,7 +1250,6 @@ function buildWavBlobUrl(type, sampleRate = SOUND_SAMPLE_RATE) {
     return URL.createObjectURL(new Blob([buffer], { type: 'audio/wav' }));
 }
 
-const wavUrlMap = {};
 const htmlAudioPools = {};
 const htmlAudioPoolIdx = {};
 let soundPoolsInitialized = false;
@@ -1279,7 +1262,6 @@ function ensureSoundPools() {
     for (const type of Object.keys(SOUND_PATTERNS)) {
         try {
             const url = buildWavBlobUrl(type);
-            wavUrlMap[type] = url;
             htmlAudioPoolIdx[type] = 0;
             htmlAudioPools[type] = Array.from({ length: 4 }, () => {
                 const a = new Audio(url);
@@ -1956,8 +1938,19 @@ function scheduleRenderRemoteCursors(remeasure = false) {
         cursorRenderTicking = false;
     });
 }
+let scrollTicking = false;
 window.addEventListener('resize', () => scheduleRenderRemoteCursors(true));
-window.addEventListener('scroll', () => scheduleRenderRemoteCursors(true), { passive: true });
+window.addEventListener('scroll', () => {
+    tableRectsDirty = true;
+    if (scrollTicking) return;
+    scrollTicking = true;
+    requestAnimationFrame(() => {
+        scrollTicking = false;
+        if (tableRectsDirty) measureAllTableRects();
+        renderRemoteCursors();
+        updateActiveMenuCatPill();
+    });
+}, { passive: true });
 
 // ─── FOCUS MÓN ĂN & TRẠNG THÁI ĐANG THU TIỀN TỪ SESSIONS ───────────────
 const remoteFocusRows = {};
@@ -2288,23 +2281,18 @@ document.getElementById('menu-cat-nav')?.addEventListener('click', (e) => {
     document.getElementById(`cat-sec-${idx}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 });
 
-let catScrollTicking = false;
-window.addEventListener('scroll', () => {
-    if (!currentTab || data.locked?.[currentTab] || catScrollTicking) return;
-    catScrollTicking = true;
-    requestAnimationFrame(() => {
-        catScrollTicking = false;
-        const nav = document.getElementById('menu-cat-nav');
-        if (!nav) return;
-        const threshold = nav.getBoundingClientRect().bottom + 14;
-        let activeIdx = 0;
-        for (let i = 0; i < menu.length; i++) {
-            const sec = document.getElementById(`cat-sec-${i}`);
-            if (sec && sec.getBoundingClientRect().top <= threshold) activeIdx = i;
-        }
-        nav.querySelectorAll('.cat-pill').forEach((p, idx) => p.classList.toggle('active', idx === activeIdx));
-    });
-}, { passive: true });
+function updateActiveMenuCatPill() {
+    if (!currentTab || data.locked?.[currentTab]) return;
+    const nav = document.getElementById('menu-cat-nav');
+    if (!nav) return;
+    const threshold = nav.getBoundingClientRect().bottom + 14;
+    let activeIdx = 0;
+    for (let i = 0; i < menu.length; i++) {
+        const sec = document.getElementById(`cat-sec-${i}`);
+        if (sec && sec.getBoundingClientRect().top <= threshold) activeIdx = i;
+    }
+    nav.querySelectorAll('.cat-pill').forEach((p, idx) => p.classList.toggle('active', idx === activeIdx));
+}
 
 // Mở khóa toàn bộ kênh âm thanh ngay từ chạm đầu tiên
 ['pointerdown', 'touchstart', 'keydown'].forEach(evt => {
@@ -2550,9 +2538,8 @@ function handleSingleTableOrderSnapshot(rawKey, tableVal) {
     }
 
     if (nextHasItems) {
-        if (!data.orders) data.orders = {};
         data.orders[tableId] = nextTableOrder;
-    } else if (data.orders) {
+    } else {
         delete data.orders[tableId];
     }
 
@@ -2575,9 +2562,8 @@ function handleSingleTableLockSnapshot(rawKey, rawVal) {
     updateNetWidget('down');
 
     if (nextLocked) {
-        if (!data.locked) data.locked = {};
         data.locked[tableId] = true;
-    } else if (data.locked) {
+    } else {
         delete data.locked[tableId];
     }
 
@@ -2601,9 +2587,8 @@ function handleSingleTableTimeSnapshot(rawKey, rawVal) {
     updateNetWidget('down');
 
     if (nextTime !== null) {
-        if (!data.times) data.times = {};
         data.times[tableId] = nextTime;
-    } else if (data.times) {
+    } else {
         delete data.times[tableId];
     }
 
@@ -3319,15 +3304,12 @@ async function doPay() {
     const restoreTableState = () => {
         const hasCurrentOrder = data.orders?.[tab] && Object.keys(data.orders[tab]).length > 0;
         if (backupOrder && Object.keys(backupOrder).length > 0 && !hasCurrentOrder) {
-            if (!data.orders) data.orders = {};
             data.orders[tab] = backupOrder;
         }
         if (backupLocked !== null && data.locked?.[tab] === undefined) {
-            if (!data.locked) data.locked = {};
             data.locked[tab] = backupLocked;
         }
         if (backupTime !== null && data.times?.[tab] === undefined) {
-            if (!data.times) data.times = {};
             data.times[tab] = backupTime;
         }
         if (backupTotal) tableTotals[tab] = backupTotal;
@@ -3354,9 +3336,9 @@ async function doPay() {
     triggerHaptic('success');
     broadcastActivity({ sfx: 'success', tableId: tab, itemId: null, paying: true, immediate: true });
 
-    if (data.orders) delete data.orders[tab];
-    if (data.locked) delete data.locked[tab];
-    if (data.times) delete data.times[tab];
+    delete data.orders[tab];
+    delete data.locked[tab];
+    delete data.times[tab];
     tableTotals[tab] = 0;
     scheduleRefresh(new Set([tab]), true);
 
@@ -3378,20 +3360,17 @@ async function doPay() {
             localPaymentEchoTables.delete(tab);
             const serverOrderVal = normalizeOrderMap(txResult.snapshot?.val());
             if (Object.keys(serverOrderVal).length > 0) {
-                if (!data.orders) data.orders = {};
                 data.orders[tab] = serverOrderVal;
                 if (backupLocked !== null) {
-                    if (!data.locked) data.locked = {};
                     data.locked[tab] = backupLocked;
                 }
                 if (backupTime !== null) {
-                    if (!data.times) data.times = {};
                     data.times[tab] = backupTime;
                 }
             } else {
-                if (data.orders) delete data.orders[tab];
-                if (data.locked) delete data.locked[tab];
-                if (data.times) delete data.times[tab];
+                delete data.orders[tab];
+                delete data.locked[tab];
+                delete data.times[tab];
             }
             scheduleRefresh(new Set([tab]), true);
             showToast('Đơn bàn này vừa có thay đổi hoặc đã được thanh toán ở máy khác!', 'warning', 4500);
