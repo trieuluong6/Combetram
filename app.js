@@ -447,6 +447,23 @@ const BILL_FLIP_MS = 560;
 let billViewMode = 'bill';
 let billScrollAnimation = 0;
 
+const QR_ICON_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.2"/><rect x="14" y="3" width="7" height="7" rx="1.2"/><rect x="3" y="14" width="7" height="7" rx="1.2"/><path d="M14 14h3v3h-3zM20 14v3M14 20h3M20 20h1"/></svg>';
+const BILL_ICON_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 3h14v18l-2.3-1.5L14.4 21 12 19.5 9.6 21l-2.3-1.5L5 21V3z"/><path d="M8.5 8h7M8.5 12h7M8.5 16h4.5"/></svg>';
+
+function syncQrToggleButtonUi(isQr) {
+    const button = document.getElementById('btn-qr-toggle');
+    if (!button) return;
+    button.classList.toggle('is-qr-active', Boolean(isQr));
+    const iconEl = document.getElementById('btn-qr-icon');
+    const labelEl = document.getElementById('btn-qr-label');
+    if (iconEl) iconEl.innerHTML = isQr ? BILL_ICON_SVG : QR_ICON_SVG;
+    if (labelEl) {
+        labelEl.textContent = isQr ? 'XEM BILL' : 'MÃ QR';
+    } else {
+        button.textContent = isQr ? 'XEM BILL' : 'MÃ QR';
+    }
+}
+
 function getBillFlipDom() {
     return {
         shell: document.getElementById('bill-flip-shell'),
@@ -513,7 +530,7 @@ function animateScrollToQrCenter(targetHeight) {
 function resetBillQrView() {
     stopBillScrollAnimation();
     billViewMode = 'bill';
-    const { shell, back, button } = getBillFlipDom();
+    const { shell, back } = getBillFlipDom();
     if (!shell) return;
 
     shell.style.transition = 'none';
@@ -521,7 +538,7 @@ function resetBillQrView() {
     if (flipper) flipper.style.transition = 'none';
     shell.classList.remove('is-qr');
     if (back) back.setAttribute('aria-hidden', 'true');
-    if (button) button.textContent = 'MÃ QR';
+    syncQrToggleButtonUi(false);
     shell.style.height = '';
     void shell.offsetHeight;
     shell.style.transition = '';
@@ -537,7 +554,7 @@ function scrollBillIntoView() {
 function toggleBillQr() {
     if (paymentInProgress) return;
     triggerHaptic('nav');
-    const { shell, back, button } = getBillFlipDom();
+    const { shell, back } = getBillFlipDom();
     if (!shell) return;
 
     const showQr = billViewMode !== 'qr';
@@ -554,7 +571,7 @@ function toggleBillQr() {
         shell.style.height = `${currentHeight}px`;
         billViewMode = 'qr';
         if (back) back.setAttribute('aria-hidden', 'false');
-        if (button) button.textContent = 'XEM BILL';
+        syncQrToggleButtonUi(true);
 
         requestAnimationFrame(() => {
             shell.classList.add('is-qr');
@@ -565,7 +582,7 @@ function toggleBillQr() {
         billViewMode = 'bill';
         shell.classList.remove('is-qr');
         if (back) back.setAttribute('aria-hidden', 'true');
-        if (button) button.textContent = 'MÃ QR';
+        syncQrToggleButtonUi(false);
         syncBillFlipHeight(true);
     }
 }

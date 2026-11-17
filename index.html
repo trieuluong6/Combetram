@@ -21,7 +21,7 @@
     html.paper-flip-pending .flip-clock-container > .flip-unit,
     html.paper-flip-pending .flip-clock-container > .flip-colon { visibility: hidden !important; }
     </style>
-    <link rel="stylesheet" href="style.css?v=fx-sound-v23">
+    <link rel="stylesheet" href="style.css?v=fx-sound-v24">
     <script>window.__paperFlipFailsafe = setTimeout(() => document.documentElement.classList.remove('paper-flip-pending'), 3000);</script>
 </head>
 <body>
@@ -130,7 +130,7 @@
     <div id="menu-area" style="position: relative;">
         <div id="menu-cat-nav" class="menu-cat-nav" aria-label="Nhảy nhanh nhóm món"></div>
         <div id="menu-list"></div>
-        <button class="btn-action" id="btn-checkout" style="background: var(--warning-orange)" data-action="lock-bill" disabled aria-disabled="true">CHỐT ĐƠN & XEM BILL</button>
+        <button class="btn-action btn-checkout" id="btn-checkout" data-action="lock-bill" disabled aria-disabled="true"><span class="btn-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h14v18l-2.3-1.5L14.4 21 12 19.5 9.6 21l-2.3-1.5L5 21V3z"/><path d="M8.5 8h7M8.5 12h7M8.5 16h4.5"/></svg></span><span class="btn-action-label">CHỐT ĐƠN &amp; XEM BILL</span></button>
     </div>
     <div id="bill-area" style="display:none;">
         <div class="printer-slot"></div>
@@ -160,9 +160,35 @@
                 </div>
             </div>
         </div>
-        <button class="btn-action qr-toggle-btn" id="btn-qr-toggle" style="background: var(--blue)" data-action="toggle-qr">MÃ QR</button>
-        <button class="btn-action" style="background: var(--blue)" data-action="unlock-bill">GỌI THÊM MÓN</button>
-        <button class="btn-action" style="background: var(--success-green)" data-action="pay-bill">XÁC NHẬN THANH TOÁN</button>
+        <button class="btn-action qr-toggle-btn btn-qr-paper" id="btn-qr-toggle" data-action="toggle-qr">
+            <span class="btn-action-icon" id="btn-qr-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="3" width="7" height="7" rx="1.2"/>
+                    <rect x="14" y="3" width="7" height="7" rx="1.2"/>
+                    <rect x="3" y="14" width="7" height="7" rx="1.2"/>
+                    <path d="M14 14h3v3h-3zM20 14v3M14 20h3M20 20h1"/>
+                </svg>
+            </span>
+            <span class="btn-action-label" id="btn-qr-label">MÃ QR</span>
+        </button>
+        <button class="btn-action btn-add-more" data-action="unlock-bill">
+            <span class="btn-action-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="9"/>
+                    <path d="M12 8v8M8 12h8"/>
+                </svg>
+            </span>
+            <span class="btn-action-label">GỌI THÊM MÓN</span>
+        </button>
+        <button class="btn-action btn-pay-confirm" data-action="pay-bill">
+            <span class="btn-action-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="9"/>
+                    <path d="M8.5 12.5l2.5 2.5 4.8-5.2"/>
+                </svg>
+            </span>
+            <span class="btn-action-label">XÁC NHẬN THANH TOÁN</span>
+        </button>
         <div class="lang-grid" id="lang-grid">
             <button class="lang-btn active-lang" data-lang="vi"><span>🇻🇳</span><span>VN</span></button>
             <button class="lang-btn" data-lang="en"><span>🇺🇸</span><span>EN</span></button>
@@ -206,6 +232,6 @@
 </div>
 <div id="app-toast-container" class="app-toast-container" aria-live="polite"></div>
 
-<script type="module" src="app.js?v=fx-sound-v23"></script>
+<script type="module" src="app.js?v=fx-sound-v24"></script>
 </body>
 </html>

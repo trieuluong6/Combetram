@@ -539,13 +539,118 @@ body.dark-mode .lang-btn.active-lang {
 @keyframes headGlowRed { 0%, 50% { opacity: 0; transform: scale(0.9); } 65% { opacity: 1; transform: scale(1.1); } 85%, 100% { opacity: 0; transform: scale(1); } }
 .total-pop { animation: popScale 0.4s ease; }
 @keyframes popScale { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
-.btn-action { border: none; padding: 15px; border-radius: 10px; font-weight: bold; width: 100%; margin-top: 12px; color: white; cursor: pointer; font-size: 1.1em; position: relative; overflow: hidden; transition: transform 0.15s ease, filter 0.15s ease, opacity 0.2s ease; }
-.btn-action:active { transform: scale(0.98); filter: brightness(0.95); }
+.btn-action {
+    border: none;
+    padding: 15px 16px;
+    border-radius: 12px;
+    font-weight: 800;
+    width: 100%;
+    margin-top: 11px;
+    color: #ffffff;
+    cursor: pointer;
+    font-size: 1.1em;
+    line-height: 1.2;
+    letter-spacing: 0.02em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    position: relative;
+    overflow: hidden;
+    box-sizing: border-box;
+    transition: transform 0.15s ease, filter 0.15s ease, opacity 0.2s ease, background 0.3s ease, border-color 0.3s ease, color 0.3s ease, box-shadow 0.3s ease;
+}
+.btn-action-icon {
+    width: 1em;
+    height: 1em;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+.btn-action-icon svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+.btn-action-label {
+    display: inline-block;
+    line-height: 1.2;
+}
+.btn-action:active { transform: scale(0.98); filter: brightness(0.96); }
 .btn-action:disabled {
     opacity: 0.45;
     cursor: not-allowed;
     filter: grayscale(0.35);
     pointer-events: none;
+}
+
+/* Nút Chốt đơn & xem bill: trạng thái trống đồng bộ giấy bill, có món bật cam hổ phách */
+.btn-checkout {
+    margin-top: 14px;
+    background: linear-gradient(135deg, #ef6c00 0%, #fb8c00 100%);
+    color: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    box-shadow: 0 4px 14px rgba(239, 108, 0, 0.28);
+}
+.btn-checkout:disabled {
+    background: var(--paper-bg);
+    color: var(--text-muted);
+    border: 1.5px dashed var(--bg-bill-divider);
+    box-shadow: none;
+    opacity: 0.78;
+    filter: none;
+}
+
+/* Tầng 1 dưới bill: Nút Mã QR mang chất liệu giấy in nhiệt đồng bộ với tờ bill */
+.btn-qr-paper {
+    margin-top: 14px;
+    padding: 13px 16px;
+    background: var(--paper-bg);
+    color: var(--text-main);
+    border: 1.5px dashed #b5ada0;
+    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.08);
+}
+body.dark-mode .btn-qr-paper {
+    border-color: #4b5b6e;
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.32);
+}
+.btn-qr-paper.is-qr-active {
+    border-style: solid;
+    border-color: #9e9587;
+    background: #e7e2d8;
+}
+body.dark-mode .btn-qr-paper.is-qr-active {
+    border-color: #60738a;
+    background: #2d3948;
+}
+
+/* Tầng 2 dưới bill: Nút Gọi thêm món dạng viền xanh nhạt tách biệt khỏi QR & Thanh toán */
+.btn-add-more {
+    padding: 12px 16px;
+    background: rgba(33, 150, 243, 0.09);
+    color: #1565c0;
+    border: 1.5px solid rgba(21, 101, 192, 0.38);
+    box-shadow: 0 1px 3px rgba(21, 101, 192, 0.06);
+}
+body.dark-mode .btn-add-more {
+    background: rgba(33, 150, 243, 0.14);
+    color: #90caf9;
+    border-color: rgba(66, 165, 245, 0.45);
+    box-shadow: none;
+}
+
+/* Tầng 3 dưới bill: Nút Xác nhận thanh toán nổi bật nhất */
+.btn-pay-confirm {
+    padding: 15px 16px;
+    background: linear-gradient(135deg, #2e7d32 0%, #43a047 100%);
+    color: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    box-shadow: 0 4px 14px rgba(46, 125, 50, 0.28);
+}
+body.dark-mode .btn-pay-confirm {
+    background: linear-gradient(135deg, #2e7d32 0%, #388e3c 100%);
+    box-shadow: 0 4px 16px rgba(46, 125, 50, 0.38);
 }
 
 /* NON-BLOCKING MODAL & TOAST (ĐỒNG BỘ GIAO DIỆN WEB) */
