@@ -278,16 +278,17 @@ body.dark-mode .status-normal { background: rgba(230,81,0,0.18); color: #ffb74d;
     74%      { transform: translateX(-2px); }
 }
 .table-card {
+    --card-25d-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.95),
+        0 3px 0 #bcc8d6,
+        0 6px 12px rgba(15, 23, 42, 0.08);
     background: linear-gradient(180deg, #ffffff 0%, #f4f7fb 100%);
     padding: 10px 4px;
     text-align: center;
     border-radius: 13px;
     cursor: pointer;
     border: 2px solid #d0dbe7;
-    box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.95),
-        0 3px 0 #bcc8d6,
-        0 6px 12px rgba(15, 23, 42, 0.08);
+    box-shadow: var(--card-25d-shadow);
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -299,23 +300,23 @@ body.dark-mode .status-normal { background: rgba(230,81,0,0.18); color: #ffb74d;
     grid-column: span 2;
 }
 body.dark-mode .table-card {
-    background: linear-gradient(180deg, #242d37 0%, #1a2129 100%);
-    border-color: #354557;
-    box-shadow:
+    --card-25d-shadow:
         inset 0 1px 0 rgba(255, 255, 255, 0.09),
         0 3px 0 #10151c,
         0 6px 14px rgba(0, 0, 0, 0.45);
+    background: linear-gradient(180deg, #242d37 0%, #1a2129 100%);
+    border-color: #354557;
 }
 .tables-container:not(.is-loading) .table-card:not(.active):not(.is-locked):active {
-    transform: translateY(2px);
-    transition-duration: 0.07s;
-    box-shadow:
+    --card-25d-shadow:
         inset 0 1px 0 rgba(255, 255, 255, 0.72),
         0 1px 0 #bcc8d6,
         0 2px 5px rgba(15, 23, 42, 0.06);
+    transform: translateY(2px);
+    transition-duration: 0.07s;
 }
 body.dark-mode .tables-container:not(.is-loading) .table-card:not(.active):not(.is-locked):active {
-    box-shadow:
+    --card-25d-shadow:
         inset 0 1px 0 rgba(255, 255, 255, 0.05),
         0 1px 0 #10151c,
         0 2px 6px rgba(0, 0, 0, 0.35);
@@ -366,15 +367,15 @@ body.dark-mode .table-meta-count { color: #fbbf24; }
     50%      { opacity: 1; }
 }
 .has-guest {
-    border-color: #388e3c;
-    background: linear-gradient(180deg, #ffffff 0%, #f1f8f2 100%);
-    box-shadow:
+    --card-25d-shadow:
         inset 0 1px 0 rgba(255, 255, 255, 0.92),
         0 3px 0 #2e7d32,
         0 6px 14px rgba(46, 160, 67, 0.22);
+    border-color: #388e3c;
+    background: linear-gradient(180deg, #ffffff 0%, #f1f8f2 100%);
 }
 .tables-container:not(.is-loading) .table-card.has-guest:not(.active):not(.is-locked):active {
-    box-shadow:
+    --card-25d-shadow:
         inset 0 1px 0 rgba(255, 255, 255, 0.7),
         0 1px 0 #2e7d32,
         0 2px 6px rgba(46, 160, 67, 0.18);
@@ -392,15 +393,15 @@ body.dark-mode .table-meta-count { color: #fbbf24; }
     will-change: opacity;
 }
 body.dark-mode .has-guest {
-    border-color: #66bb6a;
-    background: linear-gradient(180deg, #1b2c20 0%, #142118 100%);
-    box-shadow:
+    --card-25d-shadow:
         inset 0 1px 0 rgba(129, 199, 132, 0.16),
         0 3px 0 #1b4d20,
         0 6px 14px rgba(76, 175, 80, 0.28);
+    border-color: #66bb6a;
+    background: linear-gradient(180deg, #1b2c20 0%, #142118 100%);
 }
 body.dark-mode .tables-container:not(.is-loading) .table-card.has-guest:not(.active):not(.is-locked):active {
-    box-shadow:
+    --card-25d-shadow:
         inset 0 1px 0 rgba(129, 199, 132, 0.1),
         0 1px 0 #1b4d20,
         0 2px 6px rgba(76, 175, 80, 0.2);
@@ -411,14 +412,14 @@ body.dark-mode .has-guest::after {
 }
 
 .active {
+    --card-25d-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.95),
+        0 3.5px 0 #1565c0,
+        0 8px 18px rgba(25, 118, 210, 0.26);
     border-color: #1976d2 !important;
     background: linear-gradient(180deg, #ebf5ff 0%, #d6ebff 100%) !important;
     color: #0d47a1;
     transform: translateY(-1px) scale(1.045);
-    box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.95),
-        0 3.5px 0 #1565c0,
-        0 8px 18px rgba(25, 118, 210, 0.26);
     z-index: 20;
 }
 .active::after { display: none; }
@@ -428,13 +429,13 @@ body.dark-mode .has-guest::after {
     box-shadow: inset 0 0 0 2px rgba(21, 101, 192, 0.65);
 }
 body.dark-mode .active {
-    border-color: #42a5f5 !important;
-    background: linear-gradient(180deg, #21466e 0%, #163250 100%) !important;
-    color: #bbdefb;
-    box-shadow:
+    --card-25d-shadow:
         inset 0 1px 0 rgba(187, 222, 251, 0.22),
         0 3.5px 0 #0d2138,
         0 8px 20px rgba(0, 0, 0, 0.5);
+    border-color: #42a5f5 !important;
+    background: linear-gradient(180deg, #21466e 0%, #163250 100%) !important;
+    color: #bbdefb;
 }
 body.dark-mode .active strong { color: #bbdefb; }
 body.dark-mode .table-card.has-guest.active::after {
@@ -461,10 +462,10 @@ body.dark-mode .table-card.has-guest.active::after {
 /* GPU-composited LED viền chạy đồng bộ + nhấp nháy nền nhẹ cho cả 9 bàn đã chốt đơn */
 .is-locked { border-color: transparent !important; }
 .is-locked:not(.active) {
-    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.14);
+    --card-25d-shadow: 0 4px 12px rgba(15, 23, 42, 0.14);
 }
 body.dark-mode .is-locked:not(.active) {
-    box-shadow: 0 5px 14px rgba(0, 0, 0, 0.45);
+    --card-25d-shadow: 0 5px 14px rgba(0, 0, 0, 0.45);
 }
 .is-locked::before {
     content: "";
@@ -987,7 +988,10 @@ body.dark-mode .app-toast-error {
 body.dark-mode .remote-cursor { border-color: #1c232b; }
 .cursor-trail { position: fixed; width: 10px; height: 10px; border-radius: 50%; pointer-events: none; z-index: 199; transform: translate(-50%, -50%); will-change: transform, opacity; }
 .table-card.has-viewer { animation: viewerAuraPulse 1.8s ease-in-out infinite; }
-@keyframes viewerAuraPulse { 0%, 100% { box-shadow: 0 2px 7px var(--shadow-card), 0 0 0px 0px var(--viewer-color, transparent); } 50% { box-shadow: 0 2px 7px var(--shadow-card), 0 0 14px 3px var(--viewer-color, transparent); } }
+@keyframes viewerAuraPulse {
+    0%, 100% { box-shadow: var(--card-25d-shadow), 0 0 0px 0px var(--viewer-color, transparent); }
+    50%      { box-shadow: var(--card-25d-shadow), 0 0 14px 3px var(--viewer-color, transparent); }
+}
 .menu-item.remote-focus { box-shadow: inset 0 0 0 2px var(--focus-color, transparent); transition: box-shadow 0.25s ease; }
 .remote-focus-tag { position: absolute; top: -7px; right: 8px; font-size: 0.62em; font-weight: 700; padding: 1px 6px; border-radius: 8px; color: #fff; opacity: 0; transform: translateY(2px); transition: opacity 0.25s ease, transform 0.25s ease; pointer-events: none; z-index: 5; }
 .remote-focus-tag.visible { opacity: 1; transform: translateY(0); }
