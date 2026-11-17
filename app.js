@@ -278,18 +278,54 @@ function onChildRemoved(refArg, callback, ...rest) {
 let activeModalResolver = null;
 let toastTimer = null;
 
+function dismissToast() {
+    const container = document.getElementById('app-toast-container');
+    if (!container) return;
+    clearTimeout(toastTimer);
+    toastTimer = null;
+    const current = container.firstElementChild;
+    if (!current) return;
+    current.classList.add('is-leaving');
+    setTimeout(() => {
+        if (current.parentNode === container) current.remove();
+    }, 220);
+}
+
 function showToast(message, variant = 'info', durationMs = 3200) {
     const container = document.getElementById('app-toast-container');
     if (!container) return;
+
+    const existing = container.firstElementChild;
+    if (existing && !existing.classList.contains('is-leaving') && existing.dataset.variant === variant) {
+        const textEl = existing.querySelector('.app-toast-text');
+        if (textEl) textEl.textContent = message;
+        existing.classList.remove('is-pulse');
+        void existing.offsetWidth;
+        existing.classList.add('is-pulse');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(dismissToast, durationMs);
+        return;
+    }
+
     const toast = document.createElement('div');
     toast.className = `app-toast app-toast-${variant}`;
-    toast.textContent = message;
+    toast.dataset.variant = variant;
+
+    if (variant === 'loading') {
+        const spinner = document.createElement('span');
+        spinner.className = 'app-toast-spinner';
+        spinner.setAttribute('aria-hidden', 'true');
+        toast.appendChild(spinner);
+    }
+
+    const textSpan = document.createElement('span');
+    textSpan.className = 'app-toast-text';
+    textSpan.textContent = message;
+    toast.appendChild(textSpan);
+
     container.replaceChildren(toast);
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => {
-        toast.classList.add('is-leaving');
-        setTimeout(() => toast.remove(), 220);
-    }, durationMs);
+    toastTimer = setTimeout(dismissToast, durationMs);
 }
 
 function closeAppModal(result) {
@@ -2350,6 +2386,35 @@ const tableEpoch = Array(10).fill(0);
 const initialBranchesLoaded = new Set();
 let initialDataReady = false;
 const pendingRemoteOrderFlashes = [];
+const loadingTapTimers = {};
+
+function isTableSkeletonLoading(tableId = null) {
+    if (!initialDataReady) return true;
+    if (tableId !== null && tableId !== undefined) {
+        const card = TABLE_DOM[Number(tableId) - 1]?.card;
+        if (card && card.querySelector('.skeleton')) return true;
+    }
+    return false;
+}
+
+function notifyTableLoading(tableId) {
+    const tableNum = Number(tableId);
+    const card = TABLE_DOM[tableNum - 1]?.card;
+    if (card) {
+        card.classList.remove('is-loading-tap');
+        void card.offsetWidth;
+        card.classList.add('is-loading-tap');
+        clearTimeout(loadingTapTimers[tableNum]);
+        loadingTapTimers[tableNum] = setTimeout(() => {
+            card.classList.remove('is-loading-tap');
+            delete loadingTapTimers[tableNum];
+        }, 360);
+    }
+    if (window.navigator && window.navigator.vibrate) {
+        try { window.navigator.vibrate(15); } catch (e) {}
+    }
+    showToast('Đang tải, vui lòng chờ...', 'loading', 2200);
+}
 
 function recordLocalEchoDelta(tableId, itemId, delta) {
     if (!delta) return;
@@ -2434,6 +2499,15 @@ function markInitialBranchLoaded(branch) {
     initialBranchesLoaded.add(branch);
     if (initialBranchesLoaded.size === 3) {
         initialDataReady = true;
+        const tablesContainer = document.getElementById('tables-container');
+        if (tablesContainer) {
+            tablesContainer.classList.remove('is-loading');
+            tablesContainer.removeAttribute('aria-busy');
+        }
+        const activeToast = document.getElementById('app-toast-container')?.firstElementChild;
+        if (activeToast?.dataset.variant === 'loading') {
+            dismissToast();
+        }
         cleanupStaleTimes();
         scheduleOrphanedLockCheck();
         scheduleRefresh(null);
@@ -2598,6 +2672,10 @@ bindBranchWithInitialSync(
 );
 
 function selectTable(n, options = {}) {
+    if (n !== null && n !== undefined && isTableSkeletonLoading(n)) {
+        notifyTableLoading(n);
+        return;
+    }
     if ((paymentInProgress || payingTables.has(Number(n))) && !options.allowDuringPayment) return;
     if (options.haptic !== false) triggerHaptic('nav');
     resetBillQrView();
@@ -3019,6 +3097,7 @@ function renderCurrentOrder() {
 }
 
 function renderTableTime(tableId, now = getServerNow()) {
+    if (!initialDataReady) return;
     const dom = TABLE_DOM[tableId - 1];
     if (!dom?.time) return;
     dom.time.classList.remove('skeleton');

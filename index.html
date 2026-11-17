@@ -21,7 +21,7 @@
     html.paper-flip-pending .flip-clock-container > .flip-unit,
     html.paper-flip-pending .flip-clock-container > .flip-colon { visibility: hidden !important; }
     </style>
-    <link rel="stylesheet" href="style.css?v=fx-sound-v20">
+    <link rel="stylesheet" href="style.css?v=fx-sound-v21">
     <script>window.__paperFlipFailsafe = setTimeout(() => document.documentElement.classList.remove('paper-flip-pending'), 3000);</script>
 </head>
 <body>
@@ -113,7 +113,7 @@
     </div>
 </div>
 
-<div class="tables-container" id="tables-container">
+<div class="tables-container is-loading" id="tables-container" aria-busy="true">
     <div class="table-card" id="tab-1" data-table="1"><strong>Bàn 1</strong><span class="table-price skeleton" id="sum-1">0đ</span><span class="table-meta" id="meta-1"></span><span class="table-time skeleton" id="time-1">⏱ 0 phút</span></div>
     <div class="table-card" id="tab-2" data-table="2"><strong>Bàn 2</strong><span class="table-price skeleton" id="sum-2">0đ</span><span class="table-meta" id="meta-2"></span><span class="table-time skeleton" id="time-2">⏱ 0 phút</span></div>
     <div class="table-card" id="tab-3" data-table="3"><strong>Bàn 3</strong><span class="table-price skeleton" id="sum-3">0đ</span><span class="table-meta" id="meta-3"></span><span class="table-time skeleton" id="time-3">⏱ 0 phút</span></div>
@@ -205,6 +205,6 @@
 </div>
 <div id="app-toast-container" class="app-toast-container" aria-live="polite"></div>
 
-<script type="module" src="app.js?v=fx-sound-v20"></script>
+<script type="module" src="app.js?v=fx-sound-v21"></script>
 </body>
 </html>
