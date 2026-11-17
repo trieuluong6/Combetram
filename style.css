@@ -602,16 +602,17 @@ body.dark-mode .lang-btn.active-lang {
     filter: none;
 }
 
-/* 2 nút phụ xếp dọc (Mã QR & Gọi thêm món): 2.5D tông xanh dương nhạt hơn ~20% */
+/* 2 nút phụ xếp dọc (Mã QR & Gọi thêm món): 2.5D tông gỗ sồi mật ong sáng hơn nút Xác nhận thanh toán */
 .btn-qr-paper,
 .btn-add-more {
     padding: 13px 16px;
     font-size: 1.02em;
     gap: 8px;
-    background: linear-gradient(180deg, #55a3f3 0%, #4791db 100%);
-    color: #ffffff;
-    border: 1.5px solid #4484cd;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.34), 0 4px 0 #3d6cb4, 0 6px 12px rgba(61, 108, 180, 0.22);
+    background: linear-gradient(180deg, #e4c199 0%, #d1a679 100%);
+    color: #3b210e;
+    text-shadow: 0 1px 0 rgba(255, 249, 240, 0.45);
+    border: 1.5px solid #b58658;
+    box-shadow: inset 0 1px 0 rgba(255, 249, 238, 0.62), 0 4px 0 #9c6e42, 0 6px 12px rgba(124, 83, 44, 0.20);
     transition: transform 0.08s ease, box-shadow 0.08s ease, filter 0.15s ease, opacity 0.2s ease, background 0.3s ease, border-color 0.3s ease, color 0.3s ease;
 }
 .btn-qr-paper {
@@ -624,39 +625,40 @@ body.dark-mode .lang-btn.active-lang {
 .btn-add-more:active {
     transform: translateY(2px);
     filter: brightness(0.97);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.20), 0 2px 0 #3d6cb4, 0 3px 6px rgba(61, 108, 180, 0.18);
+    box-shadow: inset 0 1px 0 rgba(255, 249, 238, 0.36), 0 2px 0 #9c6e42, 0 3px 6px rgba(124, 83, 44, 0.16);
 }
 .btn-qr-paper.is-qr-active {
-    background: linear-gradient(180deg, #4791db 0%, #3d6cb4 100%);
-    border-color: #3c63a1;
-    color: #ffffff;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.26), 0 4px 0 #395789, 0 6px 12px rgba(57, 87, 137, 0.26);
+    background: linear-gradient(180deg, #d6ad82 0%, #c19264 100%);
+    border-color: #a47447;
+    color: #341c0b;
+    box-shadow: inset 0 1px 0 rgba(255, 248, 236, 0.48), 0 4px 0 #8a5e35, 0 6px 12px rgba(110, 72, 36, 0.24);
 }
 .btn-qr-paper.is-qr-active:active {
     transform: translateY(2px);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 2px 0 #395789, 0 3px 6px rgba(57, 87, 137, 0.20);
+    box-shadow: inset 0 1px 0 rgba(255, 248, 236, 0.28), 0 2px 0 #8a5e35, 0 3px 6px rgba(110, 72, 36, 0.18);
 }
 body.dark-mode .btn-qr-paper,
 body.dark-mode .btn-add-more {
-    background: linear-gradient(180deg, #4b90dd 0%, #4479b9 100%);
-    color: #ffffff;
-    border-color: #416ca1;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24), 0 4px 0 #3c5b82, 0 6px 14px rgba(0, 0, 0, 0.38);
+    background: linear-gradient(180deg, #c49a6c 0%, #ad8052 100%);
+    color: #231206;
+    text-shadow: 0 1px 0 rgba(255, 242, 224, 0.32);
+    border-color: #93683e;
+    box-shadow: inset 0 1px 0 rgba(255, 244, 226, 0.42), 0 4px 0 #7a522c, 0 6px 14px rgba(0, 0, 0, 0.40);
 }
 body.dark-mode .btn-qr-paper:active,
 body.dark-mode .btn-add-more:active {
     transform: translateY(2px);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 2px 0 #3c5b82, 0 3px 7px rgba(0, 0, 0, 0.30);
+    box-shadow: inset 0 1px 0 rgba(255, 244, 226, 0.24), 0 2px 0 #7a522c, 0 3px 7px rgba(0, 0, 0, 0.32);
 }
 body.dark-mode .btn-qr-paper.is-qr-active {
-    background: linear-gradient(180deg, #4479b9 0%, #3d6393 100%);
-    border-color: #3b5981;
-    color: #ffffff;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.20), 0 4px 0 #394f6c, 0 6px 14px rgba(0, 0, 0, 0.42);
+    background: linear-gradient(180deg, #ba8e60 0%, #a37649 100%);
+    border-color: #885e36;
+    color: #211005;
+    box-shadow: inset 0 1px 0 rgba(255, 242, 224, 0.34), 0 4px 0 #6e4926, 0 6px 14px rgba(0, 0, 0, 0.44);
 }
 body.dark-mode .btn-qr-paper.is-qr-active:active {
     transform: translateY(2px);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 2px 0 #394f6c, 0 3px 7px rgba(0, 0, 0, 0.34);
+    box-shadow: inset 0 1px 0 rgba(255, 242, 224, 0.20), 0 2px 0 #6e4926, 0 3px 7px rgba(0, 0, 0, 0.36);
 }
 
 /* Nút chính (Xác nhận thanh toán): 2.5D đậm nét (đế xanh đậm 5px, lún 3px khi nhấn) */
