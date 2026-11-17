@@ -573,48 +573,7 @@ const TABLE_DOM = Array.from({ length: 9 }, (_, idx) => {
 const ITEM_DOM = new Map();
 const tableTotals = Array(10).fill(0);
 
-// ─── LOCALSTORAGE SNAPSHOT CACHE (HIỂN THỊ TỨC THÌ KHI MỞ APP) ──────────
-const STATE_CACHE_KEY = 'combetram_state_cache_v1';
-const STATE_CACHE_MAX_AGE_MS = 30 * 60 * 1000;
-let stateCacheSaveTimer = null;
-
-function scheduleSaveLocalStateCache() {
-    clearTimeout(stateCacheSaveTimer);
-    stateCacheSaveTimer = setTimeout(() => {
-        try {
-            localStorage.setItem(STATE_CACHE_KEY, JSON.stringify({
-                orders: data.orders || {},
-                locked: data.locked || {},
-                times: data.times || {},
-                savedAt: Date.now()
-            }));
-        } catch (e) {}
-    }, 450);
-}
-
-function hydrateFromLocalStateCache() {
-    try {
-        const raw = localStorage.getItem(STATE_CACHE_KEY);
-        if (!raw) return false;
-        const parsed = JSON.parse(raw);
-        if (!parsed || typeof parsed !== 'object') return false;
-        if (!Number.isFinite(parsed.savedAt) || (Date.now() - parsed.savedAt) > STATE_CACHE_MAX_AGE_MS) return false;
-        data.orders = parsed.orders && typeof parsed.orders === 'object' ? parsed.orders : {};
-        data.locked = parsed.locked && typeof parsed.locked === 'object' ? parsed.locked : {};
-        data.times = parsed.times && typeof parsed.times === 'object' ? parsed.times : {};
-        // Loại bỏ trạng thái khóa mồ côi nếu bàn trong cache không còn món (0đ)
-        for (let t = 1; t <= 9; t++) {
-            const ord = data.orders?.[t];
-            const hasAny = ord && typeof ord === 'object' && Object.values(ord).some(q => Number(q) > 0);
-            if (!hasAny && data.locked?.[t]) {
-                delete data.locked[t];
-            }
-        }
-        return true;
-    } catch (e) {
-        return false;
-    }
-}
+try { localStorage.removeItem('combetram_state_cache_v1'); } catch (e) {}
 
 function shallowRecordEqual(a, b) {
     if (a === b) return true;
@@ -2477,7 +2436,6 @@ function markInitialBranchLoaded(branch) {
         initialDataReady = true;
         cleanupStaleTimes();
         scheduleOrphanedLockCheck();
-        scheduleSaveLocalStateCache();
         scheduleRefresh(null);
     }
 }
@@ -2525,7 +2483,6 @@ function handleSingleTableOrderSnapshot(rawKey, tableVal) {
     }
 
     if (initialDataReady) {
-        scheduleSaveLocalStateCache();
         cleanupStaleTimes(changed);
         scheduleOrphanedLockCheck(changed);
         scheduleRefresh(changed, true);
@@ -2552,7 +2509,6 @@ function handleSingleTableLockSnapshot(rawKey, rawVal) {
 
     if (initialDataReady) {
         const changed = new Set([tableId]);
-        scheduleSaveLocalStateCache();
         scheduleOrphanedLockCheck(changed);
         scheduleRefresh(changed, true);
     }
@@ -2578,7 +2534,6 @@ function handleSingleTableTimeSnapshot(rawKey, rawVal) {
     }
 
     if (initialDataReady) {
-        scheduleSaveLocalStateCache();
         scheduleRefresh(new Set([tableId]));
     }
 }
@@ -2597,10 +2552,6 @@ function bindBranchWithInitialSync(branchRef, branchName, applyInitialVal, handl
         _fbOnChildChanged(branchRef, (snap) => handleChildVal(snap.key, snap.val()));
         _fbOnChildRemoved(branchRef, (snap) => handleChildVal(snap.key, null));
     });
-}
-
-if (hydrateFromLocalStateCache()) {
-    refresh(null, false);
 }
 
 bindBranchWithInitialSync(
@@ -2943,7 +2894,6 @@ function scheduleOrphanedLockCheck(tableIds = null) {
 
             delete data.locked[tab];
             if (data.times?.[tab]) delete data.times[tab];
-            scheduleSaveLocalStateCache();
             scheduleRefresh(new Set([tab]), currentTab === tab);
             clearTableLockAndTimeOnServer(tab);
         }, 1200);
@@ -3302,7 +3252,6 @@ async function doPay() {
             data.times[tab] = backupTime;
         }
         if (backupTotal) tableTotals[tab] = backupTotal;
-        scheduleSaveLocalStateCache();
         scheduleRefresh(new Set([tab]), true);
     };
 
@@ -3330,7 +3279,6 @@ async function doPay() {
     if (data.locked) delete data.locked[tab];
     if (data.times) delete data.times[tab];
     tableTotals[tab] = 0;
-    scheduleSaveLocalStateCache();
     scheduleRefresh(new Set([tab]), true);
 
     selectTable(null, { haptic: false, allowDuringPayment: true, instantClose: true });
@@ -3366,7 +3314,6 @@ async function doPay() {
                 if (data.locked) delete data.locked[tab];
                 if (data.times) delete data.times[tab];
             }
-            scheduleSaveLocalStateCache();
             scheduleRefresh(new Set([tab]), true);
             showToast('Đơn bàn này vừa có thay đổi hoặc đã được thanh toán ở máy khác!', 'warning', 4500);
             return;
@@ -3623,3 +3570,18 @@ if (document.readyState === 'complete') {
 }
 
 updateNetWidget();
+
+// ─── SERVICE WORKER: TỰ ĐỘNG LẤY BẢN MỚI KHI PUSH GITHUB ───────────────
+if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' })
+            .then((reg) => {
+                document.addEventListener('visibilitychange', () => {
+                    if (!document.hidden) {
+                        reg.update().catch(() => {});
+                    }
+                });
+            })
+            .catch((err) => console.warn('[sw] Không thể đăng ký Service Worker:', err));
+    });
+}
