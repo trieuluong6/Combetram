@@ -15,7 +15,9 @@ import {
     runTransaction,
     query,
     orderByChild,
-    startAt
+    startAt,
+    endAt,
+    limitToFirst
 } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-database.js";
 
 import { menu } from "./menu.js";
@@ -156,9 +158,20 @@ function updateDynamicVietQr(tab, totalAmount) {
 
 // ─── ĐỒNG BỘ GIỜ SERVER FIREBASE ──────────────────────────────────────
 let serverTimeOffset = 0;
+let hasServerTimeOffset = false;
 onValue(ref(database, '.info/serverTimeOffset'), (snap) => {
     const offset = Number(snap.val());
-    if (Number.isFinite(offset)) serverTimeOffset = offset;
+    if (Number.isFinite(offset)) {
+        const prevOffset = serverTimeOffset;
+        serverTimeOffset = offset;
+        const firstSync = !hasServerTimeOffset;
+        hasServerTimeOffset = true;
+        if (typeof bindActiveSessionsListeners === 'function') {
+            if (firstSync || Math.abs(offset - prevOffset) >= 3000) {
+                bindActiveSessionsListeners(true);
+            }
+        }
+    }
 });
 function getServerNow() {
     return Date.now() + serverTimeOffset;
@@ -378,16 +391,19 @@ const localPaymentEchoTables = new Set();
 const lockInProgressTables = new Set();
 
 function syncLockButtonsState(tab = currentTab) {
-    const isBusy = Boolean(tab && lockInProgressTables.has(Number(tab)));
+    const tableNum = Number(tab);
+    const isBusy = Boolean(tableNum && lockInProgressTables.has(tableNum));
+    const hasItems = Boolean(tableNum && effectiveTableHasItems(tableNum));
     const checkoutBtn = document.getElementById('btn-checkout');
     const unlockBtn = document.querySelector('#bill-area [data-action="unlock-bill"]');
     if (checkoutBtn) {
-        checkoutBtn.disabled = isBusy;
-        checkoutBtn.style.opacity = isBusy ? '0.6' : '';
+        const disabled = isBusy || !hasItems;
+        checkoutBtn.disabled = disabled;
+        checkoutBtn.setAttribute('aria-disabled', String(disabled));
     }
     if (unlockBtn) {
         unlockBtn.disabled = isBusy;
-        unlockBtn.style.opacity = isBusy ? '0.6' : '';
+        unlockBtn.setAttribute('aria-disabled', String(isBusy));
     }
 }
 
@@ -1549,6 +1565,7 @@ let isFirebaseConnected = false;
 let hasEverConnected = false;
 const sessionsMap = {};
 const cleanedStaleSessionKeys = new Set();
+let lastServerStaleSweepAt = 0;
 
 let localActivitySeq = 0;
 let lastRemoteSfxTs = 0;
@@ -1586,23 +1603,50 @@ function isSessionGarbageLeader(now = getServerNow()) {
     return activeIds[0] === mySessionId;
 }
 
+function removeStaleSessionNode(id, ts = 0) {
+    if (!id || id === mySessionId) return;
+    const cacheKey = `${id}:${ts || 0}`;
+    if (cleanedStaleSessionKeys.has(cacheKey)) return;
+    cleanedStaleSessionKeys.add(cacheKey);
+    if (cleanedStaleSessionKeys.size > 200) {
+        const oldest = cleanedStaleSessionKeys.values().next().value;
+        cleanedStaleSessionKeys.delete(oldest);
+    }
+    remove(child(sessionsRef, id)).catch(() => {
+        cleanedStaleSessionKeys.delete(cacheKey);
+    });
+}
+
 function cleanupStaleSessions(now = getServerNow()) {
     if (!isSessionGarbageLeader(now)) return;
     for (const [id, s] of Object.entries(sessionsMap)) {
         if (id === mySessionId) continue;
         const ts = Number(s?.ts);
         if (!s || (Number.isFinite(ts) && (now - ts) >= STALE_SESSION_MS)) {
-            const cacheKey = `${id}:${ts || 0}`;
-            if (cleanedStaleSessionKeys.has(cacheKey)) continue;
-            cleanedStaleSessionKeys.add(cacheKey);
-            if (cleanedStaleSessionKeys.size > 200) {
-                const oldest = cleanedStaleSessionKeys.values().next().value;
-                cleanedStaleSessionKeys.delete(oldest);
-            }
-            remove(child(sessionsRef, id)).catch(() => {
-                cleanedStaleSessionKeys.delete(cacheKey);
-            });
+            removeStaleSessionNode(id, ts);
         }
+    }
+
+    // Quét tối đa 50 node session cũ hơn STALE_SESSION_MS còn sót trên server trước khi mở trang
+    const localNow = Date.now();
+    if ((localNow - lastServerStaleSweepAt) >= 60000) {
+        lastServerStaleSweepAt = localNow;
+        const staleQuery = query(
+            sessionsRef,
+            orderByChild('ts'),
+            endAt(now - STALE_SESSION_MS),
+            limitToFirst(50)
+        );
+        onValue(staleQuery, (snap) => {
+            if (!snap || typeof snap.forEach !== 'function') return;
+            snap.forEach((childSnap) => {
+                const key = childSnap.key;
+                if (key && key !== mySessionId) {
+                    const val = childSnap.val();
+                    removeStaleSessionNode(key, Number(val?.ts) || 0);
+                }
+            });
+        }, { onlyOnce: true });
     }
 }
 
@@ -2166,28 +2210,59 @@ function handleRemoteSessionChange(id, sessionData, eventType) {
     cleanupStaleSessions(now);
 }
 
-// Lọc phía server chỉ lấy các session hoạt động trong vòng 2 phút gần nhất -> chặn tải node rác khi F5/mở app
-const activeSessionsQuery = query(
-    sessionsRef,
-    orderByChild('ts'),
-    startAt(Date.now() - STALE_SESSION_MS)
-);
+// Lọc phía server theo giờ đã đồng bộ với Firebase (.info/serverTimeOffset) tránh lệch đồng hồ thiết bị
+let activeSessionUnsubs = [];
+let sessionBindFallbackTimer = null;
 
-onChildAdded(activeSessionsQuery, (snap) => {
-    if (snap.key) handleRemoteSessionChange(snap.key, snap.val(), 'added');
-});
-onChildChanged(activeSessionsQuery, (snap) => {
-    if (snap.key) handleRemoteSessionChange(snap.key, snap.val(), 'changed');
-});
-onChildRemoved(activeSessionsQuery, (snap) => {
-    if (snap.key) handleRemoteSessionChange(snap.key, null, 'removed');
-});
+function bindActiveSessionsListeners(forceRebind = false) {
+    clearTimeout(sessionBindFallbackTimer);
+    sessionBindFallbackTimer = null;
+
+    if (!forceRebind && activeSessionUnsubs.length > 0) return;
+    while (activeSessionUnsubs.length) {
+        const unsub = activeSessionUnsubs.pop();
+        try { unsub(); } catch (e) {}
+    }
+
+    const now = getServerNow();
+    const cutoffTs = now - STALE_SESSION_MS - 15000;
+    const activeSessionsQuery = query(
+        sessionsRef,
+        orderByChild('ts'),
+        startAt(cutoffTs)
+    );
+
+    activeSessionUnsubs.push(
+        onChildAdded(activeSessionsQuery, (snap) => {
+            if (snap.key) handleRemoteSessionChange(snap.key, snap.val(), 'added');
+        }),
+        onChildChanged(activeSessionsQuery, (snap) => {
+            if (snap.key) handleRemoteSessionChange(snap.key, snap.val(), 'changed');
+        }),
+        onChildRemoved(activeSessionsQuery, (snap) => {
+            if (snap.key) handleRemoteSessionChange(snap.key, null, 'removed');
+        })
+    );
+
+    renderPresenceCount(now);
+    renderRemoteCursors(now);
+    renderRemoteFocus(now);
+    renderRemotePaying(now);
+    cleanupStaleSessions(now);
+}
+
+sessionBindFallbackTimer = setTimeout(() => {
+    bindActiveSessionsListeners(false);
+}, 900);
 
 onValue(onlineRef, (snap) => {
     isFirebaseConnected = snap.val() === true;
     if (isFirebaseConnected) {
         hasEverConnected = true;
         updateNetworkStatusBadge();
+        if (activeSessionUnsubs.length === 0) {
+            bindActiveSessionsListeners(false);
+        }
         // Chỉ cần 1 onDisconnect duy nhất cho toàn bộ phiên làm việc
         onDisconnect(mySessionRef).remove().catch(() => {});
 
@@ -2325,12 +2400,13 @@ document.addEventListener('click', (e) => {
     }
 });
 
-// ─── TỰ ẨN NÚT CUỘN XUỐNG KHI NÚT CHỐT ĐƠN ĐÃ HIỆN RA ─────────────────
+// ─── TỰ ẨN NÚT CUỘN XUỐNG KHI NÚT CHỐT ĐƠN ĐÃ HIỆN RA HOẶC BÀN 0Đ ─────
 let checkoutBtnVisible = false;
 function updateScrollCheckoutButton() {
     const scrollBtn = document.getElementById('scroll-to-checkout');
     if (!scrollBtn) return;
-    const shouldShow = Boolean(currentTab && !data.locked?.[currentTab] && !checkoutBtnVisible);
+    const hasItems = Boolean(currentTab && effectiveTableHasItems(currentTab));
+    const shouldShow = Boolean(currentTab && !data.locked?.[currentTab] && hasItems && !checkoutBtnVisible);
     scrollBtn.classList.toggle('hidden', !shouldShow);
 }
 
@@ -2656,6 +2732,24 @@ function selectTable(n, options = {}) {
 const debounceTimers = {};
 const debounceVersions = {};
 const pendingStartTimes = new Set();
+const inFlightItemCommits = new Map(); // tableId -> Set<Promise>
+
+function trackTableCommit(tab, promise) {
+    const tableNum = Number(tab);
+    let setForTable = inFlightItemCommits.get(tableNum);
+    if (!setForTable) {
+        setForTable = new Set();
+        inFlightItemCommits.set(tableNum, setForTable);
+    }
+    setForTable.add(promise);
+    promise.finally(() => {
+        setForTable.delete(promise);
+        if (setForTable.size === 0) {
+            inFlightItemCommits.delete(tableNum);
+        }
+    });
+    return promise;
+}
 
 function getEffectiveItemQty(tab, itemId) {
     const serverQty = Number(data.orders?.[tab]?.[itemId] || 0);
@@ -2680,7 +2774,9 @@ function clearPendingForTable(tab) {
 
 function commitPendingItem(tab, id, expectedVersion = null) {
     const key = `${tab}_${id}`;
-    if (expectedVersion !== null && debounceVersions[key] !== expectedVersion) return;
+    if (expectedVersion !== null && debounceVersions[key] !== expectedVersion) {
+        return Promise.resolve();
+    }
 
     const version = expectedVersion !== null ? expectedVersion : ((debounceVersions[key] || 0) + 1);
     debounceVersions[key] = version;
@@ -2694,7 +2790,7 @@ function commitPendingItem(tab, id, expectedVersion = null) {
             if (Object.keys(pendingDeltas[tab]).length === 0) delete pendingDeltas[tab];
         }
         if (debounceVersions[key] === version) delete debounceVersions[key];
-        return;
+        return Promise.resolve();
     }
 
     const startEpoch = tableEpoch[tab] || 0;
@@ -2705,9 +2801,10 @@ function commitPendingItem(tab, id, expectedVersion = null) {
     if (deltaToSend > 0 && !data.times?.[tab] && !pendingStartTimes.has(tab)) {
         pendingStartTimes.add(tab);
         const startTs = getServerNow();
-        set(child(timesRef, String(tab)), startTs)
+        const timePromise = set(child(timesRef, String(tab)), startTs)
             .catch(err => console.error('[times] Lỗi ghi mốc giờ Firebase:', err))
             .finally(() => pendingStartTimes.delete(tab));
+        trackTableCommit(tab, timePromise);
     }
 
     const itemRef = child(ordersRef, `${tab}/${id}`);
@@ -2715,7 +2812,7 @@ function commitPendingItem(tab, id, expectedVersion = null) {
     let initialLocalCur = 0;
     let prevOptimisticTarget = null;
 
-    transaction(itemRef, (cur) => {
+    const txPromise = transaction(itemRef, (cur) => {
         passCount++;
         const current = Math.max(0, Number(cur) || 0);
         if (passCount === 1) initialLocalCur = current;
@@ -2768,19 +2865,31 @@ function commitPendingItem(tab, id, expectedVersion = null) {
                 delete debounceVersions[key];
             }
         });
+
+    return trackTableCommit(tab, txPromise);
 }
 
-function flushPendingForTable(tab) {
-    const pending = pendingDeltas[tab];
-    if (!pending) return;
-    for (const rawId of Object.keys(pending)) {
-        commitPendingItem(tab, Number(rawId));
+async function flushPendingForTable(tab) {
+    const tableNum = Number(tab);
+    const pending = pendingDeltas[tableNum];
+    if (pending) {
+        for (const rawId of Object.keys(pending)) {
+            commitPendingItem(tableNum, Number(rawId));
+        }
+    }
+    const activeCommits = inFlightItemCommits.get(tableNum);
+    if (activeCommits && activeCommits.size > 0) {
+        await Promise.allSettled(Array.from(activeCommits));
     }
 }
 
 function flushAllPendingItems() {
-    for (const rawTab of Object.keys(pendingDeltas)) {
-        flushPendingForTable(Number(rawTab));
+    const tabs = new Set([
+        ...Object.keys(pendingDeltas).map(Number),
+        ...inFlightItemCommits.keys()
+    ]);
+    for (const tableNum of tabs) {
+        flushPendingForTable(tableNum);
     }
 }
 
@@ -2921,6 +3030,8 @@ function change(id, delta) {
         applyMenuRowQtyClasses(row, newQty);
         playQtyBump(qSpan);
     }
+    syncLockButtonsState(tab);
+    updateScrollCheckoutButton();
     renderTable(tab, getServerNow());
     renderCrowdStatus();
     flashRow(id, delta);
@@ -3133,7 +3244,16 @@ async function setLock(v) {
         triggerHaptic(v ? 'lock' : 'unlock');
         broadcastActivity({ sfx: v ? 'lock' : 'unlock', tableId: tab, itemId: null, immediate: true });
         if (v) {
-            flushPendingForTable(tab);
+            // Chờ toàn bộ món debounced & in-flight transaction hoàn tất trên Firebase trước khi khóa bàn
+            await flushPendingForTable(tab);
+            if (pendingDeltas[tab] && Object.keys(pendingDeltas[tab]).length > 0) {
+                showToast('Chưa đồng bộ được món lên máy chủ, vui lòng kiểm tra mạng và thử lại!', 'error', 3200);
+                return;
+            }
+            if (!effectiveTableHasItems(tab)) {
+                showToast('Bàn chưa có món nào để chốt đơn!', 'warning', 2600);
+                return;
+            }
             preloadBillAssets();
             resetBillQrView(true);
         }
@@ -3163,6 +3283,8 @@ async function doPay() {
         showToast('Thiết bị khác đang thu tiền bàn này, vui lòng chờ!', 'warning', 2800);
         return;
     }
+
+    await flushPendingForTable(tab);
 
     const lockedBeforeConfirm = !!data.locked?.[tab];
     const orderBeforeConfirm = normalizeOrderMap(getMergedOrder(tab));

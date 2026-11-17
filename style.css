@@ -521,8 +521,14 @@ body.dark-mode .lang-btn.active-lang {
 @keyframes headGlowRed { 0%, 50% { opacity: 0; transform: scale(0.9); } 65% { opacity: 1; transform: scale(1.1); } 85%, 100% { opacity: 0; transform: scale(1); } }
 .total-pop { animation: popScale 0.4s ease; }
 @keyframes popScale { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
-.btn-action { border: none; padding: 15px; border-radius: 10px; font-weight: bold; width: 100%; margin-top: 12px; color: white; cursor: pointer; font-size: 1.1em; position: relative; overflow: hidden; transition: transform 0.15s ease, filter 0.15s ease; }
+.btn-action { border: none; padding: 15px; border-radius: 10px; font-weight: bold; width: 100%; margin-top: 12px; color: white; cursor: pointer; font-size: 1.1em; position: relative; overflow: hidden; transition: transform 0.15s ease, filter 0.15s ease, opacity 0.2s ease; }
 .btn-action:active { transform: scale(0.98); filter: brightness(0.95); }
+.btn-action:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    filter: grayscale(0.35);
+    pointer-events: none;
+}
 
 /* NON-BLOCKING MODAL & TOAST */
 .app-modal-backdrop {
@@ -755,26 +761,6 @@ html.paper-flip-pending .flip-clock-container > .flip-colon {
     will-change: transform, opacity;
 }
 
-/* Tạm dừng animation nền khi ẩn tab để tiết kiệm pin */
-body.tab-hidden .status-empty,
-body.tab-hidden .status-normal,
-body.tab-hidden .status-crowded::before,
-body.tab-hidden .online-dot,
-body.tab-hidden .wi-spin,
-body.tab-hidden .wi-pulse,
-body.tab-hidden .wi-sway,
-body.tab-hidden .wi-drop,
-body.tab-hidden .wi-flash,
-body.tab-hidden .wi-blow,
-body.tab-hidden .wi-blow2,
-body.tab-hidden .wi-blow3,
-body.tab-hidden .flip-colon,
-body.tab-hidden .has-guest::after,
-body.tab-hidden .is-locked::before,
-body.tab-hidden .is-locked::after,
-body.tab-hidden .total-container,
-body.tab-hidden .arrow-shaft::after,
-body.tab-hidden .arrow-head::after,
 /* TRẠNG THÁI ĐANG THU TIỀN TỪ THIẾT BỊ KHÁC */
 .table-card.is-remote-paying {
     opacity: 0.78;
@@ -830,6 +816,26 @@ body.dark-mode .remote-paying-banner {
     filter: grayscale(0.35);
 }
 
+/* Tạm dừng animation nền khi ẩn tab để tiết kiệm pin */
+body.tab-hidden .status-empty,
+body.tab-hidden .status-normal,
+body.tab-hidden .status-crowded::before,
+body.tab-hidden .online-dot,
+body.tab-hidden .wi-spin,
+body.tab-hidden .wi-pulse,
+body.tab-hidden .wi-sway,
+body.tab-hidden .wi-drop,
+body.tab-hidden .wi-flash,
+body.tab-hidden .wi-blow,
+body.tab-hidden .wi-blow2,
+body.tab-hidden .wi-blow3,
+body.tab-hidden .flip-colon,
+body.tab-hidden .has-guest::after,
+body.tab-hidden .is-locked::before,
+body.tab-hidden .is-locked::after,
+body.tab-hidden .total-container,
+body.tab-hidden .arrow-shaft::after,
+body.tab-hidden .arrow-head::after,
 body.tab-hidden .table-card.has-viewer,
 body.tab-hidden .remote-paying-badge,
 body.tab-hidden .remote-paying-banner,
