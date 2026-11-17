@@ -602,16 +602,16 @@ body.dark-mode .lang-btn.active-lang {
     filter: none;
 }
 
-/* 2 nút phụ xếp dọc (Mã QR & Gọi thêm món): 2.5D tông xanh dương rõ nét */
+/* 2 nút phụ xếp dọc (Mã QR & Gọi thêm món): 2.5D tông xanh dương nhạt hơn ~20% */
 .btn-qr-paper,
 .btn-add-more {
     padding: 13px 16px;
     font-size: 1.02em;
     gap: 8px;
-    background: linear-gradient(180deg, #2b8cf0 0%, #1976d2 100%);
+    background: linear-gradient(180deg, #55a3f3 0%, #4791db 100%);
     color: #ffffff;
-    border: 1.5px solid #1565c0;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.30), 0 4px 0 #0d47a1, 0 6px 12px rgba(13, 71, 161, 0.22);
+    border: 1.5px solid #4484cd;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.34), 0 4px 0 #3d6cb4, 0 6px 12px rgba(61, 108, 180, 0.22);
     transition: transform 0.08s ease, box-shadow 0.08s ease, filter 0.15s ease, opacity 0.2s ease, background 0.3s ease, border-color 0.3s ease, color 0.3s ease;
 }
 .btn-qr-paper {
@@ -624,39 +624,39 @@ body.dark-mode .lang-btn.active-lang {
 .btn-add-more:active {
     transform: translateY(2px);
     filter: brightness(0.97);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 2px 0 #0d47a1, 0 3px 6px rgba(13, 71, 161, 0.18);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.20), 0 2px 0 #3d6cb4, 0 3px 6px rgba(61, 108, 180, 0.18);
 }
 .btn-qr-paper.is-qr-active {
-    background: linear-gradient(180deg, #1976d2 0%, #0d47a1 100%);
-    border-color: #0b3c8a;
+    background: linear-gradient(180deg, #4791db 0%, #3d6cb4 100%);
+    border-color: #3c63a1;
     color: #ffffff;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24), 0 4px 0 #082d6b, 0 6px 12px rgba(13, 71, 161, 0.28);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.26), 0 4px 0 #395789, 0 6px 12px rgba(57, 87, 137, 0.26);
 }
 .btn-qr-paper.is-qr-active:active {
     transform: translateY(2px);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 2px 0 #082d6b, 0 3px 6px rgba(13, 71, 161, 0.22);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 2px 0 #395789, 0 3px 6px rgba(57, 87, 137, 0.20);
 }
 body.dark-mode .btn-qr-paper,
 body.dark-mode .btn-add-more {
-    background: linear-gradient(180deg, #1e74d4 0%, #1558a8 100%);
+    background: linear-gradient(180deg, #4b90dd 0%, #4479b9 100%);
     color: #ffffff;
-    border-color: #11478a;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.20), 0 4px 0 #0b3263, 0 6px 14px rgba(0, 0, 0, 0.42);
+    border-color: #416ca1;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24), 0 4px 0 #3c5b82, 0 6px 14px rgba(0, 0, 0, 0.38);
 }
 body.dark-mode .btn-qr-paper:active,
 body.dark-mode .btn-add-more:active {
     transform: translateY(2px);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 2px 0 #0b3263, 0 3px 7px rgba(0, 0, 0, 0.34);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 2px 0 #3c5b82, 0 3px 7px rgba(0, 0, 0, 0.30);
 }
 body.dark-mode .btn-qr-paper.is-qr-active {
-    background: linear-gradient(180deg, #1558a8 0%, #0d3c78 100%);
-    border-color: #0a3061;
+    background: linear-gradient(180deg, #4479b9 0%, #3d6393 100%);
+    border-color: #3b5981;
     color: #ffffff;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 4px 0 #072347, 0 6px 14px rgba(0, 0, 0, 0.46);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.20), 0 4px 0 #394f6c, 0 6px 14px rgba(0, 0, 0, 0.42);
 }
 body.dark-mode .btn-qr-paper.is-qr-active:active {
     transform: translateY(2px);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10), 0 2px 0 #072347, 0 3px 7px rgba(0, 0, 0, 0.36);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 2px 0 #394f6c, 0 3px 7px rgba(0, 0, 0, 0.34);
 }
 
 /* Nút chính (Xác nhận thanh toán): 2.5D đậm nét (đế xanh đậm 5px, lún 3px khi nhấn) */
