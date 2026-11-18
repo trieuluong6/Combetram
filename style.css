@@ -211,6 +211,7 @@ body.dark-mode #offline-badge {
     border: 2px solid var(--border-soft);
     position: relative;
     overflow: hidden;
+    isolation: isolate;
     text-transform: uppercase;
     transition: background 0.4s ease, border-color 0.4s ease;
 }
@@ -227,14 +228,22 @@ body.dark-mode .status-normal { background: rgba(230,81,0,0.18); color: #ffb74d;
 .status-crowded::before {
     content: "";
     position: absolute;
-    top: -150%; left: -50%; width: 200%; height: 300%;
+    top: 50%;
+    left: 50%;
+    width: 130%;
+    height: 0;
+    padding-bottom: 130%;
+    transform: translate(-50%, -50%);
     background: conic-gradient(from 0deg, #ff0000 0deg 40deg, transparent 40deg 180deg, #0044ff 180deg 220deg, transparent 220deg 360deg);
     animation: police-spin 0.45s linear infinite;
     will-change: transform;
     z-index: 1;
 }
 .status-crowded::after { content: ""; position: absolute; inset: 2px; background: #111; border-radius: 18px; z-index: 2; }
-@keyframes police-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+@keyframes police-spin {
+    from { transform: translate(-50%, -50%) rotate(0deg); }
+    to   { transform: translate(-50%, -50%) rotate(360deg); }
+}
 
 /* TIÊU ĐỀ — BẢNG HIỆU PHƯƠNG ĐÔNG HIỆN ĐẠI (VIỀN CHỈ KÉP + KE 4 GÓC HÌNH HỌC & SONG ẤN) */
 .header-title {
@@ -452,6 +461,7 @@ body.dark-mode .signboard-seal.seal-yin {
     min-height: 106px;
     position: relative;
     overflow: hidden;
+    isolation: isolate;
     transition: transform 0.16s cubic-bezier(0.22, 1, 0.36, 1), background 0.3s ease, color 0.3s ease, border-color 0.3s ease, box-shadow 0.25s ease;
     grid-column: span 2;
 }
@@ -769,13 +779,22 @@ body.dark-mode .table-card.is-locked:not(.active) {
     position: absolute;
     top: 50%;
     left: 50%;
-    width: 260%;
+    width: 165%;
     height: 0;
-    padding-bottom: 260%;
+    padding-bottom: 165%;
+    transform: translate(-50%, -50%);
     background: conic-gradient(#ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000);
     animation: rotate-led 2s linear infinite;
     will-change: transform;
     z-index: 1;
+}
+.table-card.half-width.is-locked::before {
+    width: 135%;
+    padding-bottom: 135%;
+}
+.table-card.full-width.is-locked::before {
+    width: 115%;
+    padding-bottom: 115%;
 }
 .table-card.is-locked::after {
     display: block !important;
@@ -1552,7 +1571,8 @@ body.tab-hidden #scroll-to-checkout {
     #paper-flip-overlay { display: none; }
     .status-empty,
     .status-normal,
-    .status-crowded::before {
+    .status-crowded::before,
+    .table-card.is-locked::before {
         animation: none !important;
     }
     html.paper-flip-pending #weather-hub,
