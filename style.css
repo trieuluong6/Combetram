@@ -263,7 +263,7 @@ body.dark-mode .status-normal { background: rgba(230,81,0,0.18); color: #ffb74d;
 .flip-card.animate .card-flip-wing { transform: rotateX(-180deg); }
 .flip-card.animate .card-flip-wing-back { transform: rotateX(0deg); }
 
-/* BÀN ĂN — PHÍM NỔI TACTILE 2.5D (GIỮ NGUYÊN BỐ CỤC & HIỆU ỨNG TRẠNG THÁI) */
+/* BÀN ĂN — MINIMALIST GLASS & PILL (GIỮ NGUYÊN BỐ CỤC LƯỚI & VIỀN XOAY RGB) */
 .tables-container { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px 10px; margin-bottom: 18px; }
 .tables-container.is-loading .table-card { cursor: progress; }
 .tables-container.is-loading .table-card:active { transform: scale(0.985); }
@@ -277,18 +277,19 @@ body.dark-mode .status-normal { background: rgba(230,81,0,0.18); color: #ffb74d;
     48%      { transform: translateX(3px); }
     74%      { transform: translateX(-2px); }
 }
+
 .table-card {
-    --card-25d-shadow:
+    --card-glass-shadow:
         inset 0 1px 0 rgba(255, 255, 255, 0.95),
-        0 3px 0 #bcc8d6,
-        0 6px 12px rgba(15, 23, 42, 0.08);
-    background: linear-gradient(180deg, #ffffff 0%, #f4f7fb 100%);
-    padding: 10px 4px;
+        0 4px 14px rgba(15, 23, 42, 0.05),
+        0 1px 2px rgba(15, 23, 42, 0.04);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.86) 0%, rgba(248, 250, 252, 0.74) 100%);
+    padding: 10px 6px;
     text-align: center;
-    border-radius: 13px;
+    border-radius: 16px;
     cursor: pointer;
-    border: 2px solid #d0dbe7;
-    box-shadow: var(--card-25d-shadow);
+    border: 1px solid rgba(255, 255, 255, 0.92);
+    box-shadow: var(--card-glass-shadow);
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -296,176 +297,176 @@ body.dark-mode .status-normal { background: rgba(230,81,0,0.18); color: #ffb74d;
     min-height: 106px;
     position: relative;
     overflow: hidden;
-    transition: transform 0.14s cubic-bezier(0.25, 0.46, 0.45, 0.94), background 0.4s ease, color 0.4s ease, border-color 0.3s ease, box-shadow 0.14s ease;
+    transition: transform 0.18s cubic-bezier(0.22, 1, 0.36, 1), background 0.35s ease, color 0.35s ease, border-color 0.3s ease, box-shadow 0.25s ease;
     grid-column: span 2;
 }
 body.dark-mode .table-card {
-    --card-25d-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.09),
-        0 3px 0 #10151c,
-        0 6px 14px rgba(0, 0, 0, 0.45);
-    background: linear-gradient(180deg, #242d37 0%, #1a2129 100%);
-    border-color: #354557;
+    --card-glass-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.11),
+        0 6px 16px rgba(0, 0, 0, 0.36),
+        0 1px 2px rgba(0, 0, 0, 0.24);
+    background: linear-gradient(180deg, rgba(33, 42, 53, 0.84) 0%, rgba(24, 31, 40, 0.76) 100%);
+    border-color: rgba(255, 255, 255, 0.10);
 }
-.tables-container:not(.is-loading) .table-card:not(.active):not(.is-locked):active {
-    --card-25d-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.72),
-        0 1px 0 #bcc8d6,
-        0 2px 5px rgba(15, 23, 42, 0.06);
-    transform: translateY(2px);
-    transition-duration: 0.07s;
+.tables-container:not(.is-loading) .table-card:active {
+    transform: scale(0.972);
+    transition-duration: 0.08s;
 }
-body.dark-mode .tables-container:not(.is-loading) .table-card:not(.active):not(.is-locked):active {
-    --card-25d-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.05),
-        0 1px 0 #10151c,
-        0 2px 6px rgba(0, 0, 0, 0.35);
-}
+
 .full-width { grid-column: span 6; }
 .half-width { grid-column: span 3; }
 .table-card strong, .table-card span { position: relative; z-index: 10; }
+
+/* Tên bàn: thanh mảnh, lùi nhẹ ở bàn trống và rõ nét khi bàn hoạt động */
 .table-card strong {
-    font-size: 0.79em;
-    font-weight: 800;
-    letter-spacing: 0.025em;
+    font-size: 0.75em;
+    font-weight: 700;
+    letter-spacing: 0.04em;
     text-transform: uppercase;
-    color: var(--text-main);
-    margin-bottom: 5px;
-    transition: color 0.4s ease;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+    transition: color 0.3s ease;
 }
+.table-card.has-guest strong,
+.table-card.is-locked strong,
+.table-card.active strong {
+    color: var(--text-main);
+    font-weight: 800;
+}
+
+/* Giá tiền đứng trần (bỏ khung bao) làm tâm điểm thị giác */
 .table-price {
-    color: var(--primary-red);
-    font-weight: 900;
-    font-size: 0.94em;
+    color: #94a3b8;
+    font-weight: 850;
+    font-size: 1.02em;
     line-height: 1.15;
-    background: rgba(var(--bg-card-rgb), 0.9);
-    border: 1px solid rgba(15, 23, 42, 0.08);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85), 0 1px 2px rgba(15, 23, 42, 0.05);
-    padding: 3px 9px;
-    border-radius: 999px;
-    transition: background 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease;
+    letter-spacing: -0.015em;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    padding: 1px 4px;
+    border-radius: 0;
+    transition: color 0.3s ease;
 }
 body.dark-mode .table-price {
-    background: rgba(17, 22, 28, 0.74);
-    border-color: rgba(255, 255, 255, 0.08);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 1px 2px rgba(0, 0, 0, 0.25);
+    color: #64748b;
+    background: transparent;
+    border: none;
+    box-shadow: none;
 }
-.table-time { font-size: 0.7em; color: var(--text-muted); margin-top: 5px; font-weight: 600; transition: color 0.4s ease; }
-.table-meta { margin-top: 5px; font-size: 0.58em; line-height: 1.25; font-weight: 750; color: var(--text-muted); white-space: nowrap; padding: 2px 6px; border-radius: 999px; background: rgba(127,127,127,0.09); transition: color 0.3s ease, background-color 0.3s ease; }
-.table-meta:empty { display: none; }
-body.dark-mode .table-meta { background: rgba(255,255,255,0.07); }
-.table-meta-count { color: #b45309; }
-body.dark-mode .table-meta-count { color: #fbbf24; }
-@media (max-width: 380px) {
-    .table-card strong { font-size: 0.73em; letter-spacing: 0.01em; }
-    .table-price { font-size: 0.86em; padding: 2px 7px; }
+.table-card.has-guest .table-price,
+.table-card.is-locked .table-price {
+    color: var(--primary-red);
+}
+body.dark-mode .table-card.has-guest .table-price,
+body.dark-mode .table-card.is-locked .table-price {
+    color: #ff6b6b;
 }
 
-/* GPU-composited pulse màu nền xanh lá dịu cho bàn có khách */
-@keyframes pulse-guest-opacity {
-    0%, 100% { opacity: 0.06; }
-    50%      { opacity: 1; }
+/* Viên thuốc (Pill) duy nhất chứa số món ăn & nước */
+.table-meta {
+    margin-top: 5px;
+    font-size: 0.62em;
+    line-height: 1.25;
+    font-weight: 750;
+    color: #065f46;
+    white-space: nowrap;
+    padding: 2.5px 8px;
+    border-radius: 999px;
+    background: rgba(16, 185, 129, 0.14);
+    border: 1px solid rgba(16, 185, 129, 0.24);
+    transition: color 0.3s ease, background-color 0.3s ease, border-color 0.3s ease;
 }
+.table-meta:empty { display: none; }
+body.dark-mode .table-meta {
+    color: #a7f3d0;
+    background: rgba(52, 211, 153, 0.16);
+    border-color: rgba(52, 211, 153, 0.26);
+}
+.table-meta-count { color: inherit; font-weight: 850; }
+
+/* Pill chuyển sang sắc vàng hổ phách ấm khi bàn đã chốt đơn */
+.table-card.is-locked .table-meta {
+    color: #92400e;
+    background: rgba(245, 158, 11, 0.16);
+    border-color: rgba(245, 158, 11, 0.32);
+}
+body.dark-mode .table-card.is-locked .table-meta {
+    color: #fde68a;
+    background: rgba(251, 191, 36, 0.18);
+    border-color: rgba(251, 191, 36, 0.32);
+}
+
+/* Pill chuyển sang sắc xanh iOS khi bàn đang được mở chọn */
+.table-card.active:not(.is-locked) .table-meta {
+    color: #0051a8;
+    background: rgba(0, 122, 255, 0.13);
+    border-color: rgba(0, 122, 255, 0.24);
+}
+body.dark-mode .table-card.active:not(.is-locked) .table-meta {
+    color: #bae6fd;
+    background: rgba(56, 189, 248, 0.18);
+    border-color: rgba(56, 189, 248, 0.28);
+}
+
+.table-time { font-size: 0.68em; color: var(--text-muted); margin-top: 4px; font-weight: 600; transition: color 0.3s ease; }
+
+@media (max-width: 380px) {
+    .table-card strong { font-size: 0.70em; letter-spacing: 0.02em; }
+    .table-price { font-size: 0.92em; }
+    .table-meta { font-size: 0.56em; padding: 2px 6px; }
+}
+
+/* Bàn có khách: kính mờ phủ sắc xanh bạc hà dịu, không nhấp nháy gắt */
 .has-guest {
-    --card-25d-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.92),
-        0 3px 0 #2e7d32,
-        0 6px 14px rgba(46, 160, 67, 0.22);
-    border-color: #388e3c;
-    background: linear-gradient(180deg, #ffffff 0%, #f1f8f2 100%);
-}
-.tables-container:not(.is-loading) .table-card.has-guest:not(.active):not(.is-locked):active {
-    --card-25d-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.7),
-        0 1px 0 #2e7d32,
-        0 2px 6px rgba(46, 160, 67, 0.18);
-}
-.has-guest::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    background: linear-gradient(180deg, rgba(76, 175, 80, 0.26), rgba(46, 160, 67, 0.38));
-    box-shadow: inset 0 0 0 2px rgba(46, 155, 65, 0.62);
-    pointer-events: none;
-    z-index: 1;
-    animation: pulse-guest-opacity 1.45s infinite ease-in-out;
-    will-change: opacity;
+    --card-glass-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.95),
+        0 4px 14px rgba(16, 185, 129, 0.12),
+        0 1px 3px rgba(16, 185, 129, 0.08);
+    border: 1.5px solid rgba(34, 197, 94, 0.55);
+    background: linear-gradient(180deg, rgba(240, 253, 244, 0.92) 0%, rgba(220, 252, 231, 0.80) 100%);
 }
 body.dark-mode .has-guest {
-    --card-25d-shadow:
-        inset 0 1px 0 rgba(129, 199, 132, 0.16),
-        0 3px 0 #1b4d20,
-        0 6px 14px rgba(76, 175, 80, 0.28);
-    border-color: #66bb6a;
-    background: linear-gradient(180deg, #1b2c20 0%, #142118 100%);
-}
-body.dark-mode .tables-container:not(.is-loading) .table-card.has-guest:not(.active):not(.is-locked):active {
-    --card-25d-shadow:
-        inset 0 1px 0 rgba(129, 199, 132, 0.1),
-        0 1px 0 #1b4d20,
-        0 2px 6px rgba(76, 175, 80, 0.2);
-}
-body.dark-mode .has-guest::after {
-    background: linear-gradient(180deg, rgba(76, 175, 80, 0.30), rgba(56, 142, 60, 0.42));
-    box-shadow: inset 0 0 0 2px rgba(129, 199, 132, 0.62);
+    --card-glass-shadow:
+        inset 0 1px 0 rgba(167, 243, 208, 0.16),
+        0 6px 16px rgba(16, 185, 129, 0.18),
+        0 1px 3px rgba(0, 0, 0, 0.30);
+    border-color: rgba(74, 222, 128, 0.48);
+    background: linear-gradient(180deg, rgba(22, 46, 35, 0.88) 0%, rgba(17, 36, 28, 0.80) 100%);
 }
 
+/* Bàn đang chọn: iOS Focus Ring giữ nguyên kích thước thẻ, không phóng to làm lệch lưới */
 .active {
-    --card-25d-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.95),
-        0 3.5px 0 #1565c0,
-        0 8px 18px rgba(25, 118, 210, 0.26);
-    border-color: #1976d2 !important;
-    background: linear-gradient(180deg, #ebf5ff 0%, #d6ebff 100%) !important;
+    --card-glass-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.96),
+        0 0 0 3px rgba(0, 122, 255, 0.22),
+        0 6px 16px rgba(0, 122, 255, 0.16);
+    border: 1.5px solid #007aff !important;
+    background: linear-gradient(180deg, rgba(239, 246, 255, 0.96) 0%, rgba(219, 234, 254, 0.88) 100%) !important;
     color: #0d47a1;
-    transform: translateY(-1px) scale(1.045);
     z-index: 20;
 }
-.active::after { display: none; }
-.table-card.has-guest.active::after {
-    display: block;
-    background: rgba(33, 150, 243, 0.26);
-    box-shadow: inset 0 0 0 2px rgba(21, 101, 192, 0.65);
-}
 body.dark-mode .active {
-    --card-25d-shadow:
-        inset 0 1px 0 rgba(187, 222, 251, 0.22),
-        0 3.5px 0 #0d2138,
-        0 8px 20px rgba(0, 0, 0, 0.5);
-    border-color: #42a5f5 !important;
-    background: linear-gradient(180deg, #21466e 0%, #163250 100%) !important;
-    color: #bbdefb;
+    --card-glass-shadow:
+        inset 0 1px 0 rgba(186, 230, 253, 0.20),
+        0 0 0 3px rgba(56, 189, 248, 0.25),
+        0 8px 18px rgba(0, 0, 0, 0.45);
+    border-color: #38bdf8 !important;
+    background: linear-gradient(180deg, rgba(26, 54, 88, 0.92) 0%, rgba(19, 41, 68, 0.86) 100%) !important;
+    color: #bae6fd;
 }
-body.dark-mode .active strong { color: #bbdefb; }
-body.dark-mode .table-card.has-guest.active::after {
-    background: rgba(66, 165, 245, 0.28);
-    box-shadow: inset 0 0 0 2px rgba(144, 202, 249, 0.65);
-}
+body.dark-mode .active strong { color: #e0f2fe; }
 
 @keyframes pulse-rgb-total { 0% { background-color: #ffecec; } 25% { background-color: #ecfaec; } 50% { background-color: #ecf3ff; } 75% { background-color: #fff8e6; } 100% { background-color: #ffecec; } }
 @keyframes pulse-rgb-total-dark { 0% { background-color: #2d1b1b; } 25% { background-color: #1b2d1f; } 50% { background-color: #1b2233; } 75% { background-color: #2d2719; } 100% { background-color: #2d1b1b; } }
 
-@keyframes pulse-locked-bg {
-    0%, 100% { background-color: #ffffff; }
-    25%      { background-color: #fff3f3; }
-    50%      { background-color: #f1fbf2; }
-    75%      { background-color: #f0f6ff; }
-}
-@keyframes pulse-locked-bg-dark {
-    0%, 100% { background-color: #1c232b; }
-    25%      { background-color: #2b1d22; }
-    50%      { background-color: #1b2b22; }
-    75%      { background-color: #1b2433; }
-}
-
-/* GPU-composited LED viền chạy đồng bộ + nhấp nháy nền nhẹ cho cả 9 bàn đã chốt đơn */
+/* Bàn chốt đơn: giữ nguyên viền xoay RGB kết hợp mặt kính mờ đồng tâm thanh thoát */
 .is-locked { border-color: transparent !important; }
 .is-locked:not(.active) {
-    --card-25d-shadow: 0 4px 12px rgba(15, 23, 42, 0.14);
+    --card-glass-shadow: 0 5px 15px rgba(15, 23, 42, 0.12);
 }
 body.dark-mode .is-locked:not(.active) {
-    --card-25d-shadow: 0 5px 14px rgba(0, 0, 0, 0.45);
+    --card-glass-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
 }
 .is-locked::before {
     content: "";
@@ -484,16 +485,23 @@ body.dark-mode .is-locked:not(.active) {
     display: block !important;
     content: "";
     position: absolute;
-    inset: 4px;
-    background: var(--bg-card);
-    border-radius: 9px;
+    inset: 2.5px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.94) 0%, rgba(250, 251, 253, 0.90) 100%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95);
+    border-radius: 13.5px;
     z-index: 2;
     pointer-events: none;
-    animation: pulse-locked-bg 1.6s infinite ease-in-out;
 }
-body.dark-mode .is-locked::after { animation: pulse-locked-bg-dark 1.6s infinite ease-in-out; }
-.table-card.active.is-locked::after { background: #e3f2fd; animation: none; }
-body.dark-mode .table-card.active.is-locked::after { background: #1a3a5c; animation: none; }
+body.dark-mode .is-locked::after {
+    background: linear-gradient(180deg, rgba(31, 39, 50, 0.94) 0%, rgba(24, 30, 39, 0.90) 100%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10);
+}
+.table-card.active.is-locked::after {
+    background: linear-gradient(180deg, rgba(239, 246, 255, 0.96) 0%, rgba(219, 234, 254, 0.92) 100%);
+}
+body.dark-mode .table-card.active.is-locked::after {
+    background: linear-gradient(180deg, rgba(26, 54, 88, 0.94) 0%, rgba(19, 41, 68, 0.90) 100%);
+}
 @keyframes rotate-led {
     from { transform: translate(-50%, -50%) rotate(0deg); }
     to   { transform: translate(-50%, -50%) rotate(360deg); }
@@ -971,7 +979,7 @@ body.dark-mode .app-toast-error {
 /* SKELETON */
 .skeleton { background: linear-gradient(90deg, var(--bg-menu-row-border) 25%, var(--border-soft) 50%, var(--bg-menu-row-border) 75%); background-size: 200% 100%; animation: skeletonShine 1.4s ease-in-out infinite; border-radius: 4px; color: transparent !important; display: inline-block; }
 @keyframes skeletonShine { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
-.table-price.skeleton { width: 38px; height: 0.85em; border-color: transparent; box-shadow: none; }
+.table-price.skeleton { width: 42px; height: 0.95em; border-radius: 999px; }
 .table-time.skeleton { width: 50px; height: 0.7em; margin-top: 6px; }
 
 /* CHUYỂN TAB */
@@ -989,8 +997,8 @@ body.dark-mode .remote-cursor { border-color: #1c232b; }
 .cursor-trail { position: fixed; width: 10px; height: 10px; border-radius: 50%; pointer-events: none; z-index: 199; transform: translate(-50%, -50%); will-change: transform, opacity; }
 .table-card.has-viewer { animation: viewerAuraPulse 1.8s ease-in-out infinite; }
 @keyframes viewerAuraPulse {
-    0%, 100% { box-shadow: var(--card-25d-shadow), 0 0 0px 0px var(--viewer-color, transparent); }
-    50%      { box-shadow: var(--card-25d-shadow), 0 0 14px 3px var(--viewer-color, transparent); }
+    0%, 100% { box-shadow: var(--card-glass-shadow), 0 0 0px 0px var(--viewer-color, transparent); }
+    50%      { box-shadow: var(--card-glass-shadow), 0 0 14px 3px var(--viewer-color, transparent); }
 }
 .menu-item.remote-focus { box-shadow: inset 0 0 0 2px var(--focus-color, transparent); transition: box-shadow 0.25s ease; }
 .remote-focus-tag { position: absolute; top: -7px; right: 8px; font-size: 0.62em; font-weight: 700; padding: 1px 6px; border-radius: 8px; color: #fff; opacity: 0; transform: translateY(2px); transition: opacity 0.25s ease, transform 0.25s ease; pointer-events: none; z-index: 5; }
@@ -1077,7 +1085,7 @@ body.dark-mode .single-paper-wisp {
 
 /* TRẠNG THÁI ĐANG THU TIỀN TỪ THIẾT BỊ KHÁC */
 .table-card.is-remote-paying {
-    opacity: 0.78;
+    opacity: 0.84;
 }
 .remote-paying-badge {
     display: inline-flex;
@@ -1085,22 +1093,22 @@ body.dark-mode .single-paper-wisp {
     justify-content: center;
     gap: 2px;
     margin-top: 4px;
-    padding: 2px 6px;
+    padding: 2px 7px;
     border-radius: 999px;
     font-size: 0.56em;
     font-weight: 800;
     line-height: 1.2;
     white-space: nowrap;
-    background: #fff8e1;
-    color: #b45309;
-    border: 1px solid #fbbf24;
-    box-shadow: 0 1px 4px rgba(180, 83, 9, 0.16);
+    background: rgba(99, 102, 241, 0.14);
+    color: #4338ca;
+    border: 1px solid rgba(99, 102, 241, 0.32);
+    box-shadow: 0 1px 4px rgba(67, 56, 202, 0.14);
     animation: pulse-status-gpu 1.4s infinite ease-in-out;
 }
 body.dark-mode .remote-paying-badge {
-    background: rgba(180, 83, 9, 0.28);
-    color: #fcd34d;
-    border-color: rgba(251, 191, 36, 0.55);
+    background: rgba(129, 140, 248, 0.22);
+    color: #c7d2fe;
+    border-color: rgba(129, 140, 248, 0.42);
 }
 .remote-paying-banner {
     display: flex;
@@ -1144,9 +1152,7 @@ body.tab-hidden .wi-blow,
 body.tab-hidden .wi-blow2,
 body.tab-hidden .wi-blow3,
 body.tab-hidden .flip-colon,
-body.tab-hidden .has-guest::after,
 body.tab-hidden .is-locked::before,
-body.tab-hidden .is-locked::after,
 body.tab-hidden .total-container,
 body.tab-hidden .arrow-shaft::after,
 body.tab-hidden .arrow-head::after,
