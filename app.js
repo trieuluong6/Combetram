@@ -324,7 +324,6 @@ function closeAppModal(result) {
 function showAppModal({
     title = 'Thông báo',
     message = '',
-    type = 'alert',
     confirmText = 'Xác nhận',
     cancelText = 'Hủy'
 } = {}) {
@@ -342,7 +341,6 @@ function showAppModal({
     msgEl.textContent = message;
     confirmBtn.textContent = confirmText;
     cancelBtn.textContent = cancelText;
-    cancelBtn.classList.toggle('hidden', type === 'alert');
     backdrop.classList.remove('hidden');
 
     return new Promise((resolve) => {
@@ -395,8 +393,7 @@ let currentTab = null;
 let data = { orders: {}, locked: {}, times: {} };
 let billWasShown = false;
 
-// Chặn double-click / thao tác chồng chéo khi đang gửi lệnh thanh toán hoặc chốt/mở đơn lên Firebase.
-let paymentInProgress = false;
+// Chặn double-click / thao tác chồng chéo theo từng bàn khi đang thanh toán hoặc chốt/mở đơn lên Firebase.
 let payingModalTable = null;
 let payingHeartbeatTimer = null;
 const payingTables = new Set();
@@ -458,8 +455,7 @@ function getBillFlipDom() {
     return {
         shell: document.getElementById('bill-flip-shell'),
         front: document.getElementById('bill-face-front'),
-        back: document.getElementById('bill-face-qr'),
-        button: document.getElementById('btn-qr-toggle')
+        back: document.getElementById('bill-face-qr')
     };
 }
 
@@ -542,7 +538,6 @@ function scrollBillIntoView() {
 }
 
 function toggleBillQr() {
-    if (paymentInProgress) return;
     triggerHaptic('nav');
     const { shell, back } = getBillFlipDom();
     if (!shell) return;
@@ -2471,17 +2466,14 @@ function flushRemoteOrderFlashes() {
     if (!pendingRemoteOrderFlashes.length) return;
     const flashes = pendingRemoteOrderFlashes.splice(0);
 
-    for (const { tableId, itemId, delta } of flashes) {
+    for (const { tableId, delta } of flashes) {
         const cls = delta > 0 ? 'flash-add' : 'flash-sub';
         const tableBtn = TABLE_DOM[tableId - 1]?.card;
-        const row = currentTab === tableId ? ITEM_DOM.get(itemId)?.row : null;
+        if (!tableBtn) continue;
 
-        if (tableBtn) tableBtn.classList.add(cls);
-        if (row) row.classList.add(cls);
-
+        tableBtn.classList.add(cls);
         setTimeout(() => {
-            if (tableBtn) tableBtn.classList.remove(cls);
-            if (row) row.classList.remove(cls);
+            tableBtn.classList.remove(cls);
         }, 400);
     }
 }
@@ -2665,7 +2657,7 @@ function selectTable(n, options = {}) {
         notifyTableLoading(n);
         return;
     }
-    if ((paymentInProgress || payingTables.has(Number(n))) && !options.allowDuringPayment) return;
+    if (payingTables.has(Number(n))) return;
     if (options.haptic !== false) triggerHaptic('nav');
     resetBillQrView();
     const previousTab = currentTab;
@@ -2955,7 +2947,7 @@ function scheduleOrphanedLockCheck(tableIds = null) {
         if (orphanedLockTimers[tab]) continue;
         orphanedLockTimers[tab] = setTimeout(() => {
             delete orphanedLockTimers[tab];
-            if (!initialDataReady || paymentInProgress || payingTables.has(tab) || localPaymentEchoTables.has(tab)) return;
+            if (!initialDataReady || payingTables.has(tab) || localPaymentEchoTables.has(tab)) return;
             if (!data.locked?.[tab] || effectiveTableHasItems(tab)) return;
 
             delete data.locked[tab];
@@ -2969,14 +2961,10 @@ function scheduleOrphanedLockCheck(tableIds = null) {
 function applyMenuRowQtyClasses(row, qty) {
     if (!row) return;
     const preserveRemoteFocus = row.classList.contains('remote-focus');
-    const preserveFlashAdd = row.classList.contains('flash-add');
-    const preserveFlashSub = row.classList.contains('flash-sub');
     row.className = 'menu-item';
     if (qty >= 5) row.classList.add('qty-5');
     else if (qty > 0) row.classList.add('qty-' + qty);
     if (preserveRemoteFocus) row.classList.add('remote-focus');
-    if (preserveFlashAdd) row.classList.add('flash-add');
-    if (preserveFlashSub) row.classList.add('flash-sub');
 }
 
 function change(id, delta) {
@@ -3011,7 +2999,7 @@ function change(id, delta) {
     updateScrollCheckoutButton();
     renderTable(tab, getServerNow());
     renderCrowdStatus();
-    flashRow(id, delta);
+    flashTableCard(delta);
 
     const key = `${tab}_${id}`;
     const version = (debounceVersions[key] || 0) + 1;
@@ -3020,14 +3008,15 @@ function change(id, delta) {
     debounceTimers[key] = setTimeout(() => commitPendingItem(tab, id, version), 250);
 }
 
-function flashRow(id, delta) {
-    const itemDom = ITEM_DOM.get(id), row = itemDom?.row, tabBtn = currentTab ? TABLE_DOM[currentTab - 1]?.card : null, cls = delta > 0 ? 'flash-add' : 'flash-sub';
-    if (row) row.classList.add(cls); if (tabBtn) tabBtn.classList.add(cls);
-    setTimeout(() => { if (row) row.classList.remove(cls); if (tabBtn) tabBtn.classList.remove(cls); }, 320);
+function flashTableCard(delta) {
+    const tabBtn = currentTab ? TABLE_DOM[currentTab - 1]?.card : null;
+    if (!tabBtn) return;
+    const cls = delta > 0 ? 'flash-add' : 'flash-sub';
+    tabBtn.classList.add(cls);
+    setTimeout(() => tabBtn.classList.remove(cls), 320);
 }
 
 function changeBillLang(l) {
-    if (paymentInProgress) return;
     triggerHaptic('nav');
     currentBillLang = l;
     syncActiveLangButton(l);
@@ -3239,7 +3228,7 @@ async function renderBillAsync(tab) {
 }
 
 async function setLock(v) {
-    if (!currentTab || paymentInProgress) return;
+    if (!currentTab) return;
     const tab = Number(currentTab);
     if (payingTables.has(tab) || lockInProgressTables.has(tab)) return;
     if (Boolean(data.locked?.[tab]) === Boolean(v)) return;
@@ -3292,7 +3281,7 @@ async function setLock(v) {
 }
 
 async function doPay() {
-    if (!currentTab || paymentInProgress || payingTables.has(currentTab)) return;
+    if (!currentTab || payingTables.has(currentTab)) return;
 
     const tab = currentTab;
     if (isTableRemotePaying(tab)) {
@@ -3319,11 +3308,10 @@ async function doPay() {
     const confirmed = await showAppModal({
         title: 'Xác nhận thanh toán',
         message: `Xác nhận thanh toán và đóng bill cho ${getTableDisplayName(tab)}?`,
-        type: 'confirm',
         confirmText: 'Thanh toán',
         cancelText: 'Quay lại'
     });
-    if (!confirmed || currentTab !== tab || paymentInProgress || payingTables.has(tab)) {
+    if (!confirmed || currentTab !== tab || payingTables.has(tab)) {
         stopLocalPayingBroadcast(null, currentTab || 0);
         return;
     }
@@ -3369,7 +3357,6 @@ async function doPay() {
         hasItems = true;
     }
 
-    paymentInProgress = true;
     payingTables.add(tab);
     localPaymentEchoTables.add(tab);
     clearPendingForTable(tab);
@@ -3383,8 +3370,7 @@ async function doPay() {
     tableTotals[tab] = 0;
     scheduleRefresh(new Set([tab]), true);
 
-    selectTable(null, { haptic: false, allowDuringPayment: true, instantClose: true });
-    paymentInProgress = false;
+    selectTable(null, { haptic: false, instantClose: true });
 
     const tableOrderRef = child(ordersRef, String(tab));
     let orderDeletedOnServer = false;
