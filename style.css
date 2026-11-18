@@ -263,7 +263,7 @@ body.dark-mode .status-normal { background: rgba(230,81,0,0.18); color: #ffb74d;
 .flip-card.animate .card-flip-wing { transform: rotateX(-180deg); }
 .flip-card.animate .card-flip-wing-back { transform: rotateX(0deg); }
 
-/* BÀN ĂN — MINIMALIST GLASS & PILL (GIỮ NGUYÊN BỐ CỤC LƯỚI & VIỀN XOAY RGB) */
+/* BÀN ĂN — MINIMALIST GLASS & PILL (CHỮ ĐẬM RÕ NÉT + ĐỦ HIỆU ỨNG CHỚP & VIỀN RGB) */
 .tables-container { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px 10px; margin-bottom: 18px; }
 .tables-container.is-loading .table-card { cursor: progress; }
 .tables-container.is-loading .table-card:active { transform: scale(0.985); }
@@ -280,15 +280,15 @@ body.dark-mode .status-normal { background: rgba(230,81,0,0.18); color: #ffb74d;
 
 .table-card {
     --card-glass-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.95),
-        0 4px 14px rgba(15, 23, 42, 0.05),
-        0 1px 2px rgba(15, 23, 42, 0.04);
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.86) 0%, rgba(248, 250, 252, 0.74) 100%);
+        inset 0 1px 0 rgba(255, 255, 255, 0.98),
+        0 4px 14px rgba(15, 23, 42, 0.07),
+        0 1px 3px rgba(15, 23, 42, 0.06);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.90) 0%, rgba(248, 250, 252, 0.80) 100%);
     padding: 10px 6px;
     text-align: center;
     border-radius: 16px;
     cursor: pointer;
-    border: 1px solid rgba(255, 255, 255, 0.92);
+    border: 1.5px solid rgba(203, 213, 225, 0.85);
     box-shadow: var(--card-glass-shadow);
     display: flex;
     flex-direction: column;
@@ -297,16 +297,16 @@ body.dark-mode .status-normal { background: rgba(230,81,0,0.18); color: #ffb74d;
     min-height: 106px;
     position: relative;
     overflow: hidden;
-    transition: transform 0.18s cubic-bezier(0.22, 1, 0.36, 1), background 0.35s ease, color 0.35s ease, border-color 0.3s ease, box-shadow 0.25s ease;
+    transition: transform 0.18s cubic-bezier(0.22, 1, 0.36, 1), background 0.3s ease, color 0.3s ease, border-color 0.3s ease, box-shadow 0.25s ease;
     grid-column: span 2;
 }
 body.dark-mode .table-card {
     --card-glass-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.11),
-        0 6px 16px rgba(0, 0, 0, 0.36),
-        0 1px 2px rgba(0, 0, 0, 0.24);
-    background: linear-gradient(180deg, rgba(33, 42, 53, 0.84) 0%, rgba(24, 31, 40, 0.76) 100%);
-    border-color: rgba(255, 255, 255, 0.10);
+        inset 0 1px 0 rgba(255, 255, 255, 0.14),
+        0 6px 16px rgba(0, 0, 0, 0.40),
+        0 1px 2px rgba(0, 0, 0, 0.28);
+    background: linear-gradient(180deg, rgba(35, 45, 57, 0.88) 0%, rgba(25, 33, 43, 0.82) 100%);
+    border-color: rgba(255, 255, 255, 0.14);
 }
 .tables-container:not(.is-loading) .table-card:active {
     transform: scale(0.972);
@@ -317,28 +317,37 @@ body.dark-mode .table-card {
 .half-width { grid-column: span 3; }
 .table-card strong, .table-card span { position: relative; z-index: 10; }
 
-/* Tên bàn: thanh mảnh, lùi nhẹ ở bàn trống và rõ nét khi bàn hoạt động */
+/* Tên bàn: đậm, sắc nét ngay cả khi bàn trống */
 .table-card strong {
-    font-size: 0.75em;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    color: var(--text-muted);
-    margin-bottom: 4px;
-    transition: color 0.3s ease;
-}
-.table-card.has-guest strong,
-.table-card.is-locked strong,
-.table-card.active strong {
-    color: var(--text-main);
+    font-size: 0.82em;
     font-weight: 800;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: #1e293b;
+    margin-bottom: 4px;
+    transition: color 0.25s ease;
+}
+body.dark-mode .table-card strong {
+    color: #f1f5f9;
+}
+.table-card.has-guest strong {
+    color: #064e3b;
+}
+body.dark-mode .table-card.has-guest strong {
+    color: #ecfdf5;
+}
+.table-card.active strong {
+    color: #0c4a6e;
+}
+body.dark-mode .table-card.active strong {
+    color: #e0f2fe;
 }
 
-/* Giá tiền đứng trần (bỏ khung bao) làm tâm điểm thị giác */
+/* Giá tiền đứng trần (không khung bao), độ tương phản cao */
 .table-price {
-    color: #94a3b8;
+    color: #334155;
     font-weight: 850;
-    font-size: 1.02em;
+    font-size: 1.06em;
     line-height: 1.15;
     letter-spacing: -0.015em;
     background: transparent;
@@ -346,17 +355,17 @@ body.dark-mode .table-card {
     box-shadow: none;
     padding: 1px 4px;
     border-radius: 0;
-    transition: color 0.3s ease;
+    transition: color 0.25s ease;
 }
 body.dark-mode .table-price {
-    color: #64748b;
+    color: #cbd5e1;
     background: transparent;
     border: none;
     box-shadow: none;
 }
 .table-card.has-guest .table-price,
 .table-card.is-locked .table-price {
-    color: var(--primary-red);
+    color: #c62828;
 }
 body.dark-mode .table-card.has-guest .table-price,
 body.dark-mode .table-card.is-locked .table-price {
@@ -366,109 +375,143 @@ body.dark-mode .table-card.is-locked .table-price {
 /* Viên thuốc (Pill) duy nhất chứa số món ăn & nước */
 .table-meta {
     margin-top: 5px;
-    font-size: 0.62em;
+    font-size: 0.65em;
     line-height: 1.25;
-    font-weight: 750;
-    color: #065f46;
+    font-weight: 800;
+    color: #064e3b;
     white-space: nowrap;
-    padding: 2.5px 8px;
+    padding: 2.5px 9px;
     border-radius: 999px;
-    background: rgba(16, 185, 129, 0.14);
-    border: 1px solid rgba(16, 185, 129, 0.24);
-    transition: color 0.3s ease, background-color 0.3s ease, border-color 0.3s ease;
+    background: rgba(16, 185, 129, 0.18);
+    border: 1px solid rgba(16, 185, 129, 0.36);
+    transition: color 0.25s ease, background-color 0.25s ease, border-color 0.25s ease;
 }
 .table-meta:empty { display: none; }
 body.dark-mode .table-meta {
     color: #a7f3d0;
-    background: rgba(52, 211, 153, 0.16);
-    border-color: rgba(52, 211, 153, 0.26);
+    background: rgba(16, 185, 129, 0.24);
+    border-color: rgba(52, 211, 153, 0.38);
 }
-.table-meta-count { color: inherit; font-weight: 850; }
+.table-meta-count { color: inherit; font-weight: 900; }
 
 /* Pill chuyển sang sắc vàng hổ phách ấm khi bàn đã chốt đơn */
 .table-card.is-locked .table-meta {
-    color: #92400e;
-    background: rgba(245, 158, 11, 0.16);
-    border-color: rgba(245, 158, 11, 0.32);
+    color: #78350f;
+    background: rgba(245, 158, 11, 0.22);
+    border-color: rgba(245, 158, 11, 0.42);
 }
 body.dark-mode .table-card.is-locked .table-meta {
     color: #fde68a;
-    background: rgba(251, 191, 36, 0.18);
-    border-color: rgba(251, 191, 36, 0.32);
+    background: rgba(245, 158, 11, 0.24);
+    border-color: rgba(251, 191, 36, 0.40);
 }
 
-/* Pill chuyển sang sắc xanh iOS khi bàn đang được mở chọn */
+/* Pill chuyển sang sắc xanh iOS khi bàn đang mở chọn */
 .table-card.active:not(.is-locked) .table-meta {
-    color: #0051a8;
-    background: rgba(0, 122, 255, 0.13);
-    border-color: rgba(0, 122, 255, 0.24);
+    color: #075985;
+    background: rgba(2, 132, 199, 0.16);
+    border-color: rgba(2, 132, 199, 0.34);
 }
 body.dark-mode .table-card.active:not(.is-locked) .table-meta {
     color: #bae6fd;
-    background: rgba(56, 189, 248, 0.18);
-    border-color: rgba(56, 189, 248, 0.28);
+    background: rgba(56, 189, 248, 0.22);
+    border-color: rgba(56, 189, 248, 0.36);
 }
 
-.table-time { font-size: 0.68em; color: var(--text-muted); margin-top: 4px; font-weight: 600; transition: color 0.3s ease; }
+.table-time { font-size: 0.71em; color: #475569; margin-top: 4px; font-weight: 700; transition: color 0.25s ease; }
+body.dark-mode .table-time { color: #cbd5e1; }
 
 @media (max-width: 380px) {
-    .table-card strong { font-size: 0.70em; letter-spacing: 0.02em; }
-    .table-price { font-size: 0.92em; }
-    .table-meta { font-size: 0.56em; padding: 2px 6px; }
+    .table-card strong { font-size: 0.75em; letter-spacing: 0.02em; }
+    .table-price { font-size: 0.96em; }
+    .table-meta { font-size: 0.58em; padding: 2px 7px; }
 }
 
-/* Bàn có khách: kính mờ phủ sắc xanh bạc hà dịu, không nhấp nháy gắt */
-.has-guest {
-    --card-glass-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.95),
-        0 4px 14px rgba(16, 185, 129, 0.12),
-        0 1px 3px rgba(16, 185, 129, 0.08);
-    border: 1.5px solid rgba(34, 197, 94, 0.55);
-    background: linear-gradient(180deg, rgba(240, 253, 244, 0.92) 0%, rgba(220, 252, 231, 0.80) 100%);
+/* Hiệu ứng chớp thở xanh ngọc khi bàn đang có khách / đang gọi món (.has-guest) */
+@keyframes pulse-guest-glass {
+    0%, 100% {
+        background-color: rgba(220, 252, 231, 0.94);
+        border-color: rgba(22, 163, 74, 0.78);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 4px 14px rgba(22, 163, 74, 0.20);
+    }
+    50% {
+        background-color: rgba(187, 247, 208, 0.70);
+        border-color: rgba(34, 197, 94, 0.36);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85), 0 2px 8px rgba(22, 163, 74, 0.08);
+    }
 }
-body.dark-mode .has-guest {
-    --card-glass-shadow:
-        inset 0 1px 0 rgba(167, 243, 208, 0.16),
-        0 6px 16px rgba(16, 185, 129, 0.18),
-        0 1px 3px rgba(0, 0, 0, 0.30);
-    border-color: rgba(74, 222, 128, 0.48);
-    background: linear-gradient(180deg, rgba(22, 46, 35, 0.88) 0%, rgba(17, 36, 28, 0.80) 100%);
+@keyframes pulse-guest-glass-dark {
+    0%, 100% {
+        background-color: rgba(20, 62, 43, 0.94);
+        border-color: rgba(74, 222, 128, 0.68);
+        box-shadow: inset 0 1px 0 rgba(167, 243, 208, 0.22), 0 6px 18px rgba(16, 185, 129, 0.26);
+    }
+    50% {
+        background-color: rgba(24, 42, 36, 0.78);
+        border-color: rgba(74, 222, 128, 0.26);
+        box-shadow: inset 0 1px 0 rgba(167, 243, 208, 0.10), 0 3px 10px rgba(0, 0, 0, 0.32);
+    }
 }
 
-/* Bàn đang chọn: iOS Focus Ring giữ nguyên kích thước thẻ, không phóng to làm lệch lưới */
-.active {
+.table-card.has-guest {
+    background: none;
+    border: 1.5px solid rgba(22, 163, 74, 0.75);
+    animation: pulse-guest-glass 1.7s infinite ease-in-out;
+}
+body.dark-mode .table-card.has-guest {
+    background: none;
+    border-color: rgba(74, 222, 128, 0.65);
+    animation: pulse-guest-glass-dark 1.7s infinite ease-in-out;
+}
+
+/* Bàn đang chọn (.active): giữ nguyên kích thước thẻ, viền xanh iOS sắc nét */
+.table-card.active {
     --card-glass-shadow:
         inset 0 1px 0 rgba(255, 255, 255, 0.96),
-        0 0 0 3px rgba(0, 122, 255, 0.22),
-        0 6px 16px rgba(0, 122, 255, 0.16);
-    border: 1.5px solid #007aff !important;
-    background: linear-gradient(180deg, rgba(239, 246, 255, 0.96) 0%, rgba(219, 234, 254, 0.88) 100%) !important;
+        0 0 0 3px rgba(0, 122, 255, 0.25),
+        0 6px 16px rgba(0, 122, 255, 0.18);
+    border: 2px solid #007aff !important;
+    background: linear-gradient(180deg, rgba(239, 246, 255, 0.96) 0%, rgba(219, 234, 254, 0.90) 100%);
     color: #0d47a1;
     z-index: 20;
 }
-body.dark-mode .active {
+body.dark-mode .table-card.active {
     --card-glass-shadow:
-        inset 0 1px 0 rgba(186, 230, 253, 0.20),
-        0 0 0 3px rgba(56, 189, 248, 0.25),
+        inset 0 1px 0 rgba(186, 230, 253, 0.22),
+        0 0 0 3px rgba(56, 189, 248, 0.28),
         0 8px 18px rgba(0, 0, 0, 0.45);
     border-color: #38bdf8 !important;
-    background: linear-gradient(180deg, rgba(26, 54, 88, 0.92) 0%, rgba(19, 41, 68, 0.86) 100%) !important;
+    background: linear-gradient(180deg, rgba(26, 54, 88, 0.94) 0%, rgba(19, 41, 68, 0.88) 100%);
     color: #bae6fd;
 }
-body.dark-mode .active strong { color: #e0f2fe; }
+
+/* Khi bàn vừa đang chọn (.active) vừa có món (.has-guest): giữ viền Focus Ring xanh dương + nền vẫn chớp xanh ngọc */
+.table-card.has-guest.active {
+    background: none;
+    animation: pulse-guest-glass 1.7s infinite ease-in-out;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.96), 0 0 0 3px rgba(0, 122, 255, 0.26), 0 6px 16px rgba(0, 122, 255, 0.18);
+}
+body.dark-mode .table-card.has-guest.active {
+    background: none;
+    animation: pulse-guest-glass-dark 1.7s infinite ease-in-out;
+    box-shadow: inset 0 1px 0 rgba(186, 230, 253, 0.22), 0 0 0 3px rgba(56, 189, 248, 0.28), 0 8px 18px rgba(0, 0, 0, 0.45);
+}
 
 @keyframes pulse-rgb-total { 0% { background-color: #ffecec; } 25% { background-color: #ecfaec; } 50% { background-color: #ecf3ff; } 75% { background-color: #fff8e6; } 100% { background-color: #ffecec; } }
 @keyframes pulse-rgb-total-dark { 0% { background-color: #2d1b1b; } 25% { background-color: #1b2d1f; } 50% { background-color: #1b2233; } 75% { background-color: #2d2719; } 100% { background-color: #2d1b1b; } }
 
-/* Bàn chốt đơn: giữ nguyên viền xoay RGB kết hợp mặt kính mờ đồng tâm thanh thoát */
-.is-locked { border-color: transparent !important; }
-.is-locked:not(.active) {
-    --card-glass-shadow: 0 5px 15px rgba(15, 23, 42, 0.12);
+/* Bàn chốt đơn (.is-locked): giữ nguyên viền xoay RGB kết hợp lõi kính mờ sắc nét */
+.table-card.is-locked {
+    border-color: transparent !important;
+    animation: none;
 }
-body.dark-mode .is-locked:not(.active) {
-    --card-glass-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+.table-card.is-locked:not(.active) {
+    --card-glass-shadow: 0 5px 15px rgba(15, 23, 42, 0.14);
 }
-.is-locked::before {
+body.dark-mode .table-card.is-locked:not(.active) {
+    --card-glass-shadow: 0 6px 18px rgba(0, 0, 0, 0.48);
+}
+.table-card.is-locked::before {
     content: "";
     position: absolute;
     top: 50%;
@@ -481,20 +524,20 @@ body.dark-mode .is-locked:not(.active) {
     will-change: transform;
     z-index: 1;
 }
-.is-locked::after {
+.table-card.is-locked::after {
     display: block !important;
     content: "";
     position: absolute;
     inset: 2.5px;
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.94) 0%, rgba(250, 251, 253, 0.90) 100%);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, rgba(250, 251, 253, 0.92) 100%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.96);
     border-radius: 13.5px;
     z-index: 2;
     pointer-events: none;
 }
-body.dark-mode .is-locked::after {
-    background: linear-gradient(180deg, rgba(31, 39, 50, 0.94) 0%, rgba(24, 30, 39, 0.90) 100%);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10);
+body.dark-mode .table-card.is-locked::after {
+    background: linear-gradient(180deg, rgba(31, 39, 50, 0.95) 0%, rgba(24, 30, 39, 0.92) 100%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
 .table-card.active.is-locked::after {
     background: linear-gradient(180deg, rgba(239, 246, 255, 0.96) 0%, rgba(219, 234, 254, 0.92) 100%);
@@ -507,10 +550,51 @@ body.dark-mode .table-card.active.is-locked::after {
     to   { transform: translate(-50%, -50%) rotate(360deg); }
 }
 
-.flash-add { background: #d7f0d8 !important; transition: none !important; }
-.flash-sub { background: #fad7da !important; transition: none !important; }
-body.dark-mode .flash-add { background: #244d29 !important; transition: none !important; }
-body.dark-mode .flash-sub { background: #5e2424 !important; transition: none !important; }
+/* Hiệu ứng nháy tức thì khi bấm tăng (+) / giảm (-) món (ghi đè cả trạng thái .active & .has-guest) */
+.table-card.flash-add,
+.table-card.active.flash-add,
+.table-card.has-guest.flash-add {
+    background: #bbf7d0 !important;
+    box-shadow: inset 0 0 0 2px rgba(22, 163, 74, 0.55), 0 0 14px rgba(34, 197, 94, 0.35) !important;
+    animation: none !important;
+    transition: none !important;
+}
+.table-card.flash-sub,
+.table-card.active.flash-sub,
+.table-card.has-guest.flash-sub {
+    background: #fecdd3 !important;
+    box-shadow: inset 0 0 0 2px rgba(225, 29, 72, 0.50), 0 0 14px rgba(244, 63, 94, 0.32) !important;
+    animation: none !important;
+    transition: none !important;
+}
+body.dark-mode .table-card.flash-add,
+body.dark-mode .table-card.active.flash-add,
+body.dark-mode .table-card.has-guest.flash-add {
+    background: #166534 !important;
+    box-shadow: inset 0 0 0 2px rgba(74, 222, 128, 0.65), 0 0 16px rgba(34, 197, 94, 0.38) !important;
+    animation: none !important;
+    transition: none !important;
+}
+body.dark-mode .table-card.flash-sub,
+body.dark-mode .table-card.active.flash-sub,
+body.dark-mode .table-card.has-guest.flash-sub {
+    background: #881337 !important;
+    box-shadow: inset 0 0 0 2px rgba(251, 113, 133, 0.65), 0 0 16px rgba(244, 63, 94, 0.38) !important;
+    animation: none !important;
+    transition: none !important;
+}
+.table-card.is-locked.flash-add::after {
+    background: #bbf7d0 !important;
+}
+.table-card.is-locked.flash-sub::after {
+    background: #fecdd3 !important;
+}
+body.dark-mode .table-card.is-locked.flash-add::after {
+    background: #166534 !important;
+}
+body.dark-mode .table-card.is-locked.flash-sub::after {
+    background: #881337 !important;
+}
 
 /* MENU & CONTAINER */
 .container { background: var(--bg-card); padding: 15px; border-radius: 15px; box-shadow: 0 4px 16px var(--shadow-card); max-width: 600px; margin: auto; transition: background 0.4s ease; }
@@ -1152,11 +1236,12 @@ body.tab-hidden .wi-blow,
 body.tab-hidden .wi-blow2,
 body.tab-hidden .wi-blow3,
 body.tab-hidden .flip-colon,
+body.tab-hidden .table-card.has-viewer,
+body.tab-hidden .table-card.has-guest,
 body.tab-hidden .is-locked::before,
 body.tab-hidden .total-container,
 body.tab-hidden .arrow-shaft::after,
 body.tab-hidden .arrow-head::after,
-body.tab-hidden .table-card.has-viewer,
 body.tab-hidden .remote-paying-badge,
 body.tab-hidden .remote-paying-banner,
 body.tab-hidden #scroll-to-checkout {
