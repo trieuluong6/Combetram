@@ -159,7 +159,7 @@ body.dark-mode #offline-badge {
 .header-row { position: relative; display: flex; justify-content: center; margin-top: 10px; min-height: 34px; }
 .header-center { width: 100%; }
 .header-row .status-container { margin-top: 0; }
-.header-row .header-title { margin: 22px auto 14px auto; }
+.header-row .header-title { margin: 11px auto 14px auto; }
 .side-widget {
     position: absolute;
     top: 0;
@@ -185,9 +185,15 @@ body.dark-mode #offline-badge {
 .net-divider { width: 1px; height: 10px; background: var(--border-soft); flex-shrink: 0; }
 @media (max-width: 380px) {
     .side-widget { font-size: 0.56em; padding: 2px 6px; gap: 2px; }
-    .header-row .header-title { font-size: 1.06em; letter-spacing: 0.8px; }
-    .header-title .signboard-body { padding: 7px 14px 6px 14px; gap: 5px; }
+    .header-row .header-title { font-size: 1.0em; letter-spacing: 0.7px; }
+    .header-title .signboard-body { padding: 7px 13px 6px 13px; gap: 5.5px; }
+    .header-title .sb-corner { width: 8.5px; height: 8.5px; }
+    .header-title .sb-corner.tl { top: 2.5px; left: 2.5px; }
+    .header-title .sb-corner.tr { top: 2.5px; right: 2.5px; }
+    .header-title .sb-corner.bl { bottom: 2.5px; left: 2.5px; }
+    .header-title .sb-corner.br { bottom: 2.5px; right: 2.5px; }
     .header-title .signboard-seal { width: 13px; height: 13px; }
+    .header-title .signboard-seal svg { width: 10.5px; height: 10.5px; }
 }
 
 /* TRẠNG THÁI KHÁCH (GPU-composited transform + opacity) */
@@ -230,162 +236,75 @@ body.dark-mode .status-normal { background: rgba(230,81,0,0.18); color: #ffb74d;
 .status-crowded::after { content: ""; position: absolute; inset: 2px; background: #111; border-radius: 18px; z-index: 2; }
 @keyframes police-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
-/* TIÊU ĐỀ — BẢNG HIỆU PHƯƠNG ĐÔNG HIỆN ĐẠI (TÂN Á ĐÔNG / ĐÔNG DƯƠNG TINH GIẢN) */
+/* TIÊU ĐỀ — BẢNG HIỆU PHƯƠNG ĐÔNG HIỆN ĐẠI (VIỀN CHỈ KÉP + KE 4 GÓC HÌNH HỌC & SONG ẤN) */
 .header-title {
     position: relative;
     display: table;
     width: fit-content;
     max-width: calc(100% - 42px);
-    margin: 22px auto 15px auto;
+    margin: 12px auto 15px auto;
     text-align: center;
     font-family: 'Noto Serif', 'Times New Roman', Georgia, serif;
     color: #9e1b1b;
     text-transform: uppercase;
-    font-size: 1.24em;
+    font-size: 1.22em;
     font-weight: 800;
-    letter-spacing: 1.25px;
+    letter-spacing: 1.2px;
     line-height: 1.15;
     overflow: visible;
     box-sizing: border-box;
     transition: color 0.4s ease;
 }
 
-/* Mái hiên ngói âm dương hiện đại viền chỉ đồng */
-.oriental-roof {
-    position: absolute;
-    top: -15px;
-    left: -15px;
-    right: -15px;
-    height: 18px;
-    z-index: 4;
-    pointer-events: none;
-    filter: drop-shadow(0 3px 5px rgba(28, 20, 16, 0.22));
-}
-.roof-ridge {
-    width: calc(100% - 24px);
-    height: 2.5px;
-    margin: 0 auto;
-    border-radius: 2px 2px 0 0;
-    background: linear-gradient(90deg, #9a7332 0%, #e4c27a 50%, #9a7332 100%);
-    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.25);
-}
-.roof-slope {
-    width: 100%;
-    height: 11px;
-    clip-path: polygon(12px 0%, calc(100% - 12px) 0%, 100% 100%, 0% 100%);
-    background:
-        linear-gradient(180deg, rgba(255, 240, 210, 0.14) 0%, rgba(0, 0, 0, 0.28) 100%),
-        repeating-linear-gradient(
-            90deg,
-            #352b27 0px,
-            #352b27 7px,
-            #1e1815 7px,
-            #1e1815 9px,
-            #2b221e 9px,
-            #2b221e 11px
-        );
-    box-shadow: inset 0 1px 0 rgba(228, 194, 122, 0.35);
-    transition: background 0.4s ease;
-}
-.roof-eaves {
-    width: 100%;
-    height: 4.5px;
-    border-radius: 0 0 2px 2px;
-    border-top: 1px solid #d4af37;
-    border-bottom: 1.5px solid #2b1d14;
-    box-sizing: border-box;
-    background:
-        repeating-linear-gradient(
-            90deg,
-            #b68b3e 0px,
-            #b68b3e 8px,
-            #4b3626 8px,
-            #4b3626 11px
-        );
-    transition: background 0.4s ease, border-color 0.4s ease;
-}
-
-/* 2 trụ gỗ sơn mài hai bên với đai đồng & thanh chống xiên Á Đông */
-.oriental-post {
-    position: absolute;
-    top: -1px;
-    bottom: -2px;
-    width: 4px;
-    border-radius: 1px;
-    background: linear-gradient(90deg, #2b1c14 0%, #5c3e2e 48%, #21150f 100%);
-    box-shadow: 0 1px 2px rgba(20, 14, 10, 0.3);
-    z-index: 3;
-    pointer-events: none;
-    transition: background 0.4s ease;
-}
-.oriental-post.post-left {
-    left: -8px;
-}
-.oriental-post.post-right {
-    right: -8px;
-}
-/* Thanh chống xiên màu đồng cổ đỡ mép mái ngói */
-.oriental-post::before {
-    content: "";
-    position: absolute;
-    top: 10px;
-    width: 11px;
-    height: 2.5px;
-    border-radius: 1px;
-    background: linear-gradient(180deg, #d8b467 0%, #8c6628 100%);
-    box-shadow: 0 1px 1px rgba(15, 10, 6, 0.25);
-}
-.oriental-post.post-left::before {
-    right: 1px;
-    transform-origin: right center;
-    transform: rotate(42deg);
-}
-.oriental-post.post-right::before {
-    left: 1px;
-    transform-origin: left center;
-    transform: rotate(-42deg);
-}
-/* Chân đế trụ bọc đồng */
-.oriental-post::after {
-    content: "";
-    position: absolute;
-    bottom: 0;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 10px;
-    height: 3.5px;
-    border-radius: 1.5px;
-    background: linear-gradient(180deg, #c9a050 0%, #6e4e1c 100%);
-    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.25);
-}
-
-/* Thân bảng hiệu giấy dó / sơn mài với khung chỉ kép vàng đồng & con dấu triện đỏ */
+/* Thân bảng hiệu giấy dó / sơn mài với viền chỉ kép vàng đồng */
 .signboard-body {
     position: relative;
     z-index: 2;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 7px;
-    padding: 9px 18px 8px 20px;
+    gap: 7.5px;
+    padding: 8.5px 16px 8px 16px;
     background: linear-gradient(180deg, #fdfaf3 0%, #f3e8d2 100%);
     border: 1.5px solid #4d3626;
-    border-top-color: #362519;
-    border-radius: 3px 3px 6px 6px;
+    border-radius: 4px;
     box-shadow:
-        inset 0 6px 8px -5px rgba(72, 44, 24, 0.30),
-        inset 0 0 0 2px #fdfaf3,
-        inset 0 0 0 3px rgba(184, 134, 59, 0.58),
-        0 3px 8px rgba(28, 20, 14, 0.10);
+        inset 0 1px 0 rgba(255, 255, 255, 0.85),
+        inset 0 0 0 2.5px #f9f2e4,
+        inset 0 0 0 3.5px rgba(184, 134, 59, 0.56),
+        0 3px 8px rgba(28, 20, 14, 0.09);
     transition: background 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease;
 }
+
+/* Đường chỉ mảnh thứ hai chạy song song bên trong */
 .signboard-inner-frame {
     position: absolute;
-    inset: 4.5px;
-    border: 0.5px solid rgba(158, 27, 27, 0.22);
-    border-radius: 1.5px 1.5px 3.5px 3.5px;
+    inset: 5px;
+    border: 0.5px solid rgba(158, 114, 48, 0.30);
+    border-radius: 1.5px;
     pointer-events: none;
 }
+
+/* 4 ke góc hình học Á Đông (Fretwork Corners) đối xứng */
+.sb-corner {
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    color: #9e7230;
+    pointer-events: none;
+    z-index: 2;
+    transition: color 0.4s ease;
+}
+.sb-corner svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+.sb-corner.tl { top: 3px; left: 3px; }
+.sb-corner.tr { top: 3px; right: 3px; transform: scaleX(-1); }
+.sb-corner.bl { bottom: 3px; left: 3px; transform: scaleY(-1); }
+.sb-corner.br { bottom: 3px; right: 3px; transform: scale(-1, -1); }
+
 .signboard-text {
     display: inline-block;
     position: relative;
@@ -393,6 +312,8 @@ body.dark-mode .status-normal { background: rgba(230,81,0,0.18); color: #ffb74d;
     white-space: nowrap;
     text-shadow: 0 1px 0 rgba(255, 255, 255, 0.9);
 }
+
+/* Song ấn (2 con dấu triện đỏ đối xứng hai bên: Dương văn trái & Âm văn phải) */
 .signboard-seal {
     position: relative;
     z-index: 1;
@@ -402,79 +323,61 @@ body.dark-mode .status-normal { background: rgba(230,81,0,0.18); color: #ffb74d;
     width: 15px;
     height: 15px;
     border-radius: 2.5px;
-    background: linear-gradient(145deg, #c62828 0%, #991b1b 100%);
-    color: #fdf6e9;
-    box-shadow:
-        0 1px 2px rgba(127, 29, 29, 0.32),
-        inset 0 0 0 0.5px rgba(255, 235, 205, 0.35);
     flex-shrink: 0;
+    transition: background 0.4s ease, color 0.4s ease, box-shadow 0.4s ease;
 }
 .signboard-seal svg {
     width: 12px;
     height: 12px;
     display: block;
 }
+/* Con dấu trái — Dương văn (chu văn: nét đỏ son trên nền giấy dó ngà) */
+.signboard-seal.seal-yang {
+    background: linear-gradient(145deg, #fffdf9 0%, #f6ebd6 100%);
+    color: #b91c1c;
+    box-shadow:
+        0 1px 2px rgba(127, 29, 29, 0.16),
+        inset 0 0 0 0.5px rgba(185, 28, 28, 0.35);
+}
+/* Con dấu phải — Âm văn (bạch văn: nét kem sáng trên nền đỏ son trầm) */
+.signboard-seal.seal-yin {
+    background: linear-gradient(145deg, #c62828 0%, #991b1b 100%);
+    color: #fdf6e9;
+    box-shadow:
+        0 1px 2px rgba(127, 29, 29, 0.32),
+        inset 0 0 0 0.5px rgba(255, 235, 205, 0.35);
+}
 
-/* Dark mode: Bảng sơn mài đen mun & chữ vàng kim Phương Đông hiện đại */
+/* Dark mode: Bảng sơn mài đen mun, ke góc vàng đồng & song ấn đỏ chu sa */
 body.dark-mode .header-title {
     color: #f3d28b;
 }
-body.dark-mode .oriental-roof {
-    filter: drop-shadow(0 4px 7px rgba(0, 0, 0, 0.58));
-}
-body.dark-mode .roof-ridge {
-    background: linear-gradient(90deg, #8c6626 0%, #f1d28a 50%, #8c6626 100%);
-}
-body.dark-mode .roof-slope {
-    background:
-        linear-gradient(180deg, rgba(241, 210, 138, 0.12) 0%, rgba(0, 0, 0, 0.38) 100%),
-        repeating-linear-gradient(
-            90deg,
-            #262e3a 0px,
-            #262e3a 7px,
-            #13171e 7px,
-            #13171e 9px,
-            #1e2530 9px,
-            #1e2530 11px
-        );
-}
-body.dark-mode .roof-eaves {
-    border-top-color: #e4c27a;
-    border-bottom-color: #16110e;
-    background:
-        repeating-linear-gradient(
-            90deg,
-            #c9a050 0px,
-            #c9a050 8px,
-            #2d241e 8px,
-            #2d241e 11px
-        );
-}
-body.dark-mode .oriental-post {
-    background: linear-gradient(90deg, #241b16 0%, #4e3b30 48%, #1c1511 100%);
-}
-body.dark-mode .oriental-post::before {
-    background: linear-gradient(180deg, #e6c67e 0%, #99722f 100%);
-}
-body.dark-mode .oriental-post::after {
-    background: linear-gradient(180deg, #dfc07a 0%, #7d5b22 100%);
-}
 body.dark-mode .signboard-body {
     background: linear-gradient(180deg, #241d19 0%, #17120f 100%);
-    border-color: #8c6b32;
+    border-color: #9c7838;
     box-shadow:
-        inset 0 6px 8px -5px rgba(0, 0, 0, 0.65),
-        inset 0 0 0 2px #1c1613,
-        inset 0 0 0 3px rgba(212, 175, 55, 0.45),
+        inset 0 1px 0 rgba(255, 236, 194, 0.12),
+        inset 0 0 0 2.5px #1b1512,
+        inset 0 0 0 3.5px rgba(212, 175, 55, 0.45),
         0 4px 12px rgba(0, 0, 0, 0.45);
 }
 body.dark-mode .signboard-inner-frame {
-    border-color: rgba(243, 210, 139, 0.18);
+    border-color: rgba(243, 210, 139, 0.22);
+}
+body.dark-mode .sb-corner {
+    color: #e2be72;
 }
 body.dark-mode .signboard-text {
     text-shadow: 0 1px 3px rgba(0, 0, 0, 0.75);
 }
-body.dark-mode .signboard-seal {
+body.dark-mode .signboard-seal.seal-yang {
+    background: linear-gradient(145deg, #2b211c 0%, #1e1713 100%);
+    color: #f87171;
+    box-shadow:
+        0 1px 3px rgba(0, 0, 0, 0.42),
+        inset 0 0 0 0.6px rgba(248, 113, 113, 0.45);
+}
+body.dark-mode .signboard-seal.seal-yin {
     background: linear-gradient(145deg, #d32f2f 0%, #8e1818 100%);
     color: #fff3db;
     box-shadow:
