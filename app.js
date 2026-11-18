@@ -334,12 +334,6 @@ function showAppModal({
     const cancelBtn = document.getElementById('app-modal-cancel');
     const confirmBtn = document.getElementById('app-modal-confirm');
 
-    if (!backdrop || !titleEl || !msgEl || !cancelBtn || !confirmBtn) {
-        if (type === 'confirm') return Promise.resolve(window.confirm(message));
-        window.alert(message);
-        return Promise.resolve(true);
-    }
-
     if (activeModalResolver) {
         closeAppModal(false);
     }
@@ -457,11 +451,7 @@ function syncQrToggleButtonUi(isQr) {
     const iconEl = document.getElementById('btn-qr-icon');
     const labelEl = document.getElementById('btn-qr-label');
     if (iconEl) iconEl.innerHTML = isQr ? BILL_ICON_SVG : QR_ICON_SVG;
-    if (labelEl) {
-        labelEl.textContent = isQr ? 'XEM BILL' : 'MÃ QR';
-    } else {
-        button.textContent = isQr ? 'XEM BILL' : 'MÃ QR';
-    }
+    if (labelEl) labelEl.textContent = isQr ? 'XEM BILL' : 'MÃ QR';
 }
 
 function getBillFlipDom() {
@@ -2737,7 +2727,6 @@ function trackTableCommit(tab, promise) {
             inFlightItemCommits.delete(tableNum);
         }
     });
-    return promise;
 }
 
 function getEffectiveItemQty(tab, itemId) {
@@ -3502,7 +3491,6 @@ const singleFoldTargets = new Set();
 function paperFlipLater(fn, delay) {
     const id = setTimeout(fn, delay);
     singleFoldTimers.push(id);
-    return id;
 }
 
 function getSingleFoldSpec(variant = 0) {
@@ -3674,9 +3662,7 @@ function toggleDarkMode() {
 function initDarkMode() {
     let saved = null;
     try { saved = localStorage.getItem('combetram_dark_mode'); } catch (e) {}
-    if (saved === 'on') { applyDarkMode(true); return; }
-    if (saved === 'off') { applyDarkMode(false); return; }
-    applyDarkMode(false);
+    applyDarkMode(saved === 'on');
 }
 initDarkMode();
 
