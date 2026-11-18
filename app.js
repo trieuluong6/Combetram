@@ -692,6 +692,10 @@ function syncActiveLangButton(lang) {
     document.querySelectorAll('#lang-grid .lang-btn').forEach(btn => {
         btn.classList.toggle('active-lang', btn.dataset.lang === lang);
     });
+    const billArea = document.getElementById('bill-area');
+    if (billArea) {
+        billArea.dataset.billLang = lang || 'vi';
+    }
 }
 
 // CACHE THỜI TIẾT
@@ -3198,6 +3202,9 @@ async function renderBillAsync(tab) {
     const targetLang = currentBillLang;
     const langData = await getLangData(targetLang);
     if (currentTab !== tab || currentBillLang !== targetLang || !data.locked?.[tab]) return;
+
+    const billArea = document.getElementById('bill-area');
+    if (billArea) billArea.dataset.billLang = targetLang;
 
     let h = "", t = 0, my = getMergedOrder(tab);
     document.getElementById('txt-total-label').textContent = langData.total;

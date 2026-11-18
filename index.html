@@ -21,7 +21,7 @@
     html.paper-flip-pending .flip-clock-container > .flip-unit,
     html.paper-flip-pending .flip-clock-container > .flip-colon { visibility: hidden !important; }
     </style>
-    <link rel="stylesheet" href="style.css?v=fx-sound-v29">
+    <link rel="stylesheet" href="style.css?v=fx-sound-v30">
     <script>window.__paperFlipFailsafe = setTimeout(() => document.documentElement.classList.remove('paper-flip-pending'), 3000);</script>
 </head>
 <body>
@@ -142,7 +142,7 @@
         <div id="menu-list"></div>
         <button class="btn-action btn-checkout" id="btn-checkout" data-action="lock-bill" disabled aria-disabled="true"><span class="btn-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h14v18l-2.3-1.5L14.4 21 12 19.5 9.6 21l-2.3-1.5L5 21V3z"/><path d="M8.5 8h7M8.5 12h7M8.5 16h4.5"/></svg></span><span class="btn-action-label">CHỐT ĐƠN &amp; XEM BILL</span></button>
     </div>
-    <div id="bill-area" style="display:none;">
+    <div id="bill-area" data-bill-lang="vi" style="display:none;">
         <div class="printer-slot"></div>
         <div class="bill-flip-shell" id="bill-flip-shell">
             <div class="bill-flipper" id="bill-flipper">
@@ -242,6 +242,6 @@
 </div>
 <div id="app-toast-container" class="app-toast-container" aria-live="polite"></div>
 
-<script type="module" src="app.js?v=fx-sound-v24"></script>
+<script type="module" src="app.js?v=fx-sound-v25"></script>
 </body>
 </html>

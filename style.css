@@ -993,6 +993,53 @@ body.dark-mode .bill-box { border-left-color: rgba(255, 255, 255, 0.08); border-
 .bill-row .item-qty { font-weight: 800; color: var(--text-main); text-align: right; min-width: 35px; font-size: 1.25em; transition: color 0.4s ease; }
 .bill-row .divider { height: 100%; border-left: 2px solid var(--text-main); margin: 0 10px; grid-column: 3; transition: border-color 0.4s ease; }
 .bill-row .item-price { color: var(--primary-red); font-weight: 700; text-align: right; min-width: 90px; font-size: 1.1em; }
+
+/* Tối ưu độ dày nét, bộ font hệ thống & ngắt dòng cho các ngôn ngữ phi Latinh (Nhật, Trung, Hàn, Thái, Hindi) */
+#bill-area[data-bill-lang="jp"] .bill-box {
+    font-family: "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Yu Gothic", "Meiryo", "Noto Sans JP", "Noto Sans CJK JP", sans-serif;
+}
+#bill-area[data-bill-lang="cn"] .bill-box {
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", "Noto Sans CJK SC", sans-serif;
+}
+#bill-area[data-bill-lang="tw"] .bill-box {
+    font-family: "PingFang TC", "Microsoft JhengHei", "Noto Sans TC", "Noto Sans CJK TC", sans-serif;
+}
+#bill-area[data-bill-lang="kr"] .bill-box {
+    font-family: "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", "Noto Sans CJK KR", sans-serif;
+}
+#bill-area[data-bill-lang="th"] .bill-box {
+    font-family: "Thonburi", "Leelawadee UI", "Noto Sans Thai", sans-serif;
+}
+#bill-area[data-bill-lang="in"] .bill-box {
+    font-family: "Kohinoor Devanagari", "Nirmala UI", "Noto Sans Devanagari", 'Segoe UI', Arial, sans-serif;
+}
+
+#bill-area[data-bill-lang="jp"] .bill-row .item-name,
+#bill-area[data-bill-lang="cn"] .bill-row .item-name,
+#bill-area[data-bill-lang="tw"] .bill-row .item-name,
+#bill-area[data-bill-lang="kr"] .bill-row .item-name,
+#bill-area[data-bill-lang="th"] .bill-row .item-name,
+#bill-area[data-bill-lang="in"] .bill-row .item-name {
+    font-weight: 600;
+}
+
+#bill-area[data-bill-lang="jp"] .bill-row .item-name,
+#bill-area[data-bill-lang="cn"] .bill-row .item-name,
+#bill-area[data-bill-lang="tw"] .bill-row .item-name {
+    line-break: strict;
+    overflow-wrap: break-word;
+}
+
+#bill-area[data-bill-lang="kr"] .bill-row .item-name {
+    word-break: keep-all;
+    overflow-wrap: break-word;
+}
+
+#bill-area[data-bill-lang="th"] .bill-row .item-name,
+#bill-area[data-bill-lang="in"] .bill-row .item-name {
+    line-height: 1.45;
+    overflow-wrap: break-word;
+}
 @keyframes slideInBill { to { opacity: 1; transform: translateX(0); } }
 #bill-area { transform-origin: top center; }
 #bill-area.printing-out { animation: printOutBill 0.7s cubic-bezier(0.22, 0.61, 0.36, 1) both; }
