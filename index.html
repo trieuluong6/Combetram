@@ -21,7 +21,7 @@
     html.paper-flip-pending .flip-clock-container > .flip-unit,
     html.paper-flip-pending .flip-clock-container > .flip-colon { visibility: hidden !important; }
     </style>
-    <link rel="stylesheet" href="style.css?v=fx-sound-v28">
+    <link rel="stylesheet" href="style.css?v=fx-sound-v29">
     <script>window.__paperFlipFailsafe = setTimeout(() => document.documentElement.classList.remove('paper-flip-pending'), 3000);</script>
 </head>
 <body>
@@ -67,7 +67,17 @@
             </div>
         </div>
 
-        <div class="header-title">CƠM BÉ TRÂM</div>
+        <div class="header-title">
+            <div class="awning-canopy" aria-hidden="true">
+                <div class="awning-slope"></div>
+                <div class="awning-valance"></div>
+            </div>
+            <span class="awning-post post-left" aria-hidden="true"></span>
+            <span class="awning-post post-right" aria-hidden="true"></span>
+            <div class="signboard-body">
+                <span class="signboard-text">CƠM BÉ TRÂM</span>
+            </div>
+        </div>
     </div>
 
     <div class="side-widget side-right" id="net-speed-widget" title="Ước tính payload Firebase (nhận ↓ / gửi ↑)">

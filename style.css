@@ -159,7 +159,7 @@ body.dark-mode #offline-badge {
 .header-row { position: relative; display: flex; justify-content: center; margin-top: 10px; min-height: 34px; }
 .header-center { width: 100%; }
 .header-row .status-container { margin-top: 0; }
-.header-row .header-title { margin: 8px auto 13px auto; }
+.header-row .header-title { margin: 22px auto 14px auto; }
 .side-widget {
     position: absolute;
     top: 0;
@@ -185,7 +185,8 @@ body.dark-mode #offline-badge {
 .net-divider { width: 1px; height: 10px; background: var(--border-soft); flex-shrink: 0; }
 @media (max-width: 380px) {
     .side-widget { font-size: 0.56em; padding: 2px 6px; gap: 2px; }
-    .header-row .header-title { font-size: 1.18em; padding: 13px 16px 6px 16px; }
+    .header-row .header-title { font-size: 1.15em; }
+    .header-title .signboard-body { padding: 8px 18px 7px 18px; }
 }
 
 /* TRẠNG THÁI KHÁCH (GPU-composited transform + opacity) */
@@ -228,72 +229,196 @@ body.dark-mode .status-normal { background: rgba(230,81,0,0.18); color: #ffb74d;
 .status-crowded::after { content: ""; position: absolute; inset: 2px; background: #111; border-radius: 18px; z-index: 2; }
 @keyframes police-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
-/* TIÊU ĐỀ — BẢNG HIỆU MÁI HIÊN QUÁN CƠM */
+/* TIÊU ĐỀ — BẢNG HIỆU QUÁN CƠM CÓ MÁI HIÊN & 2 CÂY CHỐNG HAI BÊN */
 .header-title {
     position: relative;
     display: table;
     width: fit-content;
-    max-width: calc(100% - 16px);
-    margin: 10px auto 14px auto;
-    padding: 14px 22px 7px 22px;
+    max-width: calc(100% - 42px);
+    margin: 22px auto 15px auto;
     text-align: center;
-    color: var(--primary-red);
+    color: #b91c1c;
     text-transform: uppercase;
-    font-size: 1.32em;
+    font-size: 1.28em;
     font-weight: 900;
-    letter-spacing: 0.8px;
+    letter-spacing: 0.9px;
     line-height: 1.15;
-    background: linear-gradient(180deg, #fffdf8 0%, #f7f0e2 100%);
-    border: 1.5px solid rgba(211, 47, 47, 0.42);
-    border-radius: 10px;
-    box-shadow:
-        inset 0 0 0 2px rgba(255, 255, 255, 0.8),
-        0 2.5px 0 rgba(183, 28, 28, 0.16),
-        0 5px 12px rgba(15, 23, 42, 0.08);
-    overflow: hidden;
+    overflow: visible;
     box-sizing: border-box;
-    transition: background 0.4s ease, border-color 0.4s ease, color 0.4s ease, box-shadow 0.4s ease;
+    transition: color 0.4s ease;
 }
-.header-title::before {
-    content: "";
+
+/* Mái hiên bạt nghiêng 3D nhô rộng hơn bảng hiệu */
+.awning-canopy {
     position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 7px;
-    background: repeating-linear-gradient(90deg, #d32f2f 0 11px, #fff8eb 11px 22px);
-    border-bottom: 1px solid rgba(183, 28, 28, 0.22);
+    top: -15px;
+    left: -15px;
+    right: -15px;
+    height: 18px;
+    z-index: 4;
     pointer-events: none;
+    filter: drop-shadow(0 3px 4px rgba(15, 23, 42, 0.16));
 }
-.header-title::after {
-    content: "";
-    position: absolute;
-    top: 6px;
-    left: 0;
-    right: 0;
-    height: 4px;
+.awning-slope {
+    width: 100%;
+    height: 13px;
+    clip-path: polygon(13px 0%, calc(100% - 13px) 0%, 100% 100%, 0% 100%);
     background:
-        radial-gradient(circle at 5.5px 0, #d32f2f 4.6px, transparent 5px) 0 0 / 22px 4px repeat-x,
-        radial-gradient(circle at 16.5px 0, #f5ead6 4.6px, rgba(183, 28, 28, 0.25) 5px, transparent 5.5px) 0 0 / 22px 4px repeat-x;
-    pointer-events: none;
+        linear-gradient(180deg, rgba(255, 255, 255, 0.24) 0%, rgba(0, 0, 0, 0.08) 100%),
+        repeating-linear-gradient(
+            90deg,
+            #b91c1c 0%,
+            #b91c1c 11.111%,
+            #f7f1e5 11.111%,
+            #f7f1e5 22.222%
+        );
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
+    transition: background 0.4s ease;
 }
-body.dark-mode .header-title {
-    color: #ff6b6b;
-    background: linear-gradient(180deg, #2b2421 0%, #211c1a 100%);
-    border-color: rgba(248, 113, 113, 0.42);
+.awning-valance {
+    width: 100%;
+    height: 5px;
+    border-radius: 0 0 2px 2px;
+    border-top: 1px solid rgba(127, 29, 29, 0.32);
+    border-bottom: 1.5px solid #881313;
+    box-sizing: border-box;
+    background:
+        linear-gradient(180deg, rgba(0, 0, 0, 0.06) 0%, rgba(0, 0, 0, 0.18) 100%),
+        repeating-linear-gradient(
+            90deg,
+            #a31616 0%,
+            #a31616 11.111%,
+            #eadfcd 11.111%,
+            #eadfcd 22.222%
+        );
+    transition: background 0.4s ease, border-color 0.4s ease;
+}
+
+/* 2 cây chống kim loại hai bên + thanh chống xiên lên đỡ mép ngoài mái hiên */
+.awning-post {
+    position: absolute;
+    top: -1px;
+    bottom: -2px;
+    width: 3.5px;
+    border-radius: 1px;
+    background: linear-gradient(90deg, #334155 0%, #64748b 48%, #1e293b 100%);
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.25);
+    z-index: 3;
+    pointer-events: none;
+    transition: background 0.4s ease;
+}
+.awning-post.post-left {
+    left: -7.5px;
+}
+.awning-post.post-right {
+    right: -7.5px;
+}
+/* Thanh chống xiên 42° từ trụ đứng chống lên góc ngoài mái hiên */
+.awning-post::before {
+    content: "";
+    position: absolute;
+    top: 11px;
+    width: 11px;
+    height: 2.5px;
+    border-radius: 1px;
+    background: linear-gradient(180deg, #64748b 0%, #1e293b 100%);
+    box-shadow: 0 1px 1px rgba(15, 23, 42, 0.2);
+}
+.awning-post.post-left::before {
+    right: 1px;
+    transform-origin: right center;
+    transform: rotate(42deg);
+}
+.awning-post.post-right::before {
+    left: 1px;
+    transform-origin: left center;
+    transform: rotate(-42deg);
+}
+/* Chân đế trụ chống */
+.awning-post::after {
+    content: "";
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 9px;
+    height: 3px;
+    border-radius: 1.5px;
+    background: #1e293b;
+}
+
+/* Khung bảng hiệu chính bên dưới mái hiên */
+.signboard-body {
+    position: relative;
+    z-index: 2;
+    padding: 9px 22px 8px 22px;
+    background: linear-gradient(180deg, #fffdf9 0%, #f5ede0 100%);
+    border: 1.5px solid #c7b9a5;
+    border-top-color: #b5a48e;
+    border-radius: 3px 3px 8px 8px;
     box-shadow:
-        inset 0 0 0 2px rgba(255, 255, 255, 0.05),
-        0 2.5px 0 rgba(0, 0, 0, 0.45),
-        0 6px 14px rgba(0, 0, 0, 0.38);
+        inset 0 6px 8px -5px rgba(120, 40, 20, 0.26),
+        inset 0 0 0 2px rgba(255, 255, 255, 0.72),
+        0 2px 6px rgba(15, 23, 42, 0.07);
+    transition: background 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease;
 }
-body.dark-mode .header-title::before {
-    background: repeating-linear-gradient(90deg, #c62828 0 11px, #3b312c 11px 22px);
-    border-bottom-color: rgba(248, 113, 113, 0.22);
+.signboard-text {
+    display: inline-block;
+    position: relative;
+    z-index: 1;
+    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.85);
 }
-body.dark-mode .header-title::after {
+
+/* Dark mode cho mái hiên & 2 cây chống */
+body.dark-mode .header-title {
+    color: #f87171;
+}
+body.dark-mode .awning-canopy {
+    filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.48));
+}
+body.dark-mode .awning-slope {
     background:
-        radial-gradient(circle at 5.5px 0, #c62828 4.6px, transparent 5px) 0 0 / 22px 4px repeat-x,
-        radial-gradient(circle at 16.5px 0, #3b312c 4.6px, rgba(248, 113, 113, 0.28) 5px, transparent 5.5px) 0 0 / 22px 4px repeat-x;
+        linear-gradient(180deg, rgba(255, 255, 255, 0.10) 0%, rgba(0, 0, 0, 0.24) 100%),
+        repeating-linear-gradient(
+            90deg,
+            #991b1b 0%,
+            #991b1b 11.111%,
+            #3b322c 11.111%,
+            #3b322c 22.222%
+        );
+}
+body.dark-mode .awning-valance {
+    border-top-color: rgba(248, 113, 113, 0.25);
+    border-bottom-color: #7f1d1d;
+    background:
+        linear-gradient(180deg, rgba(0, 0, 0, 0.14) 0%, rgba(0, 0, 0, 0.30) 100%),
+        repeating-linear-gradient(
+            90deg,
+            #7f1d1d 0%,
+            #7f1d1d 11.111%,
+            #2f2723 11.111%,
+            #2f2723 22.222%
+        );
+}
+body.dark-mode .awning-post {
+    background: linear-gradient(90deg, #475569 0%, #94a3b8 48%, #334155 100%);
+}
+body.dark-mode .awning-post::before {
+    background: linear-gradient(180deg, #94a3b8 0%, #475569 100%);
+}
+body.dark-mode .awning-post::after {
+    background: #94a3b8;
+}
+body.dark-mode .signboard-body {
+    background: linear-gradient(180deg, #27211f 0%, #1e1918 100%);
+    border-color: #4a3f39;
+    box-shadow:
+        inset 0 6px 8px -5px rgba(0, 0, 0, 0.55),
+        inset 0 0 0 2px rgba(255, 255, 255, 0.04),
+        0 4px 10px rgba(0, 0, 0, 0.36);
+}
+body.dark-mode .signboard-text {
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
 }
 
 /* ICON THỜI TIẾT */
@@ -328,10 +453,10 @@ body.dark-mode .header-title::after {
 .flip-card.animate .card-flip-wing { transform: rotateX(-180deg); }
 .flip-card.animate .card-flip-wing-back { transform: rotateX(0deg); }
 
-/* BÀN ĂN — MINIMALIST GLASS & PILL (CHỮ ĐẬM RÕ NÉT + ĐỦ HIỆU ỨNG CHỚP & VIỀN RGB) */
-.tables-container { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px 10px; margin-bottom: 18px; }
+/* BÀN ĂN — MINIMALIST GLASS & PILL (GIẢM NỔI KHỐI NHẸ NHÀNG + ĐỦ HIỆU ỨNG CHỚP & VIỀN RGB) */
+.tables-container { display: grid; grid-template-columns: repeat(6, 1fr); gap: 11px 10px; margin-bottom: 18px; }
 .tables-container.is-loading .table-card { cursor: progress; }
-.tables-container.is-loading .table-card:active { transform: scale(0.985); }
+.tables-container.is-loading .table-card:active { transform: scale(0.988); }
 .table-card.is-loading-tap {
     animation: loadingTapShake 0.34s cubic-bezier(0.36, 0.07, 0.19, 0.97);
     border-color: var(--warning-orange);
@@ -345,23 +470,22 @@ body.dark-mode .header-title::after {
 
 .table-card {
     --card-glass-shadow:
-        inset 0 1.5px 0 rgba(255, 255, 255, 1),
-        inset 0 -1px 0 rgba(148, 163, 184, 0.18),
-        0 2px 0 rgba(148, 163, 184, 0.34),
-        0 6px 14px rgba(15, 23, 42, 0.09),
-        0 2px 4px rgba(15, 23, 42, 0.06);
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.94) 0%, rgba(244, 247, 251, 0.86) 100%);
+        inset 0 1px 0 rgba(255, 255, 255, 0.88),
+        0 1px 0 rgba(148, 163, 184, 0.22),
+        0 3px 8px rgba(15, 23, 42, 0.055),
+        0 1px 2px rgba(15, 23, 42, 0.04);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(247, 249, 252, 0.90) 100%);
     padding: 9px 6px 10px;
     text-align: center;
-    border-radius: 16px;
+    border-radius: 15px;
     cursor: pointer;
-    border: 1.5px solid rgba(196, 207, 221, 0.92);
+    border: 1px solid rgba(203, 213, 225, 0.88);
     box-shadow: var(--card-glass-shadow);
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    min-height: 108px;
+    min-height: 106px;
     position: relative;
     overflow: hidden;
     transition: transform 0.16s cubic-bezier(0.22, 1, 0.36, 1), background 0.3s ease, color 0.3s ease, border-color 0.3s ease, box-shadow 0.25s ease;
@@ -369,16 +493,15 @@ body.dark-mode .header-title::after {
 }
 body.dark-mode .table-card {
     --card-glass-shadow:
-        inset 0 1.5px 0 rgba(255, 255, 255, 0.16),
-        inset 0 -1px 0 rgba(0, 0, 0, 0.35),
-        0 2px 0 rgba(7, 10, 14, 0.72),
-        0 7px 16px rgba(0, 0, 0, 0.44),
-        0 2px 4px rgba(0, 0, 0, 0.30);
-    background: linear-gradient(180deg, rgba(37, 48, 61, 0.92) 0%, rgba(26, 34, 44, 0.86) 100%);
-    border-color: rgba(255, 255, 255, 0.16);
+        inset 0 1px 0 rgba(255, 255, 255, 0.10),
+        0 1px 0 rgba(7, 10, 14, 0.55),
+        0 4px 10px rgba(0, 0, 0, 0.32),
+        0 1px 3px rgba(0, 0, 0, 0.22);
+    background: linear-gradient(180deg, rgba(35, 45, 57, 0.94) 0%, rgba(27, 35, 45, 0.89) 100%);
+    border-color: rgba(255, 255, 255, 0.13);
 }
 .tables-container:not(.is-loading) .table-card:active {
-    transform: translateY(1.5px) scale(0.982);
+    transform: translateY(1px) scale(0.986);
     transition-duration: 0.08s;
 }
 
@@ -406,8 +529,8 @@ body.dark-mode .table-card {
     width: 24px;
     height: 24px;
     border-radius: 8px;
-    background: rgba(100, 116, 139, 0.11);
-    border: 1px solid rgba(100, 116, 139, 0.18);
+    background: rgba(100, 116, 139, 0.10);
+    border: 1px solid rgba(100, 116, 139, 0.16);
     flex-shrink: 0;
     transition: background-color 0.25s ease, border-color 0.25s ease;
 }
@@ -595,57 +718,57 @@ body.dark-mode .table-time { color: #cbd5e1; }
 @keyframes pulse-guest-glass {
     0%, 100% {
         background-color: rgba(220, 252, 231, 0.95);
-        border-color: rgba(22, 163, 74, 0.78);
-        box-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.96), 0 2px 0 rgba(22, 163, 74, 0.28), 0 6px 14px rgba(22, 163, 74, 0.20);
+        border-color: rgba(22, 163, 74, 0.72);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.90), 0 1px 0 rgba(22, 163, 74, 0.20), 0 4px 10px rgba(22, 163, 74, 0.14);
     }
     50% {
         background-color: rgba(187, 247, 208, 0.72);
-        border-color: rgba(34, 197, 94, 0.38);
-        box-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.88), 0 2px 0 rgba(22, 163, 74, 0.16), 0 3px 9px rgba(22, 163, 74, 0.09);
+        border-color: rgba(34, 197, 94, 0.36);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.84), 0 1px 0 rgba(22, 163, 74, 0.12), 0 2px 6px rgba(22, 163, 74, 0.07);
     }
 }
 @keyframes pulse-guest-glass-dark {
     0%, 100% {
         background-color: rgba(20, 62, 43, 0.95);
-        border-color: rgba(74, 222, 128, 0.68);
-        box-shadow: inset 0 1.5px 0 rgba(167, 243, 208, 0.24), 0 2px 0 rgba(6, 24, 16, 0.72), 0 7px 18px rgba(16, 185, 129, 0.26);
+        border-color: rgba(74, 222, 128, 0.62);
+        box-shadow: inset 0 1px 0 rgba(167, 243, 208, 0.18), 0 1px 0 rgba(6, 24, 16, 0.55), 0 4px 12px rgba(16, 185, 129, 0.20);
     }
     50% {
         background-color: rgba(24, 42, 36, 0.80);
-        border-color: rgba(74, 222, 128, 0.28);
-        box-shadow: inset 0 1.5px 0 rgba(167, 243, 208, 0.12), 0 2px 0 rgba(6, 24, 16, 0.65), 0 4px 11px rgba(0, 0, 0, 0.34);
+        border-color: rgba(74, 222, 128, 0.26);
+        box-shadow: inset 0 1px 0 rgba(167, 243, 208, 0.10), 0 1px 0 rgba(6, 24, 16, 0.45), 0 3px 8px rgba(0, 0, 0, 0.26);
     }
 }
 
 .table-card.has-guest {
     background: none;
-    border: 1.5px solid rgba(22, 163, 74, 0.75);
+    border: 1.25px solid rgba(22, 163, 74, 0.70);
     animation: pulse-guest-glass 1.7s infinite ease-in-out;
 }
 body.dark-mode .table-card.has-guest {
     background: none;
-    border-color: rgba(74, 222, 128, 0.65);
+    border-color: rgba(74, 222, 128, 0.60);
     animation: pulse-guest-glass-dark 1.7s infinite ease-in-out;
 }
 
 /* Bàn đang chọn (.active): giữ nguyên kích thước thẻ, viền xanh iOS sắc nét + nổi khối nhẹ */
 .table-card.active {
     --card-glass-shadow:
-        inset 0 1.5px 0 rgba(255, 255, 255, 0.98),
-        0 2px 0 rgba(0, 122, 255, 0.28),
-        0 0 0 3px rgba(0, 122, 255, 0.24),
-        0 7px 16px rgba(0, 122, 255, 0.18);
-    border: 2px solid #007aff !important;
-    background: linear-gradient(180deg, rgba(239, 246, 255, 0.96) 0%, rgba(219, 234, 254, 0.90) 100%);
+        inset 0 1px 0 rgba(255, 255, 255, 0.92),
+        0 1px 0 rgba(0, 122, 255, 0.20),
+        0 0 0 2.5px rgba(0, 122, 255, 0.20),
+        0 4px 10px rgba(0, 122, 255, 0.13);
+    border: 1.5px solid #007aff !important;
+    background: linear-gradient(180deg, rgba(239, 246, 255, 0.96) 0%, rgba(224, 238, 254, 0.91) 100%);
     color: #0d47a1;
     z-index: 20;
 }
 body.dark-mode .table-card.active {
     --card-glass-shadow:
-        inset 0 1.5px 0 rgba(186, 230, 253, 0.24),
-        0 2px 0 rgba(7, 18, 32, 0.75),
-        0 0 0 3px rgba(56, 189, 248, 0.28),
-        0 8px 18px rgba(0, 0, 0, 0.46);
+        inset 0 1px 0 rgba(186, 230, 253, 0.18),
+        0 1px 0 rgba(7, 18, 32, 0.55),
+        0 0 0 2.5px rgba(56, 189, 248, 0.22),
+        0 5px 12px rgba(0, 0, 0, 0.36);
     border-color: #38bdf8 !important;
     background: linear-gradient(180deg, rgba(26, 54, 88, 0.94) 0%, rgba(19, 41, 68, 0.88) 100%);
     color: #bae6fd;
@@ -655,12 +778,12 @@ body.dark-mode .table-card.active {
 .table-card.has-guest.active {
     background: none;
     animation: pulse-guest-glass 1.7s infinite ease-in-out;
-    box-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.98), 0 2px 0 rgba(0, 122, 255, 0.28), 0 0 0 3px rgba(0, 122, 255, 0.25), 0 7px 16px rgba(0, 122, 255, 0.18);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.92), 0 1px 0 rgba(0, 122, 255, 0.20), 0 0 0 2.5px rgba(0, 122, 255, 0.21), 0 4px 10px rgba(0, 122, 255, 0.13);
 }
 body.dark-mode .table-card.has-guest.active {
     background: none;
     animation: pulse-guest-glass-dark 1.7s infinite ease-in-out;
-    box-shadow: inset 0 1.5px 0 rgba(186, 230, 253, 0.24), 0 2px 0 rgba(7, 18, 32, 0.75), 0 0 0 3px rgba(56, 189, 248, 0.28), 0 8px 18px rgba(0, 0, 0, 0.46);
+    box-shadow: inset 0 1px 0 rgba(186, 230, 253, 0.18), 0 1px 0 rgba(7, 18, 32, 0.55), 0 0 0 2.5px rgba(56, 189, 248, 0.22), 0 5px 12px rgba(0, 0, 0, 0.36);
 }
 
 @keyframes pulse-rgb-total { 0% { background-color: #ffecec; } 25% { background-color: #ecfaec; } 50% { background-color: #ecf3ff; } 75% { background-color: #fff8e6; } 100% { background-color: #ffecec; } }
@@ -672,10 +795,10 @@ body.dark-mode .table-card.has-guest.active {
     animation: none;
 }
 .table-card.is-locked:not(.active) {
-    --card-glass-shadow: 0 5px 15px rgba(15, 23, 42, 0.14);
+    --card-glass-shadow: 0 3px 10px rgba(15, 23, 42, 0.10);
 }
 body.dark-mode .table-card.is-locked:not(.active) {
-    --card-glass-shadow: 0 6px 18px rgba(0, 0, 0, 0.48);
+    --card-glass-shadow: 0 4px 12px rgba(0, 0, 0, 0.38);
 }
 .table-card.is-locked::before {
     content: "";
@@ -695,15 +818,15 @@ body.dark-mode .table-card.is-locked:not(.active) {
     content: "";
     position: absolute;
     inset: 2.5px;
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, rgba(250, 251, 253, 0.92) 100%);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.96);
-    border-radius: 13.5px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(250, 251, 253, 0.93) 100%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.90);
+    border-radius: 12.5px;
     z-index: 2;
     pointer-events: none;
 }
 body.dark-mode .table-card.is-locked::after {
     background: linear-gradient(180deg, rgba(31, 39, 50, 0.95) 0%, rgba(24, 30, 39, 0.92) 100%);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.09);
 }
 .table-card.active.is-locked::after {
     background: linear-gradient(180deg, rgba(239, 246, 255, 0.96) 0%, rgba(219, 234, 254, 0.92) 100%);
