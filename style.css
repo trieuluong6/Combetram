@@ -436,16 +436,16 @@ body.dark-mode .signboard-seal.seal-yin {
 
 .table-card {
     --card-glass-shadow:
-        inset 0 1px 0 rgba(255, 252, 240, 0.95),
-        0 1px 0 rgba(184, 134, 27, 0.24),
-        0 3px 8px rgba(146, 104, 18, 0.09),
-        0 1px 2px rgba(146, 104, 18, 0.06);
-    background: linear-gradient(180deg, #fffdf5 0%, #faecc6 55%, #f3df9f 100%);
+        inset 0 1px 0 rgba(255, 255, 255, 0.92),
+        0 1px 0 rgba(15, 23, 42, 0.05),
+        0 3px 8px var(--shadow-card),
+        0 1px 2px rgba(15, 23, 42, 0.04);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(250, 251, 253, 0.93) 100%);
     padding: 9px 6px 10px;
     text-align: center;
     border-radius: 15px;
     cursor: pointer;
-    border: 1px solid rgba(201, 151, 28, 0.62);
+    border: 1px solid var(--border-card);
     box-shadow: var(--card-glass-shadow);
     display: flex;
     flex-direction: column;
@@ -460,12 +460,12 @@ body.dark-mode .signboard-seal.seal-yin {
 }
 body.dark-mode .table-card {
     --card-glass-shadow:
-        inset 0 1px 0 rgba(255, 224, 130, 0.18),
-        0 1px 0 rgba(12, 9, 4, 0.65),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08),
+        0 1px 0 rgba(0, 0, 0, 0.55),
         0 4px 10px rgba(0, 0, 0, 0.36),
         0 1px 3px rgba(0, 0, 0, 0.25);
-    background: linear-gradient(180deg, rgba(58, 47, 24, 0.95) 0%, rgba(42, 33, 16, 0.92) 100%);
-    border-color: rgba(212, 175, 55, 0.45);
+    background: linear-gradient(180deg, rgba(31, 39, 50, 0.95) 0%, rgba(24, 30, 39, 0.92) 100%);
+    border-color: var(--border-card);
 }
 .tables-container:not(.is-loading) .table-card:active {
     transform: translateY(1px) scale(0.986);
