@@ -3677,17 +3677,16 @@ if (document.readyState === 'complete') {
 
 updateNetWidget();
 
-// ─── SERVICE WORKER: TỰ ĐỘNG LẤY BẢN MỚI KHI PUSH GITHUB ───────────────
+// ─── GỠ BỎ SERVICE WORKER & DỌN CACHE CŨ (KHÔNG DÙNG sw.js) ─────────────
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
     window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' })
-            .then((reg) => {
-                document.addEventListener('visibilitychange', () => {
-                    if (!document.hidden) {
-                        reg.update().catch(() => {});
-                    }
-                });
-            })
-            .catch((err) => console.warn('[sw] Không thể đăng ký Service Worker:', err));
-    });
+        navigator.serviceWorker.getRegistrations()
+            .then((regs) => Promise.all(regs.map((r) => r.unregister())))
+            .catch(() => {});
+        if ('caches' in window) {
+            caches.keys()
+                .then((keys) => Promise.all(keys.map((k) => caches.delete(k))))
+                .catch(() => {});
+        }
+    }, { once: true });
 }
