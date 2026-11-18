@@ -12,7 +12,7 @@
     --bg-category: #eeeeee;
     --bg-btn-sub: #f5f5f5;
     --bg-bill-divider: #c9c3b8;
-    --glass-bg: rgba(255,255,255,0.72);
+    --glass-bg: rgba(255,255,255,0.92);
     --glass-border: rgba(255,255,255,0.88);
     --paper-bg: #efece6;
 }
@@ -29,7 +29,7 @@ body.dark-mode {
     --bg-category: #232d37;
     --bg-btn-sub: #283340;
     --bg-bill-divider: #3a4a5a;
-    --glass-bg: rgba(28,35,43,0.55);
+    --glass-bg: rgba(28,35,43,0.92);
     --glass-border: rgba(255,255,255,0.08);
     --paper-bg: #26303d;
 }
@@ -64,8 +64,6 @@ button, .table-card, .btn-qty, .btn-action, .lang-btn, .cat-pill {
 }
 #weather-hub {
     background: var(--glass-bg);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
     color: var(--text-main);
     padding: 4px 10px;
     border-radius: 20px;
@@ -114,8 +112,6 @@ body.dark-mode #offline-badge {
 
 #presence-count {
     background: var(--glass-bg);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
     color: var(--text-main);
     padding: 4px 10px;
     border-radius: 20px;
@@ -136,8 +132,6 @@ body.dark-mode #offline-badge {
 #sound-toggle,
 #dark-toggle {
     background: var(--glass-bg);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
     border: 1px solid var(--glass-border);
     color: var(--text-main);
     width: 22px; height: 22px;
@@ -760,8 +754,7 @@ body.dark-mode .table-card.has-guest.active {
     box-shadow: inset 0 1px 0 rgba(186, 230, 253, 0.18), 0 1px 0 rgba(7, 18, 32, 0.55), 0 0 0 2.5px rgba(56, 189, 248, 0.22), 0 5px 12px rgba(0, 0, 0, 0.36);
 }
 
-@keyframes pulse-rgb-total { 0% { background-color: #ffecec; } 25% { background-color: #ecfaec; } 50% { background-color: #ecf3ff; } 75% { background-color: #fff8e6; } 100% { background-color: #ffecec; } }
-@keyframes pulse-rgb-total-dark { 0% { background-color: #2d1b1b; } 25% { background-color: #1b2d1f; } 50% { background-color: #1b2233; } 75% { background-color: #2d2719; } 100% { background-color: #2d1b1b; } }
+
 
 /* Bàn chốt đơn (.is-locked): giữ nguyên viền xoay RGB kết hợp lõi kính mờ sắc nét */
 .table-card.is-locked {
@@ -882,8 +875,6 @@ body.dark-mode .table-card.is-locked.flash-sub::after {
     padding: 8px;
     margin: 0 -4px 8px -4px;
     background: var(--glass-bg);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
     border: 1px solid var(--border-soft);
     border-radius: 14px;
     scrollbar-width: none;
@@ -1034,9 +1025,11 @@ body.dark-mode .bill-box { border-left-color: rgba(255, 255, 255, 0.08); border-
 .printer-slot { height: 10px; background: linear-gradient(180deg, var(--text-muted), var(--bg-card)); border-radius: 4px 4px 0 0; margin-bottom: -2px; position: relative; box-shadow: 0 2px 4px var(--shadow-card); opacity: 0; }
 #bill-area.printing-out .printer-slot { animation: printerSlotFlash 0.7s ease-out both; }
 @keyframes printerSlotFlash { 0% { opacity: 1; } 8% { opacity: 1; } 100% { opacity: 0; } }
-.total-container { display: flex; justify-content: space-between; align-items: center; font-size: 1.2em; font-weight: 900; margin-top: 15px; color: var(--primary-red); padding: 18px 8px; border-top: 3px solid var(--text-main); gap: 5px; animation: pulse-rgb-total 2.8s infinite ease-in-out; border-radius: 6px; overflow: hidden; transition: border-color 0.4s ease; }
+.total-container { position: relative; isolation: isolate; display: flex; justify-content: space-between; align-items: center; font-size: 1.2em; font-weight: 900; margin-top: 15px; color: var(--primary-red); padding: 18px 8px; border-top: 3px solid var(--text-main); gap: 5px; border-radius: 6px; overflow: hidden; transition: border-color 0.4s ease; }
+.total-container::before { content: ''; position: absolute; inset: 0; width: 400%; background: linear-gradient(90deg, #ffecec 0%, #ecfaec 25%, #ecf3ff 50%, #fff8e6 75%, #ffecec 100%); z-index: -1; pointer-events: none; will-change: transform; animation: pulse-rgb-total 2.8s infinite linear; }
+body.dark-mode .total-container::before { background: linear-gradient(90deg, #2d1b1b 0%, #1b2d1f 25%, #1b2233 50%, #2d2719 75%, #2d1b1b 100%); }
+@keyframes pulse-rgb-total { 0% { transform: translate3d(0%, 0, 0); } 100% { transform: translate3d(-75%, 0, 0); } }
 .bill-thanks { margin-top: 12px; padding: 11px 4px 2px; border-top: 1.5px dashed var(--bg-bill-divider); text-align: center; font-size: 17.5px; font-weight: 800; line-height: 1.3; letter-spacing: 0.01em; color: var(--text-main); white-space: nowrap; transition: border-color 0.4s ease, color 0.4s ease; }
-body.dark-mode .total-container { animation: pulse-rgb-total-dark 2.8s infinite ease-in-out; }
 .total-label-wrapper { display: flex; align-items: center; gap: 5px; min-width: 0; flex-shrink: 1; }
 #txt-total-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.85em; }
 .lang-btn { flex: 1; padding: 10px 2px; border: 1px solid var(--border-card); border-radius: 8px; background: var(--bg-card); font-size: 0.75em; font-weight: bold; color: var(--text-muted); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; cursor: pointer; transition: background 0.3s ease, color 0.3s ease, border-color 0.3s ease, transform 0.15s ease; }
@@ -1056,11 +1049,11 @@ body.dark-mode .lang-btn.active-lang {
 #txt-lang-flag { font-size: 1.4em; flex-shrink: 0; }
 .arrow-container { flex-grow: 1; display: flex; align-items: center; position: relative; height: 35px; min-width: 20px; }
 .arrow-shaft { height: 10px; background: rgba(0,0,0,0.05); flex-grow: 1; position: relative; border-radius: 5px 0 0 5px; overflow: hidden; }
-.arrow-shaft::after { content: ''; position: absolute; top: 0; left: -100%; height: 100%; width: 100%; background: linear-gradient(to right, transparent, var(--primary-red), var(--primary-red)); animation: shaftFlow 1.2s infinite cubic-bezier(0.4, 0, 0.2, 1); }
+.arrow-shaft::after { content: ''; position: absolute; top: 0; left: 0; height: 100%; width: 100%; background: linear-gradient(to right, transparent, var(--primary-red), var(--primary-red)); will-change: transform; animation: shaftFlow 1.2s infinite cubic-bezier(0.4, 0, 0.2, 1); }
 .arrow-head { width: 22px; height: 26px; background: rgba(0,0,0,0.05); clip-path: polygon(0% 0%, 100% 50%, 0% 100%); margin-left: -2px; position: relative; flex-shrink: 0; }
-.arrow-head::after { content: ''; position: absolute; inset: 0; background: var(--primary-red); opacity: 0; animation: headGlowRed 1.2s infinite cubic-bezier(0.4, 0, 0.2, 1); filter: drop-shadow(0 0 8px var(--primary-red)); }
-@keyframes shaftFlow { 0% { left: -100%; } 60%, 100% { left: 100%; } }
-@keyframes headGlowRed { 0%, 50% { opacity: 0; transform: scale(0.9); } 65% { opacity: 1; transform: scale(1.1); } 85%, 100% { opacity: 0; transform: scale(1); } }
+.arrow-head::after { content: ''; position: absolute; inset: 0; background: var(--primary-red); opacity: 0; will-change: opacity; animation: headGlowRed 1.2s infinite cubic-bezier(0.4, 0, 0.2, 1); }
+@keyframes shaftFlow { 0% { transform: translate3d(-100%, 0, 0); } 60%, 100% { transform: translate3d(100%, 0, 0); } }
+@keyframes headGlowRed { 0%, 50% { opacity: 0; } 65% { opacity: 1; } 85%, 100% { opacity: 0; } }
 .total-pop { animation: popScale 0.4s ease; }
 @keyframes popScale { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
 .btn-action {
@@ -1390,8 +1383,7 @@ body.dark-mode .app-toast-error {
 #order-section.section-visible { opacity: 1; transform: translateY(0); }
 
 /* RIPPLE */
-.ripple { position: absolute; border-radius: 50%; background: rgba(255,255,255,0.55); transform: scale(0); animation: rippleEffect 0.55s ease-out; pointer-events: none; }
-@keyframes rippleEffect { to { transform: scale(2.8); opacity: 0; } }
+.ripple { position: absolute; border-radius: 50%; background: rgba(255,255,255,0.55); transform: scale(0); opacity: 0; pointer-events: none; }
 
 /* CURSOR ĐỒNG NGHIỆP */
 .remote-cursor { position: fixed; width: 14px; height: 14px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.35); pointer-events: none; z-index: 200; transform: translate(-50%, -50%); transition: top 0.5s cubic-bezier(0.22, 0.61, 0.36, 1), left 0.5s cubic-bezier(0.22, 0.61, 0.36, 1), opacity 0.25s ease; opacity: 0; }
@@ -1558,7 +1550,7 @@ body.tab-hidden .flip-colon,
 body.tab-hidden .table-card.has-viewer,
 body.tab-hidden .table-card.has-guest,
 body.tab-hidden .is-locked::before,
-body.tab-hidden .total-container,
+body.tab-hidden .total-container::before,
 body.tab-hidden .arrow-shaft::after,
 body.tab-hidden .arrow-head::after,
 body.tab-hidden .remote-paying-badge,

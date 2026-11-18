@@ -610,6 +610,7 @@ const TABLE_DOM = Array.from({ length: 9 }, (_, idx) => {
 });
 const ITEM_DOM = new Map();
 const tableTotals = Array(10).fill(0);
+const lastTableMetaKey = Array(10).fill(null);
 
 
 function shallowRecordEqual(a, b) {
@@ -1441,12 +1442,13 @@ function triggerHaptic(type = 'nav') {
 }
 
 // ─── animateNumber với cancel flag + cache giá trị số (tránh regex DOM) ──
+const NUMBER_FMT = new Intl.NumberFormat();
 const animatingFlags = {};
 const animatedValues = {};
 
 function setAnimatedDisplayValue(key, el, value, suffix = '') {
     animatedValues[key] = value;
-    el.textContent = `${value.toLocaleString()}${suffix}`;
+    el.textContent = `${NUMBER_FMT.format(value)}${suffix}`;
 }
 
 function animateNumber(target, newValue, suffix = '') {
@@ -1461,7 +1463,7 @@ function animateNumber(target, newValue, suffix = '') {
     }
 
     const startValue = hasKnownStart ? animatedValues[key] : 0;
-    const expectedText = `${newValue.toLocaleString()}${suffix}`;
+    const expectedText = `${NUMBER_FMT.format(newValue)}${suffix}`;
     if (startValue === newValue && el.textContent === expectedText) return;
 
     const diff = newValue - startValue;
@@ -3122,8 +3124,12 @@ function renderTable(tableId, now = getServerNow()) {
     }
     if (dom.meta) {
         dom.meta.classList.remove('skeleton');
-        dom.meta.innerHTML = total > 0 ? `🍽 <span class="table-meta-count">${foodQty}</span> món · 🥤🍺 <span class="table-meta-count">${drinkQty}</span>` : '';
-        dom.meta.title = total > 0 ? `${foodQty} phần món ăn · ${drinkQty} nước/bia` : '';
+        const metaKey = total > 0 ? `1:${foodQty}:${drinkQty}` : '0';
+        if (lastTableMetaKey[tableId] !== metaKey) {
+            lastTableMetaKey[tableId] = metaKey;
+            dom.meta.innerHTML = total > 0 ? `🍽 <span class="table-meta-count">${foodQty}</span> món · 🥤🍺 <span class="table-meta-count">${drinkQty}</span>` : '';
+            dom.meta.title = total > 0 ? `${foodQty} phần món ăn · ${drinkQty} nước/bia` : '';
+        }
     }
     renderTableTime(tableId, now);
 
@@ -3448,18 +3454,43 @@ async function doPay() {
     }
 }
 
-// RIPPLE
+// RIPPLE (tái sử dụng 1 node/nút + Web Animations API, không tạo/xóa DOM hay setTimeout)
+const buttonRipples = new WeakMap();
 document.addEventListener('click', (e) => {
-    const btn = e.target.closest('.btn-action'); if (!btn) return;
+    const btn = e.target.closest('.btn-action');
+    if (!btn || btn.disabled) return;
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+
+    let state = buttonRipples.get(btn);
+    if (!state) {
+        const el = document.createElement('span');
+        el.className = 'ripple';
+        btn.appendChild(el);
+        state = { el, anim: null };
+        buttonRipples.set(btn, state);
+    }
+    if (state.anim) state.anim.cancel();
+
     const rect = btn.getBoundingClientRect();
-    const ripple = document.createElement('span');
     const size = Math.max(rect.width, rect.height) * 1.2;
-    ripple.className = 'ripple';
-    ripple.style.width = ripple.style.height = size + 'px';
-    ripple.style.left = (e.clientX - rect.left - size / 2) + 'px';
-    ripple.style.top = (e.clientY - rect.top - size / 2) + 'px';
-    btn.appendChild(ripple);
-    setTimeout(() => ripple.remove(), 600);
+    const { el } = state;
+    el.style.width = el.style.height = size + 'px';
+    el.style.left = (e.clientX - rect.left - size / 2) + 'px';
+    el.style.top = (e.clientY - rect.top - size / 2) + 'px';
+
+    if (el.animate) {
+        const anim = el.animate([
+            { transform: 'scale(0)', opacity: 1 },
+            { transform: 'scale(2.8)', opacity: 0 }
+        ], { duration: 550, easing: 'ease-out', fill: 'forwards' });
+        state.anim = anim;
+        anim.onfinish = () => {
+            if (state.anim === anim) {
+                state.anim = null;
+                try { anim.cancel(); } catch (err) {}
+            }
+        };
+    }
 });
 
 // ─── SINGLE-SHEET ORIGAMI INTRO V7 ────────────────────────────────────
