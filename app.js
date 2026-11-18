@@ -1049,7 +1049,8 @@ window.addEventListener('pagehide', handleAppBackgrounded);
 startClockInterval();
 
 // ─── ÂM THANH THAO TÁC CÔNG SUẤT CAO + PRE-RENDERED AUDIOBUFFER CACHE ───
-if (typeof navigator !== 'undefined' && navigator.audioSession) {
+const SUPPORTS_AUDIO_SESSION = typeof navigator !== 'undefined' && Boolean(navigator.audioSession);
+if (SUPPORTS_AUDIO_SESSION) {
     try { navigator.audioSession.type = 'playback'; } catch (e) {}
 }
 
@@ -1057,6 +1058,7 @@ const IS_IOS_DEVICE = typeof navigator !== 'undefined' && (
     /iPad|iPhone|iPod/.test(navigator.userAgent) ||
     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
 );
+const USE_LEGACY_IOS_HTML_AUDIO = IS_IOS_DEVICE && !SUPPORTS_AUDIO_SESSION;
 
 let isSoundMuted = false;
 function applySoundMuteUi(muted) {
@@ -1245,6 +1247,7 @@ function buildWavBlobUrl(type, sampleRate = SOUND_SAMPLE_RATE) {
 const htmlAudioPools = {};
 const htmlAudioPoolIdx = {};
 let soundPoolsInitialized = false;
+let htmlPoolsUnlocked = false;
 let audioUnlocked = false;
 
 function ensureSoundPools() {
@@ -1254,14 +1257,49 @@ function ensureSoundPools() {
     for (const type of Object.keys(SOUND_PATTERNS)) {
         try {
             const url = buildWavBlobUrl(type);
+            const poolSize = (type === 'nav' || type === 'add' || type === 'sub') ? 2 : 1;
             htmlAudioPoolIdx[type] = 0;
-            htmlAudioPools[type] = Array.from({ length: 4 }, () => {
+            htmlAudioPools[type] = Array.from({ length: poolSize }, () => {
                 const a = new Audio(url);
                 a.preload = 'auto';
                 a.setAttribute('playsinline', '');
                 return a;
             });
         } catch (e) {}
+    }
+}
+
+function unlockHtmlAudioPoolsAsync() {
+    if (htmlPoolsUnlocked) return;
+    htmlPoolsUnlocked = true;
+    ensureSoundPools();
+    if (!soundPoolsInitialized) return;
+    const elements = Object.values(htmlAudioPools).flat();
+    let idx = 0;
+    const warmNext = () => {
+        if (idx >= elements.length) return;
+        const a = elements[idx++];
+        try {
+            a.muted = true;
+            const p = a.play();
+            if (p && p.then) {
+                p.then(() => { a.pause(); a.currentTime = 0; a.muted = false; }).catch(() => { a.muted = false; });
+            } else {
+                a.pause(); a.currentTime = 0; a.muted = false;
+            }
+        } catch (e) { a.muted = false; }
+        if (idx < elements.length) setTimeout(warmNext, 25);
+    };
+    setTimeout(warmNext, 0);
+}
+
+// Pre-warm WAV blobs during idle time on legacy iOS (< 17) so first tap never stalls
+if (USE_LEGACY_IOS_HTML_AUDIO) {
+    const prewarmLegacyPools = () => ensureSoundPools();
+    if (typeof requestIdleCallback === 'function') {
+        requestIdleCallback(prewarmLegacyPools, { timeout: 1500 });
+    } else {
+        setTimeout(prewarmLegacyPools, 900);
     }
 }
 
@@ -1312,41 +1350,23 @@ function getCachedWebAudioBuffer(ctx, type) {
 }
 
 function unlockAllAudio() {
-    if (typeof navigator !== 'undefined' && navigator.audioSession) {
+    if (SUPPORTS_AUDIO_SESSION) {
         try { navigator.audioSession.type = 'playback'; } catch (e) {}
     }
     const ctx = getAudioContext();
-    if (ctx && !audioUnlocked) {
-        try {
-            const silentBuf = ctx.createBuffer(1, 1, SOUND_SAMPLE_RATE);
-            const src = ctx.createBufferSource();
-            src.buffer = silentBuf;
-            src.connect(ctx.destination);
-            src.start(0);
-            for (const type of Object.keys(SOUND_PATTERNS)) {
-                getCachedWebAudioBuffer(ctx, type);
-            }
-        } catch (e) {}
-    }
     if (!audioUnlocked) {
         audioUnlocked = true;
-        if (IS_IOS_DEVICE) {
-            ensureSoundPools();
+        if (ctx) {
+            try {
+                const silentBuf = ctx.createBuffer(1, 1, SOUND_SAMPLE_RATE);
+                const src = ctx.createBufferSource();
+                src.buffer = silentBuf;
+                src.connect(ctx.destination);
+                src.start(0);
+            } catch (e) {}
         }
-        if (soundPoolsInitialized) {
-            for (const pool of Object.values(htmlAudioPools)) {
-                for (const a of pool) {
-                    try {
-                        a.muted = true;
-                        const p = a.play();
-                        if (p && p.then) {
-                            p.then(() => { a.pause(); a.currentTime = 0; a.muted = false; }).catch(() => { a.muted = false; });
-                        } else {
-                            a.pause(); a.currentTime = 0; a.muted = false;
-                        }
-                    } catch (e) { a.muted = false; }
-                }
-            }
+        if (USE_LEGACY_IOS_HTML_AUDIO) {
+            unlockHtmlAudioPoolsAsync();
         }
     }
 }
@@ -1372,8 +1392,11 @@ function playHtmlWav(type) {
 
 function playWebAudioCached(type) {
     const ctx = getAudioContext();
-    if (!ctx || ctx.state !== 'running') return false;
+    if (!ctx) return false;
     try {
+        if (ctx.state === 'suspended') {
+            ctx.resume().catch(() => {});
+        }
         const audioBuf = getCachedWebAudioBuffer(ctx, type);
         const src = ctx.createBufferSource();
         src.buffer = audioBuf;
@@ -1395,7 +1418,7 @@ function playWebAudioCached(type) {
 function playUiSound(type = 'nav') {
     if (isSoundMuted) return;
     try {
-        if (IS_IOS_DEVICE) {
+        if (USE_LEGACY_IOS_HTML_AUDIO) {
             if (playHtmlWav(type)) return;
         }
         if (!playWebAudioCached(type)) {
@@ -2658,7 +2681,6 @@ function selectTable(n, options = {}) {
         return;
     }
     if (payingTables.has(Number(n))) return;
-    if (options.haptic !== false) triggerHaptic('nav');
     resetBillQrView();
     const previousTab = currentTab;
     const wasOpenForSameTable = (currentTab === n);
@@ -2697,6 +2719,7 @@ function selectTable(n, options = {}) {
         }
         refresh(new Set([previousTab].filter(Boolean)));
     }
+    if (options.haptic !== false) triggerHaptic('nav');
 }
 
 // ─── Debounce Firebase write 250ms với Atomic Transaction chặn cận dưới 0 ───

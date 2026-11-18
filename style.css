@@ -46,6 +46,8 @@ body {
 }
 button, .table-card, .btn-qty, .btn-action, .lang-btn, .cat-pill {
     touch-action: manipulation;
+    -webkit-user-select: none;
+    user-select: none;
 }
 .table-price, .item-price, #bill-total, .total-container, .flip-card, .qty-num, #w-temp, #w-wind-speed, .item-info small {
     font-variant-numeric: tabular-nums;
