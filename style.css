@@ -241,7 +241,7 @@ body.dark-mode .status-normal { background: rgba(230,81,0,0.18); color: #ffb74d;
     to   { transform: translate(-50%, -50%) rotate(360deg); }
 }
 
-/* TIÊU ĐỀ — BẢNG HIỆU PHƯƠNG ĐÔNG HIỆN ĐẠI (VIỀN CHỈ KÉP + KE 4 GÓC HÌNH HỌC & SONG ẤN) */
+/* TIÊU ĐỀ — BẢNG HIỆU VÀNG 24K ĐỒNG BỘ (VIỀN CHỈ KÉP + KE 4 GÓC & SONG ẤN) */
 .header-title {
     position: relative;
     display: table;
@@ -249,7 +249,7 @@ body.dark-mode .status-normal { background: rgba(230,81,0,0.18); color: #ffb74d;
     max-width: calc(100% - 42px);
     text-align: center;
     font-family: 'Noto Serif', 'Times New Roman', Georgia, serif;
-    color: #9e1b1b;
+    color: #8f5b00;
     text-transform: uppercase;
     font-size: 1.22em;
     font-weight: 800;
@@ -260,7 +260,7 @@ body.dark-mode .status-normal { background: rgba(230,81,0,0.18); color: #ffb74d;
     transition: color 0.4s ease;
 }
 
-/* Thân bảng hiệu giấy dó / sơn mài với viền chỉ kép vàng đồng */
+/* Thân bảng hiệu vàng 24K đồng bộ với huy hiệu & đồng hồ lật */
 .signboard-body {
     position: relative;
     z-index: 2;
@@ -269,14 +269,14 @@ body.dark-mode .status-normal { background: rgba(230,81,0,0.18); color: #ffb74d;
     justify-content: center;
     gap: 7.5px;
     padding: 8.5px 16px 8px 16px;
-    background: linear-gradient(180deg, #fdfaf3 0%, #f3e8d2 100%);
-    border: 1.5px solid #4d3626;
-    border-radius: 4px;
+    background: linear-gradient(180deg, #fff9db 0%, #f9e184 100%);
+    border: 1.5px solid #d49b00;
+    border-radius: 5px;
     box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.85),
-        inset 0 0 0 2.5px #f9f2e4,
-        inset 0 0 0 3.5px rgba(184, 134, 59, 0.56),
-        0 3px 8px rgba(28, 20, 14, 0.09);
+        inset 0 1px 0 rgba(255, 255, 255, 0.90),
+        inset 0 0 0 2.5px #fff5c0,
+        inset 0 0 0 3.5px rgba(180, 120, 0, 0.45),
+        0 3px 8px rgba(180, 120, 0, 0.20);
     transition: background 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease;
 }
 
@@ -284,8 +284,8 @@ body.dark-mode .status-normal { background: rgba(230,81,0,0.18); color: #ffb74d;
 .signboard-inner-frame {
     position: absolute;
     inset: 5px;
-    border: 0.5px solid rgba(158, 114, 48, 0.30);
-    border-radius: 1.5px;
+    border: 0.5px solid rgba(156, 98, 0, 0.28);
+    border-radius: 2px;
     pointer-events: none;
 }
 
@@ -294,7 +294,7 @@ body.dark-mode .status-normal { background: rgba(230,81,0,0.18); color: #ffb74d;
     position: absolute;
     width: 10px;
     height: 10px;
-    color: #9e7230;
+    color: #9c6200;
     pointer-events: none;
     z-index: 2;
     transition: color 0.4s ease;
@@ -314,7 +314,9 @@ body.dark-mode .status-normal { background: rgba(230,81,0,0.18); color: #ffb74d;
     position: relative;
     z-index: 1;
     white-space: nowrap;
-    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.9);
+    color: #8f5b00;
+    text-shadow: 0 1px 0 rgba(255, 252, 224, 0.92);
+    transition: color 0.4s ease, text-shadow 0.4s ease;
 }
 
 /* Song ấn (2 con dấu triện đỏ đối xứng hai bên: Dương văn trái & Âm văn phải) */
@@ -335,58 +337,59 @@ body.dark-mode .status-normal { background: rgba(230,81,0,0.18); color: #ffb74d;
     height: 12px;
     display: block;
 }
-/* Con dấu trái — Dương văn (chu văn: nét đỏ son trên nền giấy dó ngà) */
+/* Con dấu trái — Dương văn (nét đỏ son trên nền vàng kem sáng) */
 .signboard-seal.seal-yang {
-    background: linear-gradient(145deg, #fffdf9 0%, #f6ebd6 100%);
+    background: linear-gradient(145deg, #fffdf0 0%, #f9e48a 100%);
     color: #b91c1c;
     box-shadow:
-        0 1px 2px rgba(127, 29, 29, 0.16),
-        inset 0 0 0 0.5px rgba(185, 28, 28, 0.35);
+        0 1px 2px rgba(156, 98, 0, 0.22),
+        inset 0 0 0 0.5px rgba(185, 28, 28, 0.38);
 }
-/* Con dấu phải — Âm văn (bạch văn: nét kem sáng trên nền đỏ son trầm) */
+/* Con dấu phải — Âm văn (nét vàng kem trên nền đỏ son trầm) */
 .signboard-seal.seal-yin {
     background: linear-gradient(145deg, #c62828 0%, #991b1b 100%);
-    color: #fdf6e9;
+    color: #fff6d1;
     box-shadow:
         0 1px 2px rgba(127, 29, 29, 0.32),
-        inset 0 0 0 0.5px rgba(255, 235, 205, 0.35);
+        inset 0 0 0 0.5px rgba(255, 236, 166, 0.40);
 }
 
-/* Dark mode: Bảng sơn mài đen mun, ke góc vàng đồng & song ấn đỏ chu sa */
+/* Dark mode: Bảng sơn mài đen ánh kim, viền & chữ vàng 24K đồng bộ đồng hồ lật */
 body.dark-mode .header-title {
-    color: #f3d28b;
+    color: #ffd700;
 }
 body.dark-mode .signboard-body {
-    background: linear-gradient(180deg, #241d19 0%, #17120f 100%);
-    border-color: #9c7838;
+    background: linear-gradient(180deg, #2c200d 0%, #1a1206 100%);
+    border-color: rgba(255, 215, 0, 0.56);
     box-shadow:
-        inset 0 1px 0 rgba(255, 236, 194, 0.12),
-        inset 0 0 0 2.5px #1b1512,
-        inset 0 0 0 3.5px rgba(212, 175, 55, 0.45),
-        0 4px 12px rgba(0, 0, 0, 0.45);
+        inset 0 1px 0 rgba(255, 236, 153, 0.16),
+        inset 0 0 0 2.5px #1e1508,
+        inset 0 0 0 3.5px rgba(255, 215, 0, 0.38),
+        0 4px 12px rgba(0, 0, 0, 0.50);
 }
 body.dark-mode .signboard-inner-frame {
-    border-color: rgba(243, 210, 139, 0.22);
+    border-color: rgba(255, 215, 0, 0.22);
 }
 body.dark-mode .sb-corner {
-    color: #e2be72;
+    color: #ffd700;
 }
 body.dark-mode .signboard-text {
-    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.75);
+    color: #ffd700;
+    text-shadow: 0 0 10px rgba(255, 215, 0, 0.38);
 }
 body.dark-mode .signboard-seal.seal-yang {
-    background: linear-gradient(145deg, #2b211c 0%, #1e1713 100%);
+    background: linear-gradient(145deg, #2c200d 0%, #1a1206 100%);
     color: #f87171;
     box-shadow:
-        0 1px 3px rgba(0, 0, 0, 0.42),
-        inset 0 0 0 0.6px rgba(248, 113, 113, 0.45);
+        0 1px 3px rgba(0, 0, 0, 0.45),
+        inset 0 0 0 0.6px rgba(248, 113, 113, 0.48);
 }
 body.dark-mode .signboard-seal.seal-yin {
     background: linear-gradient(145deg, #d32f2f 0%, #8e1818 100%);
-    color: #fff3db;
+    color: #ffe885;
     box-shadow:
-        0 1px 3px rgba(0, 0, 0, 0.45),
-        inset 0 0 0 0.5px rgba(255, 224, 166, 0.45);
+        0 1px 3px rgba(0, 0, 0, 0.48),
+        inset 0 0 0 0.5px rgba(255, 224, 130, 0.45);
 }
 
 /* ICON THỜI TIẾT */
