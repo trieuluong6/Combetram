@@ -483,36 +483,13 @@ body.dark-mode .table-card {
 .half-width { grid-column: span 3; }
 .table-card strong, .table-card span { position: relative; z-index: 10; }
 
-/* Tên bàn + Huy hiệu thỏi vàng 24K (Shimmer ánh đèn rọi chỉ bật khi đã chốt đơn .is-locked) */
-@keyframes tableBullionSweep {
+/* Tên bàn + Huy hiệu thỏi vàng 24K (GPU-composited Shimmer chỉ bật khi đã chốt đơn .is-locked) */
+@keyframes tableBullionSweepGPU {
     0%, 15% {
-        background-position: 100% 0, 0 0, 0 0;
-        box-shadow:
-            0 2px 6px rgba(180, 120, 0, 0.30),
-            inset 0 1px 0 rgba(255, 255, 255, 0.90),
-            inset 0 -1px 1px rgba(160, 100, 0, 0.32);
-    }
-    48% {
-        box-shadow:
-            0 2px 10px rgba(255, 200, 0, 0.62),
-            0 0 6px rgba(255, 238, 136, 0.55),
-            inset 0 1px 0 rgba(255, 255, 255, 0.98),
-            inset 0 -1px 1px rgba(160, 100, 0, 0.25);
+        transform: translate3d(-66.6667%, 0, 0);
     }
     82%, 100% {
-        background-position: 0% 0, 0 0, 0 0;
-        box-shadow:
-            0 2px 6px rgba(180, 120, 0, 0.30),
-            inset 0 1px 0 rgba(255, 255, 255, 0.90),
-            inset 0 -1px 1px rgba(160, 100, 0, 0.32);
-    }
-}
-@keyframes tableIconLightSweep {
-    0%, 15% {
-        background-position: 100% 0, 0 0;
-    }
-    82%, 100% {
-        background-position: 0% 0, 0 0;
+        transform: translate3d(0%, 0, 0);
     }
 }
 .table-card strong {
@@ -528,14 +505,16 @@ body.dark-mode .table-card {
     margin-bottom: 3px;
     transition: color 0.25s ease;
 }
-.table-card strong::before {
-    content: "";
+.table-badge {
+    position: relative;
     display: block;
     width: 28px;
     height: 28px;
     box-sizing: border-box;
     border-radius: 8px;
     border: 1.5px solid transparent;
+    overflow: hidden;
+    contain: paint;
     background-color: #f5b800;
     background-image:
         linear-gradient(145deg, #fff6b3 0%, #ffd700 28%, #e6a100 56%, #f5be0b 82%, #fff08a 100%),
@@ -546,46 +525,53 @@ body.dark-mode .table-card {
     background-position: 0 0, 0 0;
     background-repeat: no-repeat;
     box-shadow:
-        0 2px 6px rgba(180, 120, 0, 0.30),
-        inset 0 1px 0 rgba(255, 255, 255, 0.90),
+        0 2px 7px rgba(195, 132, 0, 0.34),
+        inset 0 1px 0 rgba(255, 255, 255, 0.92),
         inset 0 -1px 1px rgba(160, 100, 0, 0.32);
     flex-shrink: 0;
     transition: box-shadow 0.25s ease;
 }
-.table-card.is-locked strong::before {
-    background-image:
-        linear-gradient(
-            120deg,
-            rgba(255, 255, 255, 0) 0%,
-            rgba(255, 255, 255, 0) 36%,
-            rgba(255, 253, 224, 0.65) 44%,
-            rgba(255, 255, 255, 0.98) 50%,
-            rgba(255, 253, 224, 0.65) 56%,
-            rgba(255, 255, 255, 0) 64%,
-            rgba(255, 255, 255, 0) 100%
-        ),
-        linear-gradient(145deg, #fff6b3 0%, #ffd700 28%, #e6a100 56%, #f5be0b 82%, #fff08a 100%),
-        linear-gradient(135deg, #fffde0 0%, #f5b800 34%, #9e6200 70%, #ffe666 100%);
-    background-origin: border-box, padding-box, border-box;
-    background-clip: border-box, padding-box, border-box;
-    background-size: 300% 100%, 100% 100%, 100% 100%;
-    background-position: 100% 0, 0 0, 0 0;
-    will-change: background-position;
-    animation: tableBullionSweep 2.1s ease-in-out infinite;
+.table-card.is-locked .table-badge {
+    box-shadow:
+        0 2px 9px rgba(235, 175, 0, 0.48),
+        0 0 5px rgba(255, 232, 120, 0.38),
+        inset 0 1px 0 rgba(255, 255, 255, 0.96),
+        inset 0 -1px 1px rgba(160, 100, 0, 0.28);
 }
-.table-card strong::after {
+/* Lớp tia đèn rọi 120deg chạy thuần GPU (transform: translate3d) phủ qua cả nền vàng lẫn icon */
+.table-card.is-locked .table-badge::before {
     content: "";
     position: absolute;
-    top: 6px;
-    left: 50%;
-    transform: translateX(-50%);
+    top: -1.5px;
+    left: -1.5px;
+    width: calc(300% + 9px);
+    height: calc(100% + 3px);
+    background-image: linear-gradient(
+        120deg,
+        rgba(255, 255, 255, 0) 0%,
+        rgba(255, 255, 255, 0) 36%,
+        rgba(255, 253, 224, 0.65) 44%,
+        rgba(255, 255, 255, 0.98) 50%,
+        rgba(255, 253, 224, 0.65) 56%,
+        rgba(255, 255, 255, 0) 64%,
+        rgba(255, 255, 255, 0) 100%
+    );
+    transform: translate3d(-66.6667%, 0, 0);
+    will-change: transform;
+    animation: tableBullionSweepGPU 2.1s ease-in-out infinite;
+    pointer-events: none;
+    z-index: 2;
+}
+/* Icon khắc chìm tĩnh (không repaint mỗi frame) */
+.table-badge::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    margin: auto;
     width: 16px;
     height: 16px;
     background-color: #6b3d00;
     background-image: linear-gradient(180deg, #4a2800 0%, #784200 48%, #381d00 100%);
-    background-size: 100% 100%;
-    background-position: 0 0;
-    background-repeat: no-repeat;
     filter: drop-shadow(0 1px 0 rgba(255, 252, 210, 0.85));
     -webkit-mask-repeat: no-repeat;
     mask-repeat: no-repeat;
@@ -597,82 +583,54 @@ body.dark-mode .table-card {
     -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 10.5L12 3l9 7.5'/%3E%3Cpath d='M5.5 9.5V19.5h13V9.5'/%3E%3Cpath d='M10 19.5v-5.5h4v5.5'/%3E%3C/svg%3E");
     mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 10.5L12 3l9 7.5'/%3E%3Cpath d='M5.5 9.5V19.5h13V9.5'/%3E%3Cpath d='M10 19.5v-5.5h4v5.5'/%3E%3C/svg%3E");
     pointer-events: none;
-    transition: filter 0.25s ease;
-}
-.table-card.is-locked strong::after {
-    background-image:
-        linear-gradient(
-            120deg,
-            rgba(255, 255, 255, 0) 0%,
-            rgba(255, 255, 255, 0) 36%,
-            rgba(255, 248, 196, 0.55) 44%,
-            rgba(255, 255, 255, 0.92) 50%,
-            rgba(255, 248, 196, 0.55) 56%,
-            rgba(255, 255, 255, 0) 64%,
-            rgba(255, 255, 255, 0) 100%
-        ),
-        linear-gradient(180deg, #4a2800 0%, #784200 48%, #381d00 100%);
-    background-size: 300% 100%, 100% 100%;
-    background-position: 100% 0, 0 0;
-    will-change: background-position;
-    animation: tableIconLightSweep 2.1s ease-in-out infinite;
+    z-index: 1;
 }
 /* Bàn trong hiên: Icon Mái hiên quán */
-.table-card.full-width strong::after {
+.table-card.full-width .table-badge::after {
     -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 9.5L5.5 4h13L21 9.5'/%3E%3Cpath d='M3 9.5c0 1.4 1.3 2.5 3 2.5s3-1.1 3-2.5c0 1.4 1.3 2.5 3 2.5s3-1.1 3-2.5c0 1.4 1.3 2.5 3 2.5s3-1.1 3-2.5'/%3E%3Cpath d='M5.5 12v8h13v-8'/%3E%3Cpath d='M9.5 20v-4.5h5V20'/%3E%3C/svg%3E");
     mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 9.5L5.5 4h13L21 9.5'/%3E%3Cpath d='M3 9.5c0 1.4 1.3 2.5 3 2.5s3-1.1 3-2.5c0 1.4 1.3 2.5 3 2.5s3-1.1 3-2.5c0 1.4 1.3 2.5 3 2.5s3-1.1 3-2.5'/%3E%3Cpath d='M5.5 12v8h13v-8'/%3E%3Cpath d='M9.5 20v-4.5h5V20'/%3E%3C/svg%3E");
 }
 /* Ngoài đường (Trái / Phải): Icon Dù che vỉa hè */
-.table-card.half-width strong::after {
+.table-card.half-width .table-badge::after {
     -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 4C6.8 4 3 7.6 3 11.5h18C21 7.6 17.2 4 12 4z'/%3E%3Cpath d='M12 4c-2.5 1.8-3.8 4.4-3.8 7.5'/%3E%3Cpath d='M12 4c2.5 1.8 3.8 4.4 3.8 7.5'/%3E%3Cpath d='M12 11.5V20'/%3E%3Cpath d='M8.5 20h7'/%3E%3C/svg%3E");
     mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 4C6.8 4 3 7.6 3 11.5h18C21 7.6 17.2 4 12 4z'/%3E%3Cpath d='M12 4c-2.5 1.8-3.8 4.4-3.8 7.5'/%3E%3Cpath d='M12 4c2.5 1.8 3.8 4.4 3.8 7.5'/%3E%3Cpath d='M12 11.5V20'/%3E%3Cpath d='M8.5 20h7'/%3E%3C/svg%3E");
 }
 body.dark-mode .table-card strong {
     color: #ffe885;
 }
-body.dark-mode .table-card strong::before {
+body.dark-mode .table-badge {
     background-color: #f5b800;
     background-image:
         linear-gradient(145deg, #fff5a8 0%, #ffd000 28%, #d99200 56%, #f5b800 82%, #ffea75 100%),
         linear-gradient(135deg, #fffde0 0%, #ffd700 34%, #9e6200 70%, #ffe666 100%);
     box-shadow:
-        0 2px 8px rgba(255, 215, 0, 0.34),
+        0 2px 8px rgba(255, 215, 0, 0.36),
         inset 0 1px 0 rgba(255, 255, 255, 0.92),
         inset 0 -1px 1px rgba(140, 85, 0, 0.35);
 }
-body.dark-mode .table-card.is-locked strong::before {
-    background-image:
-        linear-gradient(
-            120deg,
-            rgba(255, 255, 255, 0) 0%,
-            rgba(255, 255, 255, 0) 36%,
-            rgba(255, 253, 224, 0.70) 44%,
-            rgba(255, 255, 255, 1) 50%,
-            rgba(255, 253, 224, 0.70) 56%,
-            rgba(255, 255, 255, 0) 64%,
-            rgba(255, 255, 255, 0) 100%
-        ),
-        linear-gradient(145deg, #fff5a8 0%, #ffd000 28%, #d99200 56%, #f5b800 82%, #ffea75 100%),
-        linear-gradient(135deg, #fffde0 0%, #ffd700 34%, #9e6200 70%, #ffe666 100%);
+body.dark-mode .table-card.is-locked .table-badge {
+    box-shadow:
+        0 2px 10px rgba(255, 215, 0, 0.52),
+        0 0 6px rgba(255, 238, 136, 0.40),
+        inset 0 1px 0 rgba(255, 255, 255, 0.96),
+        inset 0 -1px 1px rgba(140, 85, 0, 0.30);
 }
-body.dark-mode .table-card strong::after {
+body.dark-mode .table-card.is-locked .table-badge::before {
+    background-image: linear-gradient(
+        120deg,
+        rgba(255, 255, 255, 0) 0%,
+        rgba(255, 255, 255, 0) 36%,
+        rgba(255, 253, 224, 0.70) 44%,
+        rgba(255, 255, 255, 1) 50%,
+        rgba(255, 253, 224, 0.70) 56%,
+        rgba(255, 255, 255, 0) 64%,
+        rgba(255, 255, 255, 0) 100%
+    );
+}
+body.dark-mode .table-badge::after {
     background-color: #5c3400;
     background-image: linear-gradient(180deg, #422300 0%, #6e3c00 48%, #2e1700 100%);
     filter: drop-shadow(0 1px 0 rgba(255, 250, 196, 0.78));
-}
-body.dark-mode .table-card.is-locked strong::after {
-    background-image:
-        linear-gradient(
-            120deg,
-            rgba(255, 255, 255, 0) 0%,
-            rgba(255, 255, 255, 0) 36%,
-            rgba(255, 248, 196, 0.60) 44%,
-            rgba(255, 255, 255, 0.95) 50%,
-            rgba(255, 248, 196, 0.60) 56%,
-            rgba(255, 255, 255, 0) 64%,
-            rgba(255, 255, 255, 0) 100%
-        ),
-        linear-gradient(180deg, #422300 0%, #6e3c00 48%, #2e1700 100%);
 }
 .table-card.has-guest strong {
     color: #064e3b;
@@ -1459,8 +1417,9 @@ body.dark-mode .app-toast-error {
 }
 
 /* SKELETON */
-.skeleton { background: linear-gradient(90deg, var(--bg-menu-row-border) 25%, var(--border-soft) 50%, var(--bg-menu-row-border) 75%); background-size: 200% 100%; animation: skeletonShine 1.4s ease-in-out infinite; border-radius: 4px; color: transparent !important; display: inline-block; }
-@keyframes skeletonShine { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+.skeleton { position: relative; overflow: hidden; background: var(--bg-menu-row-border); border-radius: 4px; color: transparent !important; display: inline-block; }
+.skeleton::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent 0%, var(--border-soft) 50%, transparent 100%); will-change: transform; animation: skeletonShineGPU 1.4s ease-in-out infinite; pointer-events: none; }
+@keyframes skeletonShineGPU { 0% { transform: translate3d(-100%, 0, 0); } 100% { transform: translate3d(100%, 0, 0); } }
 .table-price.skeleton { width: 42px; height: 0.95em; border-radius: 999px; }
 .table-time.skeleton { width: 50px; height: 0.7em; margin-top: 6px; }
 
@@ -1633,8 +1592,7 @@ body.tab-hidden .wi-blow,
 body.tab-hidden .wi-blow2,
 body.tab-hidden .wi-blow3,
 body.tab-hidden .flip-colon,
-body.tab-hidden .table-card.is-locked strong::before,
-body.tab-hidden .table-card.is-locked strong::after,
+body.tab-hidden .table-card.is-locked .table-badge::before,
 body.tab-hidden .table-card.has-viewer,
 body.tab-hidden .table-card.has-guest,
 body.tab-hidden .is-locked::before,
@@ -1652,8 +1610,7 @@ body.tab-hidden #scroll-to-checkout {
     .status-empty,
     .status-normal,
     .status-crowded::before,
-    .table-card.is-locked strong::before,
-    .table-card.is-locked strong::after,
+    .table-card.is-locked .table-badge::before,
     .table-card.is-locked::before {
         animation: none !important;
     }
