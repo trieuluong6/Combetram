@@ -1,156 +1,87 @@
 // dict.js
-const enItems = {
-  1: "Grilled pork chops and egg rice",
-  2: "Shredded chicken rice",
-  3: "Fried chicken thighs with fish sauce",
-  4: "Seafood fried rice",
-  5: "Extra crispy fried chicken thighs",
-  6: "Stir-fried beef with vegetables",
-  7: "Stir-fried beef noodles",
-  8: "Seafood fried noodles",
-  9: "Stir-fried beef vermicelli",
-  10: "Stir-fried seafood vermicelli",
-  11: "Chicken noodle soup",
-  12: "Beef noodle soup",
-  13: "Seafood noodle soup",
-  14: "Clam porridge",
-  15: "Beef porridge",
-  16: "Steamed clams",
-  17: "Stir-fried clams",
-  18: "Steamed shrimp",
-  19: "Fried shrimp with fish sauce",
-  20: "Steamed squid",
-  21: "Fried squid with fish sauce",
-  22: "Extra egg",
-  23: "Extra bitter melon soup",
-  24: "Spring roll (1 pc)",
-  25: "Extra grilled ribs",
-  26: "Extra fried chicken thigh with fish sauce",
-  27: "Extra shredded chicken",
-  28: "Extra crispy fried chicken thigh",
-  29: "Soft drinks of all kinds",
-  30: "Red Bull",
-  31: "Spring water",
-  32: "Mineral water",
-  33: "Coconut water",
-  34: "Fresh orange juice",
-  35: "Larue Beer",
-  36: "Huda Beer",
-  37: "Saigon Beer",
-  38: "Tiger Beer",
-  39: "Heineken Beer",
-  40: "Extra rice",
-  41: "Extra stir-fried beef with vegetables"
+// Kiến trúc tối ưu:
+// - 24 cờ dùng chung 20 gói ngôn ngữ (en/sg, de/at/ch, nl/be dùng chung gói gốc).
+// - Nguồn sự thật duy nhất (LANG_BUTTONS) cho cả lưới cờ trên giao diện lẫn dữ liệu bill.
+// - Tự động sinh tên bia (ID 35..39) theo quy tắc từng ngôn ngữ & tự kiểm tra thiếu/sai ID qua validateMenuDict(menu).
+
+const BEER_BRANDS = {
+  35: "Larue",
+  36: "Huda",
+  37: "Saigon",
+  38: "Tiger",
+  39: "Heineken"
 };
 
-const deItems = {
-  1: "Reis mit gegrillten Schweinerippchen und Ei",
-  2: "Reis mit gezupftem Hähnchenfleisch",
-  3: "Reis mit Hähnchenschenkel in Fischsauce",
-  4: "Gebratener Reis mit Meeresfrüchten",
-  5: "Reis mit knusprig frittiertem Hähnchenschenkel",
-  6: "Gebratenes Rindfleisch mit Gemüse und Reis",
-  7: "Gebratene Nudeln mit Rindfleisch",
-  8: "Gebratene Nudeln mit Meeresfrüchten",
-  9: "Gebratene Glasnudeln mit Rindfleisch",
-  10: "Gebratene Glasnudeln mit Meeresfrüchten",
-  11: "Glasnudelsuppe mit Hähnchen",
-  12: "Glasnudelsuppe mit Rindfleisch",
-  13: "Glasnudelsuppe mit Meeresfrüchten",
-  14: "Muschel-Reissuppe (Congee)",
-  15: "Rindfleisch-Reissuppe (Congee)",
-  16: "Gedämpfte Muscheln",
-  17: "Gebratene Muscheln",
-  18: "Gedämpfte Garnelen",
-  19: "Gebratene Garnelen in Fischsauce",
-  20: "Gedämpfter Tintenfisch",
-  21: "Gebratener Tintenfisch in Fischsauce",
-  22: "Extra Ei",
-  23: "Extra Bittermelonensuppe",
-  24: "Frühlingsrolle (1 Stk)",
-  25: "Extra gegrilltes Rippchen",
-  26: "Extra Hähnchenschenkel in Fischsauce",
-  27: "Extra gezupftes Hähnchen",
-  28: "Extra knuspriger Hähnchenschenkel",
-  29: "Alkoholfreie Getränke aller Art",
-  30: "Red Bull",
-  31: "Stilles Wasser",
-  32: "Mineralwasser",
-  33: "Frisches Kokoswasser",
-  34: "Frischer Orangensaft",
-  35: "Larue Bier",
-  36: "Huda Bier",
-  37: "Saigon Bier",
-  38: "Tiger Bier",
-  39: "Heineken Bier",
-  40: "Extra Reis",
-  41: "Extra gebratenes Rindfleisch mit Gemüse"
-};
+function buildBeers(format) {
+  const out = {};
+  for (const [id, brand] of Object.entries(BEER_BRANDS)) {
+    out[id] = format.replace("{brand}", brand);
+  }
+  return out;
+}
 
-const nlItems = {
-  1: "Rijst met gegrilde varkenskrabbetjes en ei",
-  2: "Rijst met geplukte kip",
-  3: "Rijst met kippenbout in vissaus",
-  4: "Gebakken rijst met zeevruchten",
-  5: "Rijst met superkrokante kippenbout",
-  6: "Roergebakken rundvlees met groenten en rijst",
-  7: "Gebakken mie met rundvlees",
-  8: "Gebakken mie met zeevruchten",
-  9: "Gebakken glasnoedels met rundvlees",
-  10: "Gebakken glasnoedels met zeevruchten",
-  11: "Glasnoedelsoep met kip",
-  12: "Glasnoedelsoep met rundvlees",
-  13: "Glasnoedelsoep met zeevruchten",
-  14: "Rijstcongee met kokkels",
-  15: "Rijstcongee met rundvlees",
-  16: "Gestoomde kokkels",
-  17: "Roergebakken kokkels",
-  18: "Gestoomde garnalen",
-  19: "Gebakken garnalen in vissaus",
-  20: "Gestoomde inktvis",
-  21: "Gebakken inktvis in vissaus",
-  22: "Extra ei",
-  23: "Extra bitterkomkommersoep",
-  24: "Loempia (1 stuk)",
-  25: "Extra gegrilde sparerib",
-  26: "Extra kippenbout in vissaus",
-  27: "Extra geplukte kip",
-  28: "Extra krokante kippenbout",
-  29: "Frisdranken naar keuze",
-  30: "Red Bull",
-  31: "Stil water",
-  32: "Bruiswater / Mineraalwater",
-  33: "Vers kokoswater",
-  34: "Vers geperst sinaasappelsap",
-  35: "Larue bier",
-  36: "Huda bier",
-  37: "Saigon bier",
-  38: "Tiger bier",
-  39: "Heineken bier",
-  40: "Extra rijst",
-  41: "Extra roergebakken rundvlees met groenten"
-};
+const LANG_PACKS = {
+  vi: {
+    total: "TỔNG",
+    thanks: "Cảm ơn quý khách & hẹn gặp lại!",
+    items: {} // Tiếng Việt lấy trực tiếp tên gốc từ menu.js
+  },
 
-export const dict = {
-  vi: { flag: "🇻🇳", total: "TỔNG", thanks: "Cảm ơn quý khách & hẹn gặp lại!", items: {} },
-
+  // Dùng chung cho: 🇺🇸 EN, 🇸🇬 SG
   en: {
-    flag: "🇺🇸",
     total: "TOTAL",
     thanks: "Thank you & see you again!",
-    items: enItems
+    beerFormat: "{brand} Beer",
+    items: {
+      1: "Grilled pork chops and egg rice",
+      2: "Shredded chicken rice",
+      3: "Fried chicken thigh with fish sauce rice",
+      4: "Seafood fried rice",
+      5: "Crispy fried chicken thigh rice",
+      6: "Stir-fried beef with vegetables and rice",
+      7: "Stir-fried beef noodles",
+      8: "Seafood fried noodles",
+      9: "Stir-fried beef glass noodles",
+      10: "Stir-fried seafood glass noodles",
+      11: "Chicken glass noodle soup",
+      12: "Beef glass noodle soup",
+      13: "Seafood glass noodle soup",
+      14: "Clam rice porridge",
+      15: "Beef rice porridge",
+      16: "Steamed clams",
+      17: "Stir-fried clams",
+      18: "Steamed shrimp",
+      19: "Fried shrimp with fish sauce",
+      20: "Steamed squid",
+      21: "Fried squid with fish sauce",
+      22: "Extra egg",
+      23: "Extra bitter melon soup",
+      24: "Fried spring roll (1 pc)",
+      25: "Extra grilled pork chop",
+      26: "Extra fried chicken thigh with fish sauce",
+      27: "Extra shredded chicken",
+      28: "Extra crispy fried chicken thigh",
+      29: "Assorted soft drinks",
+      30: "Red Bull",
+      31: "Bottled water",
+      32: "Still mineral water",
+      33: "Fresh coconut water",
+      34: "Fresh orange juice",
+      40: "Extra rice",
+      41: "Extra stir-fried beef with vegetables"
+    }
   },
 
   fr: {
-    flag: "🇫🇷",
     total: "TOTAL",
     thanks: "Merci et à très bientôt !",
+    beerFormat: "Bière {brand}",
     items: {
       1: "Riz aux côtes de porc grillées et œuf",
-      2: "Riz au poulet émincé",
+      2: "Riz au poulet effiloché",
       3: "Riz aux cuisses de poulet au nuoc-mâm",
       4: "Riz sauté aux fruits de mer",
-      5: "Riz à la cuisse de poulet extra croustillante",
+      5: "Riz à la cuisse de poulet croustillante",
       6: "Bœuf sauté aux légumes avec riz",
       7: "Nouilles sautées au bœuf",
       8: "Nouilles sautées aux fruits de mer",
@@ -169,40 +100,34 @@ export const dict = {
       21: "Calmar frit au nuoc-mâm",
       22: "Œuf supplémentaire",
       23: "Soupe de margose supplémentaire",
-      24: "Pâté impérial (1 pc)",
-      25: "Côte de porc supplémentaire",
+      24: "Nem frit (1 pc)",
+      25: "Côte de porc grillée supplémentaire",
       26: "Cuisse de poulet au nuoc-mâm supplémentaire",
-      27: "Poulet émincé supplémentaire",
+      27: "Poulet effiloché supplémentaire",
       28: "Cuisse de poulet croustillante supplémentaire",
       29: "Sodas de toutes sortes",
       30: "Red Bull",
       31: "Eau de source",
-      32: "Eau minérale",
+      32: "Eau minérale plate",
       33: "Eau de coco fraîche",
       34: "Jus d'orange frais",
-      35: "Bière Larue",
-      36: "Bière Huda",
-      37: "Bière Saigon",
-      38: "Bière Tiger",
-      39: "Bière Heineken",
       40: "Riz supplémentaire",
       41: "Bœuf sauté aux légumes supplémentaire"
     }
   },
 
   kr: {
-    flag: "🇰🇷",
     total: "합계",
     thanks: "감사합니다. 또 오세요!",
     items: {
-      1: "돼지갈비 구이와 계란후라이 덮밥",
-      2: "닭고기 찢음 덮밥",
+      1: "돼지갈비 구이와 달걀프라이 덮밥",
+      2: "찢은 닭고기 덮밥",
       3: "피시 소스 닭다리 튀김 덮밥",
       4: "해산물 볶음밥",
       5: "바삭한 닭다리 튀김 덮밥",
       6: "소고기 야채 볶음 덮밥",
-      7: "소고기 볶음라면",
-      8: "해산물 볶음라면",
+      7: "소고기 볶음면",
+      8: "해산물 볶음면",
       9: "소고기 볶음당면",
       10: "해산물 볶음당면",
       11: "닭고기 당면국수",
@@ -216,17 +141,17 @@ export const dict = {
       19: "피시 소스 새우 튀김",
       20: "오징어 찜",
       21: "피시 소스 오징어 튀김",
-      22: "계란 추가",
+      22: "달걀 추가",
       23: "여주 국 추가",
-      24: "짜조 (1개)",
+      24: "튀김 스프링롤 (1개)",
       25: "돼지갈비 구이 추가",
       26: "피시 소스 닭다리 추가",
-      27: "닭고기 찢음 추가",
+      27: "찢은 닭고기 추가",
       28: "바삭한 닭다리 추가",
       29: "탄산음료",
       30: "레드불",
       31: "생수",
-      32: "미네랄 워터",
+      32: "무탄산 미네랄 워터",
       33: "코코넛 워터",
       34: "생오렌지 주스",
       35: "라루 맥주",
@@ -240,12 +165,11 @@ export const dict = {
   },
 
   jp: {
-    flag: "🇯🇵",
     total: "合計",
     thanks: "ありがとうございました。またお越しください！",
     items: {
       1: "豚リブ焼きと目玉焼きご飯",
-      2: "ほぐし鶏肉ご飯",
+      2: "ほぐし鶏ご飯",
       3: "鶏もも肉のヌクマム揚げご飯",
       4: "海鮮チャーハン",
       5: "カリカリ鶏もも肉揚げご飯",
@@ -265,17 +189,17 @@ export const dict = {
       19: "エビのヌクマム揚げ",
       20: "イカ蒸し",
       21: "イカのヌクマム揚げ",
-      22: "追加トッピング卵",
+      22: "追加目玉焼き",
       23: "追加ゴーヤスープ",
       24: "揚げ春巻き (1個)",
       25: "追加豚リブ焼き",
       26: "追加鶏もも肉ヌクマム揚げ",
-      27: "追加ほぐし鶏肉",
+      27: "追加ほぐし鶏",
       28: "追加カリカリ鶏もも肉揚げ",
       29: "ソフトドリンク各種",
       30: "レッドブル",
       31: "天然水",
-      32: "ミネラルウォーター",
+      32: "無炭酸ミネラルウォーター",
       33: "新鮮なココナッツジュース",
       34: "生オレンジジュース",
       35: "ラルービール",
@@ -289,9 +213,9 @@ export const dict = {
   },
 
   th: {
-    flag: "🇹🇭",
     total: "รวม",
     thanks: "ขอบคุณค่ะ แล้วพบกันใหม่นะคะ!",
+    beerFormat: "เบียร์ {brand}",
     items: {
       1: "ข้าวหน้าซี่โครงหมูย่างและไข่ดาว",
       2: "ข้าวหน้าไก่ฉีก",
@@ -324,29 +248,24 @@ export const dict = {
       29: "น้ำอัดลมต่างๆ",
       30: "กระทิงแดง",
       31: "น้ำเปล่า",
-      32: "น้ำแร่",
+      32: "น้ำแร่ไม่อัดแก๊ส",
       33: "น้ำมะพร้าวสด",
       34: "น้ำส้มคั้นสด",
-      35: "เบียร์ Larue",
-      36: "เบียร์ Huda",
-      37: "เบียร์ Saigon",
-      38: "เบียร์ Tiger",
-      39: "เบียร์ Heineken",
       40: "เพิ่มข้าว",
       41: "เพิ่มเนื้อผัดผัก"
     }
   },
 
   it: {
-    flag: "🇮🇹",
     total: "TOTALE",
     thanks: "Grazie e arrivederci a presto!",
+    beerFormat: "Birra {brand}",
     items: {
       1: "Riso con costolette di maiale alla griglia e uovo",
       2: "Riso con pollo sfilacciato",
       3: "Riso con cosce di pollo alla salsa di pesce",
       4: "Riso fritto ai frutti di mare",
-      5: "Riso con coscia di pollo extra croccante",
+      5: "Riso con coscia di pollo croccante",
       6: "Manzo saltato con verdure e riso",
       7: "Spaghetti saltati con manzo",
       8: "Spaghetti saltati ai frutti di mare",
@@ -365,7 +284,7 @@ export const dict = {
       21: "Calamari fritti alla salsa di pesce",
       22: "Uovo extra",
       23: "Zuppa di melone amaro extra",
-      24: "Involtino primavera (1 pz)",
+      24: "Involtino primavera fritto (1 pz)",
       25: "Costoletta alla griglia extra",
       26: "Coscia di pollo alla salsa di pesce extra",
       27: "Pollo sfilacciato extra",
@@ -373,29 +292,24 @@ export const dict = {
       29: "Bevande analcoliche varie",
       30: "Red Bull",
       31: "Acqua naturale",
-      32: "Acqua minerale",
+      32: "Acqua minerale naturale",
       33: "Acqua di cocco fresca",
       34: "Spremuta d'arancia fresca",
-      35: "Birra Larue",
-      36: "Birra Huda",
-      37: "Birra Saigon",
-      38: "Birra Tiger",
-      39: "Birra Heineken",
       40: "Riso extra",
       41: "Manzo saltato con verdure extra"
     }
   },
 
   pt: {
-    flag: "🇵🇹",
     total: "TOTAL",
     thanks: "Obrigado e volte sempre!",
+    beerFormat: "Cerveja {brand}",
     items: {
       1: "Arroz com costeletas de porco grelhadas e ovo",
       2: "Arroz com frango desfiado",
       3: "Arroz com coxas de frango com molho de peixe",
       4: "Arroz frito de frutos do mar",
-      5: "Arroz com coxa de frango super crocante",
+      5: "Arroz com coxa de frango crocante",
       6: "Carne de vaca refogada com legumes e arroz",
       7: "Massa salteada com carne de vaca",
       8: "Massa salteada com frutos do mar",
@@ -414,37 +328,32 @@ export const dict = {
       21: "Lula frita com molho de peixe",
       22: "Ovo extra",
       23: "Sopa de melão amargo extra",
-      24: "Rolinho primavera (1 un)",
+      24: "Rolinho primavera frito (1 un.)",
       25: "Costeleta grelhada extra",
       26: "Coxa de frango com molho de peixe extra",
       27: "Frango desfiado extra",
       28: "Coxa de frango crocante extra",
       29: "Refrigerantes variados",
       30: "Red Bull",
-      31: "Água mineral",
-      32: "Água com gás",
+      31: "Água mineral natural",
+      32: "Água mineral sem gás",
       33: "Água de coco natural",
       34: "Sumo de laranja natural",
-      35: "Cerveja Larue",
-      36: "Cerveja Huda",
-      37: "Cerveja Saigon",
-      38: "Cerveja Tiger",
-      39: "Cerveja Heineken",
       40: "Arroz extra",
       41: "Carne de vaca refogada com legumes extra"
     }
   },
 
   es: {
-    flag: "🇪🇸",
     total: "TOTAL",
     thanks: "¡Gracias y vuelva pronto!",
+    beerFormat: "Cerveza {brand}",
     items: {
       1: "Arroz con chuletas de cerdo a la parrilla y huevo",
       2: "Arroz con pollo desmenuzado",
       3: "Arroz con muslos de pollo con salsa de pescado",
       4: "Arroz frito con mariscos",
-      5: "Arroz con muslo de pollo extra crujiente",
+      5: "Arroz con muslo de pollo crujiente",
       6: "Ternera salteada con verduras y arroz",
       7: "Fideos salteados con ternera",
       8: "Fideos salteados con mariscos",
@@ -454,7 +363,7 @@ export const dict = {
       12: "Sopa de fideos de celofán con ternera",
       13: "Sopa de fideos de celofán con mariscos",
       14: "Gachas de arroz con almejas",
-      15: "Papilla de ternera",
+      15: "Gachas de arroz con ternera",
       16: "Almejas al vapor",
       17: "Almejas salteadas",
       18: "Camarones al vapor",
@@ -463,29 +372,24 @@ export const dict = {
       21: "Calamares fritos con salsa de pescado",
       22: "Huevo extra",
       23: "Sopa de melón amargo extra",
-      24: "Rollito de primavera (1 ud)",
+      24: "Rollito de primavera frito (1 ud.)",
       25: "Chuleta a la parrilla extra",
       26: "Muslo de pollo a la salsa de pescado extra",
       27: "Pollo desmenuzado extra",
       28: "Muslo de pollo crujiente extra",
       29: "Refrescos de todo tipo",
       30: "Red Bull",
-      31: "Agua de manantial",
-      32: "Agua mineral",
+      31: "Agua embotellada",
+      32: "Agua mineral sin gas",
       33: "Agua de coco fresca",
       34: "Zumo de naranja fresco",
-      35: "Cerveza Larue",
-      36: "Cerveza Huda",
-      37: "Cerveza Saigon",
-      38: "Cerveza Tiger",
-      39: "Cerveza Heineken",
       40: "Arroz extra",
       41: "Ternera salteada con verduras extra"
     }
   },
 
+  // Trung Giản thể: 🇨🇳 CN
   cn: {
-    flag: "🇨🇳",
     total: "总计",
     thanks: "谢谢光临，欢迎再来！",
     items: {
@@ -519,8 +423,8 @@ export const dict = {
       28: "加脆皮鸡腿",
       29: "各类软饮料",
       30: "红牛",
-      31: "矿泉水",
-      32: "苏打水",
+      31: "饮用水",
+      32: "无气矿泉水",
       33: "新鲜椰子汁",
       34: "鲜榨橙汁",
       35: "拉鲁啤酒",
@@ -533,20 +437,58 @@ export const dict = {
     }
   },
 
+  // Dùng chung cho: 🇩🇪 DE, 🇦🇹 AT, 🇨🇭 CH
   de: {
-    flag: "🇩🇪",
     total: "GESAMT",
     thanks: "Vielen Dank & auf Wiedersehen!",
-    items: deItems
+    beerFormat: "{brand} Bier",
+    items: {
+      1: "Reis mit gegrillten Schweinerippchen und Ei",
+      2: "Reis mit gezupftem Hähnchenfleisch",
+      3: "Reis mit Hähnchenschenkel in Fischsauce",
+      4: "Gebratener Reis mit Meeresfrüchten",
+      5: "Reis mit knusprig frittiertem Hähnchenschenkel",
+      6: "Gebratenes Rindfleisch mit Gemüse und Reis",
+      7: "Gebratene Nudeln mit Rindfleisch",
+      8: "Gebratene Nudeln mit Meeresfrüchten",
+      9: "Gebratene Glasnudeln mit Rindfleisch",
+      10: "Gebratene Glasnudeln mit Meeresfrüchten",
+      11: "Glasnudelsuppe mit Hähnchen",
+      12: "Glasnudelsuppe mit Rindfleisch",
+      13: "Glasnudelsuppe mit Meeresfrüchten",
+      14: "Muschel-Reissuppe",
+      15: "Rindfleisch-Reissuppe",
+      16: "Gedämpfte Muscheln",
+      17: "Gebratene Muscheln",
+      18: "Gedämpfte Garnelen",
+      19: "Gebratene Garnelen in Fischsauce",
+      20: "Gedämpfter Tintenfisch",
+      21: "Gebratener Tintenfisch in Fischsauce",
+      22: "Extra Ei",
+      23: "Extra Bittermelonensuppe",
+      24: "Frittierte Frühlingsrolle (1 Stk.)",
+      25: "Extra gegrilltes Rippchen",
+      26: "Extra Hähnchenschenkel in Fischsauce",
+      27: "Extra gezupftes Hähnchen",
+      28: "Extra knuspriger Hähnchenschenkel",
+      29: "Alkoholfreie Getränke aller Art",
+      30: "Red Bull",
+      31: "Stilles Wasser",
+      32: "Stilles Mineralwasser",
+      33: "Frisches Kokoswasser",
+      34: "Frischer Orangensaft",
+      40: "Extra Reis",
+      41: "Extra gebratenes Rindfleisch mit Gemüse"
+    }
   },
 
   ru: {
-    flag: "🇷🇺",
     total: "ИТОГО",
     thanks: "Спасибо за визит! Ждём вас снова!",
+    beerFormat: "Пиво {brand}",
     items: {
-      1: "Рис с свиными ребрышками гриль и яйцом",
-      2: "Рис с измельченной курицей",
+      1: "Рис со свиными ребрышками гриль и яйцом",
+      2: "Рис с рваной курицей",
       3: "Рис с куриным бедрышком в рыбном соусе",
       4: "Жареный рис с морепродуктами",
       5: "Рис с хрустящим куриным бедрышком",
@@ -568,64 +510,32 @@ export const dict = {
       21: "Жареные кальмары в рыбном соусе",
       22: "Дополнительное яйцо",
       23: "Дополнительный суп из горькой дыни",
-      24: "Спринг-ролл (1 шт.)",
+      24: "Жареный спринг-ролл (1 шт.)",
       25: "Дополнительное ребрышко гриль",
       26: "Дополнительное куриное бедро в рыбном соусе",
-      27: "Дополнительная измельченная курица",
+      27: "Дополнительная рваная курица",
       28: "Дополнительное хрустящее куриное бедро",
       29: "Газированные напитки в ассортименте",
       30: "Ред Булл",
-      31: "Родниковая вода",
-      32: "Минеральная вода",
+      31: "Питьевая вода",
+      32: "Минеральная вода без газа",
       33: "Свежий кокосовый сок",
       34: "Свежевыжатый апельсиновый сок",
-      35: "Пиво Larue",
-      36: "Пиво Huda",
-      37: "Пиво Saigon",
-      38: "Пиво Tiger",
-      39: "Пиво Heineken",
       40: "Дополнительный рис",
       41: "Дополнительная говядина с овощами"
     }
   },
 
-  be: {
-    flag: "🇧🇪",
-    total: "TOTAAL",
-    thanks: "Dank u en tot ziens!",
-    items: {
-      ...nlItems,
-      1: "Rijst met gegrilde varkensribben en ei",
-      2: "Rijst met gepluisde kip",
-      5: "Rijst met extra krokante kippenbout",
-      6: "Gebakken rundvlees met groenten en rijst",
-      7: "Gebakken bami met rundvlees",
-      8: "Gebakken bami met zeevruchten",
-      14: "Rijstpap met kokkels",
-      15: "Rijstpap met rundvlees",
-      17: "Gebakken kokkels",
-      23: "Extra balsempeersoep",
-      24: "Loempia (1 stk)",
-      25: "Extra gegrilde rib",
-      27: "Extra gepluisde kip",
-      29: "Frisdranken allerhande",
-      31: "Bronwater",
-      32: "Spawater / Mineraalwater",
-      34: "Vers sinaasappelsap",
-      41: "Extra gebakken rundvlees met groenten"
-    }
-  },
-
   hu: {
-    flag: "🇭🇺",
     total: "ÖSSZESEN",
     thanks: "Köszönjük, várjuk vissza!",
+    beerFormat: "{brand} sör",
     items: {
       1: "Rizs grillezett sertésbordával és tojással",
       2: "Rizs tépett csirkehússal",
       3: "Rizs halszószban sült csirkecombbal",
       4: "Tenger gyümölcsei sült rizs",
-      5: "Rizs extra ropogós sült csirkecombbal",
+      5: "Rizs ropogósra sült csirkecombbal",
       6: "Marhahús zöldségekkel pirítva, rizzsel",
       7: "Pirított tészta marhahússal",
       8: "Pirított tészta tenger gyümölcseivel",
@@ -634,8 +544,8 @@ export const dict = {
       11: "Üvegtészta leves csirkehússal",
       12: "Üvegtészta leves marhahússal",
       13: "Üvegtészta leves tenger gyümölcseivel",
-      14: "Kagylós rizs kása",
-      15: "Marhahúsos rizs kása",
+      14: "Kagylós rizskása",
+      15: "Marhahúsos rizskása",
       16: "Gőzölt kagyló",
       17: "Pirított kagyló",
       18: "Gőzölt rák",
@@ -644,7 +554,7 @@ export const dict = {
       21: "Halszószban sült tintahal",
       22: "Plusz tojás",
       23: "Plusz keserűdinnye leves",
-      24: "Tavaszi tekercs (1 db)",
+      24: "Sült tavaszi tekercs (1 db)",
       25: "Plusz grillezett borda",
       26: "Plusz halszószos csirkecomb",
       27: "Plusz tépett csirke",
@@ -652,55 +562,16 @@ export const dict = {
       29: "Mindenféle üdítőital",
       30: "Red Bull",
       31: "Forrásvíz",
-      32: "Ásványvíz",
+      32: "Szénsavmentes ásványvíz",
       33: "Friss kókuszvíz",
       34: "Friss narancslé",
-      35: "Larue sör",
-      36: "Huda sör",
-      37: "Saigon sör",
-      38: "Tiger sör",
-      39: "Heineken sör",
       40: "Plusz rizs",
       41: "Plusz marhahús zöldségekkel"
     }
   },
 
-  at: {
-    flag: "🇦🇹",
-    total: "GESAMT",
-    thanks: "Vielen Dank & bis zum nächsten Mal!",
-    items: {
-      ...deItems,
-      1: "Reis mit gegrillten Koteletts und Ei",
-      2: "Reis mit zerfetztem Huhn",
-      3: "Reis mit Hühnerkeule in Fischsauce",
-      5: "Reis mit knuspriger Hühnerkeule",
-      6: "Rindfleisch mit Gemüse und Reis",
-      7: "Gebratene Nudeln mit Rind",
-      9: "Gebratene Glasnudeln mit Rind",
-      11: "Glasnudelsuppe mit Hühnerfleisch",
-      14: "Reiscongee mit Muscheln",
-      15: "Reiscongee mit Rindfleisch",
-      19: "Garnelen in Fischsauce gebraten",
-      21: "Tintenfisch in Fischsauce gebraten",
-      22: "Zusätzliches Ei",
-      23: "Zusätzliche Bittermelonensuppe",
-      24: "Frühlingsrolle (1 Stück)",
-      25: "Zusätzliches gegrilltes Kotelett",
-      26: "Zusätzliche Hühnerkeule in Fischsauce",
-      27: "Zusätzliches zerfetztes Huhn",
-      28: "Zusätzliche knusprige Hühnerkeule",
-      29: "Erfrischungsgetränke aller Art",
-      31: "Mineralwasser ohne Kohlensäure",
-      32: "Mildes Mineralwasser",
-      33: "Frische Kokosnuss",
-      40: "Zusätzlicher Reis",
-      41: "Zusätzliches Rindfleisch mit Gemüse"
-    }
-  },
-
+  // Trung Phồn thể: 🇹🇼 TW
   tw: {
-    flag: "🇹🇼",
     total: "總計",
     thanks: "謝謝光臨，歡迎再來！",
     items: {
@@ -734,8 +605,8 @@ export const dict = {
       28: "加脆皮雞腿",
       29: "各式軟飲料",
       30: "紅牛",
-      31: "礦泉水",
-      32: "氣泡水",
+      31: "飲用水",
+      32: "無氣礦泉水",
       33: "新鮮椰子汁",
       34: "鮮榨橙汁",
       35: "拉魯啤酒",
@@ -748,45 +619,16 @@ export const dict = {
     }
   },
 
-  sg: {
-    flag: "🇸🇬",
-    total: "TOTAL",
-    thanks: "Thank you & see you again!",
-    items: {
-      ...enItems,
-      1: "Grilled pork chop with egg rice",
-      3: "Fried chicken thigh with fish sauce rice",
-      5: "Crispy fried chicken thigh rice",
-      6: "Stir-fried beef with vegetables rice",
-      9: "Stir-fried beef glass noodles",
-      10: "Stir-fried seafood glass noodles",
-      11: "Chicken glass noodle soup",
-      12: "Beef glass noodle soup",
-      13: "Seafood glass noodle soup",
-      18: "Steamed prawns",
-      19: "Fried prawns with fish sauce",
-      23: "Extra bitter gourd soup",
-      24: "Fried spring roll (1 pc)",
-      25: "Extra grilled pork chop",
-      26: "Extra fish sauce chicken thigh",
-      28: "Extra crispy chicken thigh",
-      29: "Assorted soft drinks",
-      31: "Bottled water",
-      33: "Fresh coconut water",
-      34: "Fresh orange juice"
-    }
-  },
-
   id: {
-    flag: "🇮🇩",
     total: "TOTAL",
     thanks: "Terima kasih & sampai jumpa lagi!",
+    beerFormat: "Bir {brand}",
     items: {
       1: "Nasi iga babi bakar dengan telur",
       2: "Nasi ayam suwir",
       3: "Nasi paha ayam goreng saus ikan",
       4: "Nasi goreng seafood",
-      5: "Nasi paha ayam goreng ekstra renyah",
+      5: "Nasi paha ayam goreng renyah",
       6: "Tumis daging sapi dengan sayuran dan nasi",
       7: "Mie goreng daging sapi",
       8: "Mie goreng seafood",
@@ -804,32 +646,27 @@ export const dict = {
       20: "Cumi-cumi kukus",
       21: "Cumi-cumi goreng saus ikan",
       22: "Tambahan telur",
-      23: "Tambahan sup peria / pare",
+      23: "Tambahan sup pare",
       24: "Lumpia goreng (1 biji)",
       25: "Tambahan iga bakar",
       26: "Tambahan paha ayam saus ikan",
       27: "Tambahan ayam suwir",
       28: "Tambahan paha ayam renyah",
       29: "Aneka minuman ringan",
-      30: "Kratingdaeng (Red Bull)",
+      30: "Red Bull",
       31: "Air mineral",
-      32: "Air soda tawar",
+      32: "Air mineral tawar",
       33: "Air kelapa muda segar",
       34: "Jus jeruk segar",
-      35: "Bir Larue",
-      36: "Bir Huda",
-      37: "Bir Saigon",
-      38: "Bir Tiger",
-      39: "Bir Heineken",
       40: "Tambahan nasi",
       41: "Tambahan tumis daging sapi dengan sayuran"
     }
   },
 
   my: {
-    flag: "🇲🇾",
     total: "TOTAL",
     thanks: "Terima kasih & sila datang lagi!",
+    beerFormat: "Bir {brand}",
     items: {
       1: "Nasi rusuk babi bakar dengan telur",
       2: "Nasi ayam siat",
@@ -844,7 +681,7 @@ export const dict = {
       11: "Sup suhun ayam",
       12: "Sup suhun daging lembu",
       13: "Sup suhun makanan laut",
-      14: "Bubur remis / kupang",
+      14: "Bubur remis",
       15: "Bubur daging lembu",
       16: "Remis dikukus",
       17: "Remis digoreng",
@@ -859,81 +696,76 @@ export const dict = {
       26: "Paha ayam sos ikan tambahan",
       27: "Ayam siat tambahan",
       28: "Paha ayam rangup tambahan",
-      29: "Pelbagai jenis air gas",
+      29: "Pelbagai jenis minuman ringan",
       30: "Red Bull",
       31: "Air mineral",
-      32: "Air soda",
+      32: "Air mineral semula jadi",
       33: "Air kelapa segar",
       34: "Jus oren segar",
-      35: "Bir Larue",
-      36: "Bir Huda",
-      37: "Bir Saigon",
-      38: "Bir Tiger",
-      39: "Bir Heineken",
       40: "Nasi tambahan",
       41: "Tambahan daging lembu goreng kilas dengan sayur"
     }
   },
 
+  // Thuần tiếng Hindi (Devanagari, không kèm tiếng Anh trong ngoặc)
   in: {
-    flag: "🇮🇳",
-    total: "TOTAL",
+    total: "कुल योग",
     thanks: "धन्यवाद, फिर पधारें!",
     items: {
-      1: "ग्रिल्ड पोर्क चॉप्स और अंडा चावल (Rice with Pork & Egg)",
-      2: "कटे हुए चिकन के साथ चावल (Shredded Chicken Rice)",
-      3: "फिश सॉस चिकन ड्रमस्टिक चावल (Fish Sauce Chicken Rice)",
-      4: "सीफूड फ्राइड राइस (Seafood Fried Rice)",
-      5: "क्रिस्पी चिकन थाई चावल (Crispy Chicken Rice)",
-      6: "सब्जियों और बीफ के साथ चावल (Stir-fried Beef Rice)",
-      7: "बीफ फ्राइड नूडल्स (Beef Fried Noodles)",
-      8: "सीफूड फ्राइड नूडल्स (Seafood Fried Noodles)",
-      9: "बीफ के साथ फ्राइड ग्लास नूडल्स (Stir-fried Beef Glass Noodles)",
-      10: "सीफूड फ्राइड ग्लास नूडल्स (Seafood Glass Noodles)",
-      11: "चिकन ग्लास नूडल सूप (Chicken Glass Noodle Soup)",
-      12: "बीफ ग्लास नूडल सूप (Beef Glass Noodle Soup)",
-      13: "सीफूड ग्लास नूडल सूप (Seafood Glass Noodle Soup)",
-      14: "क्लैम दलिया (Clam Porridge)",
-      15: "बीफ दलिया (Beef Porridge)",
-      16: "उबले हुए क्लैम (Steamed Clams)",
-      17: "तले हुए क्लैम (Stir-fried Clams)",
-      18: "उबले हुए झींगे (Steamed Prawns)",
-      19: "फिश सॉस फ्राइड झींगे (Fried Prawns in Fish Sauce)",
-      20: "उबली हुई स्क्विड (Steamed Squid)",
-      21: "फिश सॉस फ्राइड स्क्विड (Fried Squid in Fish Sauce)",
-      22: "अतिरिक्त अंडा (Extra Egg)",
-      23: "करेला सूप (Extra Bitter Melon Soup)",
-      24: "फ्राइड स्प्रिंग रोल (Spring Roll - 1 Pc)",
-      25: "अतिरिक्त ग्रिल्ड रिब्स (Extra Grilled Ribs)",
-      26: "अतिरिक्त फिश सॉस चिकन (Extra Fish Sauce Chicken)",
-      27: "अतिरिक्त चिकन श्रेड (Extra Shredded Chicken)",
-      28: "अतिरिक्त क्रिस्पी चिकन (Extra Crispy Chicken)",
-      29: "कोल्ड ड्रिंक्स (Assorted Soft Drinks)",
-      30: "रेड बुल (Red Bull)",
-      31: "पानी की बोतल (Mineral Water)",
-      32: "सोडा वाटर (Sparkling Water)",
-      33: "नारियल पानी (Fresh Coconut Water)",
-      34: "संतरे का रस (Fresh Orange Juice)",
-      35: "लारू बियर (Larue Beer)",
-      36: "हुडा बियर (Huda Beer)",
-      37: "साइगॉन बियर (Saigon Beer)",
-      38: "टाइगर बियर (Tiger Beer)",
-      39: "हैनेकेन बियर (Heineken Beer)",
-      40: "अतिरिक्त चावल (Extra Rice)",
-      41: "अतिरिक्त बीफ़ सब्जी (Extra Stir-fried Beef)"
+      1: "ग्रिल्ड पोर्क चॉप्स और अंडा चावल",
+      2: "रेशेदार चिकन चावल",
+      3: "फिश सॉस तली चिकन टांग चावल",
+      4: "सीफूड फ्राइड राइस",
+      5: "कुरकुरी तली चिकन टांग चावल",
+      6: "सब्ज़ियों के साथ भुना बीफ़ और चावल",
+      7: "बीफ़ फ्राइड नूडल्स",
+      8: "सीफूड फ्राइड नूडल्स",
+      9: "बीफ़ भुने ग्लास नूडल्स",
+      10: "सीफूड भुने ग्लास नूडल्स",
+      11: "चिकन ग्लास नूडल सूप",
+      12: "बीफ़ ग्लास नूडल सूप",
+      13: "सीफूड ग्लास नूडल सूप",
+      14: "क्लैम चावल दलिया",
+      15: "बीफ़ चावल दलिया",
+      16: "उबले हुए क्लैम",
+      17: "भुने हुए क्लैम",
+      18: "उबले हुए झींगे",
+      19: "फिश सॉस तले झींगे",
+      20: "उबला हुआ स्क्विड",
+      21: "फिश सॉस तला स्क्विड",
+      22: "अतिरिक्त अंडा",
+      23: "अतिरिक्त करेला सूप",
+      24: "तला स्प्रिंग रोल (1 पीस)",
+      25: "अतिरिक्त ग्रिल्ड पोर्क चॉप",
+      26: "अतिरिक्त फिश सॉस चिकन टांग",
+      27: "अतिरिक्त रेशेदार चिकन",
+      28: "अतिरिक्त कुरकुरी चिकन टांग",
+      29: "विभिन्न शीतल पेय",
+      30: "रेड बुल",
+      31: "बोतलबंद पानी",
+      32: "सादा मिनरल वाटर",
+      33: "ताज़ा नारियल पानी",
+      34: "ताज़ा संतरे का रस",
+      35: "लारू बियर",
+      36: "हुडा बियर",
+      37: "साइगॉन बियर",
+      38: "टाइगर बियर",
+      39: "हाइनेकेन बियर",
+      40: "अतिरिक्त चावल",
+      41: "अतिरिक्त सब्ज़ियों के साथ भुना बीफ़"
     }
   },
 
   fi: {
-    flag: "🇫🇮",
     total: "YHTEENSÄ",
     thanks: "Kiitos ja tervetuloa uudelleen!",
+    beerFormat: "{brand}-olut",
     items: {
       1: "Riisiä, grillattua porsaankylkeä ja kananmuna",
       2: "Riisiä ja revittyä kanaa",
       3: "Riisiä ja kanankoipi kalakastikkeessa",
       4: "Paistettua riisiä merenelävillä",
-      5: "Riisiä ja erittäin rapeaa kanankoipea",
+      5: "Riisiä ja rapeaa kanankoipea",
       6: "Paistettua nautaa ja vihanneksia riisillä",
       7: "Paistettuja nuudeleita ja nautaa",
       8: "Paistettuja nuudeleita ja mereneläviä",
@@ -946,13 +778,13 @@ export const dict = {
       15: "Naudanlihariisipuuro",
       16: "Höyrytetyt simpukat",
       17: "Paistetut simpukat",
-      18: "Höyrytetyt ravut",
-      19: "Paistetut ravut kalakastikkeessa",
+      18: "Höyrytetyt katkaravut",
+      19: "Paistetut katkaravut kalakastikkeessa",
       20: "Höyrytetty mustekala",
       21: "Paistettu mustekala kalakastikkeessa",
       22: "Ylimääräinen kananmuna",
       23: "Ylimääräinen karvaskurkkukeitto",
-      24: "Kevätkääryle (1 kpl)",
+      24: "Paistettu kevätkääryle (1 kpl)",
       25: "Ylimääräinen grillattu kylki",
       26: "Ylimääräinen kanankoipi kalakastikkeessa",
       27: "Ylimääräinen revitty kana",
@@ -960,36 +792,69 @@ export const dict = {
       29: "Virvoitusjuomat laidasta laitaan",
       30: "Red Bull",
       31: "Lähdevesi",
-      32: "Kivennäisvesi",
+      32: "Hiilihapoton kivennäisvesi",
       33: "Tuore kookosvesi",
       34: "Tuore appelsiinimehu",
-      35: "Larue-olut",
-      36: "Huda-olut",
-      37: "Saigon-olut",
-      38: "Tiger-olut",
-      39: "Heineken-olut",
       40: "Lisäriisi",
       41: "Ylimääräinen paistettu nauta vihanneksilla"
     }
   },
 
+  // Dùng chung cho: 🇳🇱 NL, 🇧🇪 BE
   nl: {
-    flag: "🇳🇱",
     total: "TOTAAL",
     thanks: "Bedankt en graag tot ziens!",
-    items: nlItems
+    beerFormat: "{brand} bier",
+    items: {
+      1: "Rijst met gegrilde varkensribben en ei",
+      2: "Rijst met geplukte kip",
+      3: "Rijst met kippenbout in vissaus",
+      4: "Gebakken rijst met zeevruchten",
+      5: "Rijst met krokante kippenbout",
+      6: "Roergebakken rundvlees met groenten en rijst",
+      7: "Gebakken mie met rundvlees",
+      8: "Gebakken mie met zeevruchten",
+      9: "Gebakken glasnoedels met rundvlees",
+      10: "Gebakken glasnoedels met zeevruchten",
+      11: "Glasnoedelsoep met kip",
+      12: "Glasnoedelsoep met rundvlees",
+      13: "Glasnoedelsoep met zeevruchten",
+      14: "Rijstcongee met kokkels",
+      15: "Rijstcongee met rundvlees",
+      16: "Gestoomde kokkels",
+      17: "Roergebakken kokkels",
+      18: "Gestoomde garnalen",
+      19: "Gebakken garnalen in vissaus",
+      20: "Gestoomde inktvis",
+      21: "Gebakken inktvis in vissaus",
+      22: "Extra ei",
+      23: "Extra bitterkomkommersoep",
+      24: "Gebakken loempia (1 st.)",
+      25: "Extra gegrilde sparerib",
+      26: "Extra kippenbout in vissaus",
+      27: "Extra geplukte kip",
+      28: "Extra krokante kippenbout",
+      29: "Frisdranken naar keuze",
+      30: "Red Bull",
+      31: "Bronwater",
+      32: "Stil mineraalwater",
+      33: "Vers kokoswater",
+      34: "Vers geperst sinaasappelsap",
+      40: "Extra rijst",
+      41: "Extra roergebakken rundvlees met groenten"
+    }
   },
 
   se: {
-    flag: "🇸🇪",
     total: "TOTALT",
     thanks: "Tack och välkommen åter!",
+    beerFormat: "{brand}-öl",
     items: {
       1: "Ris med grillade fläskkotletter och ägg",
       2: "Ris med strimlad kyckling",
       3: "Ris med kycklingklubba i fisksås",
       4: "Stekt ris med skaldjur",
-      5: "Ris med extra krispig kycklingklubba",
+      5: "Ris med krispig kycklingklubba",
       6: "Wokat nötkött med grönsaker och ris",
       7: "Stekta nudlar med nötkött",
       8: "Stekta nudlar med skaldjur",
@@ -1008,7 +873,7 @@ export const dict = {
       21: "Stekt bläckfisk i fisksås",
       22: "Extra ägg",
       23: "Extra bittermelonsoppa",
-      24: "Vårrulle (1 st)",
+      24: "Friterad vårrulle (1 st)",
       25: "Extra grillad kotlett",
       26: "Extra kycklingklubba i fisksås",
       27: "Extra strimlad kyckling",
@@ -1016,45 +881,126 @@ export const dict = {
       29: "Läskedrycker av alla slag",
       30: "Red Bull",
       31: "Källvatten",
-      32: "Lätt kolsyrat mineralvatten",
+      32: "Stilla mineralvatten",
       33: "Färskt kokosvatten",
       34: "Färskpressad apelsinjuice",
-      35: "Larue öl",
-      36: "Huda öl",
-      37: "Saigon öl",
-      38: "Tiger öl",
-      39: "Heineken öl",
       40: "Extra ris",
       41: "Extra wokat nötkött med grönsaker"
     }
-  },
-
-  ch: {
-    flag: "🇨🇭",
-    total: "GESAMT",
-    thanks: "Herzlichen Dank & auf Wiedersehen!",
-    items: {
-      ...deItems,
-      1: "Reis mit gegrillten Schweinsrippli und Ei",
-      2: "Reis mit gezupftem Poulet",
-      3: "Reis mit Pouletschenkel in Fischsauce",
-      5: "Reis mit knusprigem Pouletschenkel",
-      11: "Glasnudelsuppe mit Poulet",
-      14: "Reisbrei (Congee) mit Muscheln",
-      15: "Reisbrei (Congee) mit Rindfleisch",
-      18: "Gedämpfte Riesencrevetten",
-      19: "Gebratene Riesencrevetten in Fischsauce",
-      21: "Gebratenes Tintenfisch in Fischsauce",
-      23: "Extra Bittermelonen-Suppe",
-      24: "Frühlingsrolle (1 Stk.)",
-      25: "Extra gegrilltes Rippli",
-      26: "Extra Pouletschenkel in Fischsauce",
-      27: "Extra gezupftes Poulet",
-      28: "Extra knuspriges Pouletschenkel",
-      29: "Softdrinks aller Art",
-      31: "Mineralwasser ohne Kohlensäure",
-      32: "Stilles Mineralwasser",
-      41: "Extra gebratenes Rindfleisch mit Gemüse und Reis"
-    }
   }
 };
+
+// Danh sách 24 nút cờ hiển thị trên bill (thứ tự giữ nguyên 100%, nước cùng ngôn ngữ trỏ chung `pack`)
+export const LANG_BUTTONS = [
+  { code: "vi", flag: "🇻🇳", label: "VN", pack: "vi" },
+  { code: "en", flag: "🇺🇸", label: "EN", pack: "en" },
+  { code: "fr", flag: "🇫🇷", label: "FR", pack: "fr" },
+  { code: "kr", flag: "🇰🇷", label: "KR", pack: "kr" },
+  { code: "jp", flag: "🇯🇵", label: "JP", pack: "jp" },
+  { code: "th", flag: "🇹🇭", label: "TH", pack: "th" },
+  { code: "it", flag: "🇮🇹", label: "IT", pack: "it" },
+  { code: "pt", flag: "🇵🇹", label: "PT", pack: "pt" },
+  { code: "es", flag: "🇪🇸", label: "ES", pack: "es" },
+  { code: "cn", flag: "🇨🇳", label: "CN", pack: "cn" },
+  { code: "de", flag: "🇩🇪", label: "DE", pack: "de" },
+  { code: "ru", flag: "🇷🇺", label: "RU", pack: "ru" },
+  { code: "be", flag: "🇧🇪", label: "BE", pack: "nl" },
+  { code: "hu", flag: "🇭🇺", label: "HU", pack: "hu" },
+  { code: "at", flag: "🇦🇹", label: "AT", pack: "de" },
+  { code: "tw", flag: "🇹🇼", label: "TW", pack: "tw" },
+  { code: "sg", flag: "🇸🇬", label: "SG", pack: "en" },
+  { code: "id", flag: "🇮🇩", label: "ID", pack: "id" },
+  { code: "my", flag: "🇲🇾", label: "MY", pack: "my" },
+  { code: "in", flag: "🇮🇳", label: "IN", pack: "in" },
+  { code: "fi", flag: "🇫🇮", label: "FI", pack: "fi" },
+  { code: "nl", flag: "🇳🇱", label: "NL", pack: "nl" },
+  { code: "se", flag: "🇸🇪", label: "SE", pack: "se" },
+  { code: "ch", flag: "🇨🇭", label: "CH", pack: "de" }
+];
+
+// Đóng băng items theo từng gói để các cờ dùng chung (ví dụ en & sg, de & at & ch) trỏ chung 1 object nhẹ RAM
+const resolvedItemsByPack = {};
+for (const [packKey, packData] of Object.entries(LANG_PACKS)) {
+  if (packKey === "vi") {
+    resolvedItemsByPack[packKey] = {};
+    continue;
+  }
+  const beers = packData.beerFormat ? buildBeers(packData.beerFormat) : {};
+  resolvedItemsByPack[packKey] = {
+    ...beers,
+    ...packData.items
+  };
+}
+
+export const dict = {};
+for (const btn of LANG_BUTTONS) {
+  const packData = LANG_PACKS[btn.pack];
+  dict[btn.code] = {
+    flag: btn.flag,
+    total: packData.total,
+    thanks: packData.thanks,
+    items: resolvedItemsByPack[btn.pack]
+  };
+}
+
+// Hàm tự động kiểm tra tính toàn vẹn giữa menu.js và dict.js
+// Bắt lỗi ngay lập tức khi thêm món mới mà quên dịch, sai ID hoặc để chuỗi rỗng
+export function validateMenuDict(menuGroups) {
+  const issues = [];
+  const menuItems = Array.isArray(menuGroups) ? menuGroups.flatMap(g => g.items || []) : [];
+  const validIds = new Set(menuItems.map(i => Number(i.id)));
+
+  // 1. Kiểm tra ánh xạ 24 nút cờ
+  const seenCodes = new Set();
+  for (const btn of LANG_BUTTONS) {
+    if (seenCodes.has(btn.code)) {
+      issues.push(`Trùng mã cờ "${btn.code}" trong LANG_BUTTONS.`);
+    }
+    seenCodes.add(btn.code);
+    if (!LANG_PACKS[btn.pack]) {
+      issues.push(`Cờ "${btn.code}" trỏ tới gói ngôn ngữ không tồn tại "${btn.pack}".`);
+    }
+  }
+
+  // 2. Kiểm tra từng gói ngôn ngữ so với danh sách món trong menu.js
+  for (const [packKey, packData] of Object.entries(LANG_PACKS)) {
+    if (!packData.total || !packData.thanks) {
+      issues.push(`Gói [${packKey}] thiếu "total" hoặc "thanks".`);
+    }
+    if (packKey === "vi") continue;
+
+    const items = resolvedItemsByPack[packKey] || {};
+    const missingIds = [];
+    const emptyIds = [];
+    const extraIds = [];
+
+    for (const id of validIds) {
+      if (!Object.prototype.hasOwnProperty.call(items, id)) {
+        missingIds.push(id);
+      } else if (typeof items[id] !== "string" || !items[id].trim()) {
+        emptyIds.push(id);
+      }
+    }
+
+    for (const rawId of Object.keys(items)) {
+      if (!validIds.has(Number(rawId))) {
+        extraIds.push(rawId);
+      }
+    }
+
+    if (missingIds.length) {
+      issues.push(`Gói [${packKey}] thiếu bản dịch cho ID: ${missingIds.join(", ")}`);
+    }
+    if (emptyIds.length) {
+      issues.push(`Gói [${packKey}] có bản dịch rỗng ở ID: ${emptyIds.join(", ")}`);
+    }
+    if (extraIds.length) {
+      issues.push(`Gói [${packKey}] dư ID không có trong menu.js: ${extraIds.join(", ")}`);
+    }
+  }
+
+  if (issues.length > 0) {
+    console.error("[dict] Phát hiện lỗi cấu hình đa ngôn ngữ:\n - " + issues.join("\n - "));
+  }
+  return issues;
+}
