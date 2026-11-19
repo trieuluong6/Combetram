@@ -407,17 +407,22 @@ body.dark-mode .signboard-seal.seal-yin {
 .wi-blow3   { display:inline-block; animation: wi-blow  1s ease-in-out infinite .3s; }
 .wind-arrow { width: 12px; height: 12px; transition: transform 0.8s cubic-bezier(0.4, 0, 0.2, 1); transform-origin: center; fill: currentColor; }
 
-/* ĐỒNG HỒ LẬT */
+/* ĐỒNG HỒ LẬT — ÁNH VÀNG GOLD */
 .flip-clock-container { display: flex; justify-content: center; align-items: center; gap: 4px; user-select: none; margin-bottom: 20px; flex-wrap: wrap; row-gap: 6px; }
 .flip-unit { display: flex; gap: 2px; }
-.flip-colon { font-size: 1.75em; font-weight: bold; color: var(--text-main); padding: 0 1px; line-height: 42px; height: 42px; display: flex; align-items: center; animation: blinkColon 1s infinite; transition: color 0.4s ease; }
+.flip-colon { font-size: 1.75em; font-weight: bold; color: #c59217; text-shadow: 0 1px 2px rgba(212, 175, 55, 0.28); padding: 0 1px; line-height: 42px; height: 42px; display: flex; align-items: center; animation: blinkColon 1s infinite; transition: color 0.4s ease, text-shadow 0.4s ease; }
+body.dark-mode .flip-colon { color: #ffd700; text-shadow: 0 0 8px rgba(255, 215, 0, 0.36); }
 @keyframes blinkColon { 0%, 100% { opacity: 1; } 50% { opacity: 0.2; } }
 .flip-card { position: relative; width: 26px; height: 42px; perspective: 100px; font-family: 'Segoe UI', Arial, sans-serif; font-size: 1.75em; font-weight: bold; font-variant-numeric: tabular-nums; }
-.card-half { position: absolute; left: 0; width: 100%; height: 50%; overflow: hidden; background: var(--bg-card); color: var(--text-main); box-sizing: border-box; text-align: center; box-shadow: 0 1px 2px rgba(0,0,0,0.08); border: 1px solid var(--border-soft); transition: background 0.4s ease, color 0.4s ease, border-color 0.4s ease; }
+.card-half { position: absolute; left: 0; width: 100%; height: 50%; overflow: hidden; background: linear-gradient(180deg, #fffdf7 0%, #fcf4de 100%); color: #b8860b; text-shadow: 0 1px 0 rgba(255, 255, 255, 0.85); box-sizing: border-box; text-align: center; box-shadow: 0 1px 3px rgba(184, 134, 11, 0.14); border: 1px solid rgba(212, 175, 55, 0.56); transition: background 0.4s ease, color 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease; }
 .card-top { top: 0; border-top-left-radius: 5px; border-top-right-radius: 5px; line-height: 42px; border-bottom: none; }
-.card-bottom { bottom: 0; border-bottom-left-radius: 5px; border-bottom-right-radius: 5px; line-height: 0px; border-top: 1px solid var(--border-soft); }
-.card-flip-wing { position: absolute; top: 0; left: 0; width: 100%; height: 50%; overflow: hidden; box-sizing: border-box; text-align: center; border-top-left-radius: 5px; border-top-right-radius: 5px; line-height: 42px; transform-origin: center bottom; backface-visibility: hidden; z-index: 5; background: var(--bg-card); color: var(--text-main); border: 1px solid var(--border-soft); border-bottom: none; transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1), background 0.4s ease, color 0.4s ease, border-color 0.4s ease; }
-.card-flip-wing-back { position: absolute; bottom: 0; left: 0; width: 100%; height: 50%; overflow: hidden; box-sizing: border-box; text-align: center; border-bottom-left-radius: 5px; border-bottom-right-radius: 5px; line-height: 0px; transform-origin: center top; backface-visibility: hidden; z-index: 4; background: var(--bg-card); color: var(--text-main); border: 1px solid var(--border-soft); border-top: 1px solid var(--border-soft); transform: rotateX(180deg); transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1), background 0.4s ease, color 0.4s ease, border-color 0.4s ease; }
+.card-bottom { bottom: 0; border-bottom-left-radius: 5px; border-bottom-right-radius: 5px; line-height: 0px; background: linear-gradient(180deg, #f9efd2 0%, #fffdf7 100%); border-top: 1px solid rgba(212, 175, 55, 0.46); }
+.card-flip-wing { position: absolute; top: 0; left: 0; width: 100%; height: 50%; overflow: hidden; box-sizing: border-box; text-align: center; border-top-left-radius: 5px; border-top-right-radius: 5px; line-height: 42px; transform-origin: center bottom; backface-visibility: hidden; z-index: 5; background: linear-gradient(180deg, #fffdf7 0%, #fcf4de 100%); color: #b8860b; text-shadow: 0 1px 0 rgba(255, 255, 255, 0.85); border: 1px solid rgba(212, 175, 55, 0.56); border-bottom: none; transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1), background 0.4s ease, color 0.4s ease, border-color 0.4s ease; }
+.card-flip-wing-back { position: absolute; bottom: 0; left: 0; width: 100%; height: 50%; overflow: hidden; box-sizing: border-box; text-align: center; border-bottom-left-radius: 5px; border-bottom-right-radius: 5px; line-height: 0px; transform-origin: center top; backface-visibility: hidden; z-index: 4; background: linear-gradient(180deg, #f9efd2 0%, #fffdf7 100%); color: #b8860b; text-shadow: 0 1px 0 rgba(255, 255, 255, 0.85); border: 1px solid rgba(212, 175, 55, 0.56); border-top: 1px solid rgba(212, 175, 55, 0.46); transform: rotateX(180deg); transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1), background 0.4s ease, color 0.4s ease, border-color 0.4s ease; }
+body.dark-mode .card-half,
+body.dark-mode .card-flip-wing { background: linear-gradient(180deg, #26221a 0%, #1c1913 100%); color: #ffd700; text-shadow: 0 0 8px rgba(255, 215, 0, 0.28); border-color: rgba(255, 215, 0, 0.44); box-shadow: 0 2px 5px rgba(0, 0, 0, 0.42); }
+body.dark-mode .card-bottom,
+body.dark-mode .card-flip-wing-back { background: linear-gradient(180deg, #17140f 0%, #231f17 100%); color: #ffd700; text-shadow: 0 0 8px rgba(255, 215, 0, 0.28); border-color: rgba(255, 215, 0, 0.44); border-top-color: rgba(255, 215, 0, 0.36); }
 .flip-card.animate .card-flip-wing { transform: rotateX(-180deg); }
 .flip-card.animate .card-flip-wing-back { transform: rotateX(0deg); }
 
@@ -478,7 +483,7 @@ body.dark-mode .table-card {
 .half-width { grid-column: span 3; }
 .table-card strong, .table-card span { position: relative; z-index: 10; }
 
-/* Tên bàn + Huy hiệu icon phân khu màu vàng kim (Trong nhà / Ngoài hiên / Ngoài đường) */
+/* Tên bàn + Huy hiệu icon phân khu màu vàng gold (Trong nhà / Ngoài hiên / Ngoài đường) */
 .table-card strong {
     display: flex;
     flex-direction: column;
@@ -488,7 +493,7 @@ body.dark-mode .table-card {
     font-weight: 800;
     letter-spacing: 0.03em;
     text-transform: uppercase;
-    color: #5c400c;
+    color: #7c5608;
     margin-bottom: 3px;
     transition: color 0.25s ease;
 }
@@ -498,11 +503,11 @@ body.dark-mode .table-card {
     width: 24px;
     height: 24px;
     border-radius: 8px;
-    background: linear-gradient(145deg, rgba(255, 236, 173, 0.72) 0%, rgba(224, 176, 52, 0.32) 100%);
-    border: 1px solid rgba(184, 134, 27, 0.48);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+    background: linear-gradient(145deg, #fff9db 0%, #fde68a 58%, #f6cf59 100%);
+    border: 1px solid #d4af37;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.90), 0 1px 3px rgba(212, 175, 55, 0.24);
     flex-shrink: 0;
-    transition: background 0.25s ease, border-color 0.25s ease;
+    transition: background 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
 }
 .table-card strong::after {
     content: "";
@@ -512,8 +517,9 @@ body.dark-mode .table-card {
     transform: translateX(-50%);
     width: 15px;
     height: 15px;
-    background-color: #a87412;
-    background-image: linear-gradient(180deg, #cc971d 0%, #8c5f0b 100%);
+    background-color: #d4af37;
+    background-image: linear-gradient(180deg, #eab308 0%, #ca8a04 55%, #a16207 100%);
+    filter: drop-shadow(0 0.5px 0 rgba(255, 255, 255, 0.65));
     -webkit-mask-repeat: no-repeat;
     mask-repeat: no-repeat;
     -webkit-mask-position: center;
@@ -524,7 +530,7 @@ body.dark-mode .table-card {
     -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 10.5L12 3l9 7.5'/%3E%3Cpath d='M5.5 9.5V19.5h13V9.5'/%3E%3Cpath d='M10 19.5v-5.5h4v5.5'/%3E%3C/svg%3E");
     mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 10.5L12 3l9 7.5'/%3E%3Cpath d='M5.5 9.5V19.5h13V9.5'/%3E%3Cpath d='M10 19.5v-5.5h4v5.5'/%3E%3C/svg%3E");
     pointer-events: none;
-    transition: background-color 0.25s ease;
+    transition: background-color 0.25s ease, filter 0.25s ease;
 }
 /* Bàn trong hiên: Icon Mái hiên quán */
 .table-card.full-width strong::after {
@@ -537,16 +543,17 @@ body.dark-mode .table-card {
     mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 4C6.8 4 3 7.6 3 11.5h18C21 7.6 17.2 4 12 4z'/%3E%3Cpath d='M12 4c-2.5 1.8-3.8 4.4-3.8 7.5'/%3E%3Cpath d='M12 4c2.5 1.8 3.8 4.4 3.8 7.5'/%3E%3Cpath d='M12 11.5V20'/%3E%3Cpath d='M8.5 20h7'/%3E%3C/svg%3E");
 }
 body.dark-mode .table-card strong {
-    color: #faecc2;
+    color: #ffe89e;
 }
 body.dark-mode .table-card strong::before {
-    background: linear-gradient(145deg, rgba(245, 197, 66, 0.24) 0%, rgba(180, 130, 24, 0.14) 100%);
-    border-color: rgba(245, 207, 107, 0.46);
-    box-shadow: inset 0 1px 0 rgba(255, 236, 179, 0.18);
+    background: linear-gradient(145deg, rgba(255, 215, 0, 0.28) 0%, rgba(212, 175, 55, 0.14) 100%);
+    border-color: rgba(255, 215, 0, 0.56);
+    box-shadow: inset 0 1px 0 rgba(255, 243, 176, 0.24), 0 1px 4px rgba(212, 175, 55, 0.20);
 }
 body.dark-mode .table-card strong::after {
-    background-color: #f3c95b;
-    background-image: linear-gradient(180deg, #ffe38f 0%, #d9a126 100%);
+    background-color: #ffd700;
+    background-image: linear-gradient(180deg, #fff099 0%, #ffd700 52%, #d4af37 100%);
+    filter: drop-shadow(0 0 2px rgba(255, 215, 0, 0.25));
 }
 .table-card.has-guest strong {
     color: #064e3b;
@@ -561,9 +568,9 @@ body.dark-mode .table-card.active strong {
     color: #e0f2fe;
 }
 
-/* Giá tiền đứng trần (không khung bao), độ tương phản cao — 0đ ánh vàng kim */
+/* Giá tiền đứng trần (không khung bao), độ tương phản cao — 0đ ánh vàng gold */
 .table-price {
-    color: #8f6310;
+    color: #b47b09;
     font-weight: 850;
     font-size: 1.06em;
     line-height: 1.15;
@@ -576,7 +583,7 @@ body.dark-mode .table-card.active strong {
     transition: color 0.25s ease;
 }
 body.dark-mode .table-price {
-    color: #f3c95b;
+    color: #ffd54f;
     background: transparent;
     border: none;
     box-shadow: none;
