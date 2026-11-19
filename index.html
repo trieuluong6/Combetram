@@ -1,261 +1,165 @@
 <!DOCTYPE html>
-<html lang="vi" class="paper-flip-pending">
+<html lang="vi">
 <head>
-<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
-<link rel="preconnect" href="https://combetram-default-rtdb.asia-southeast1.firebasedatabase.app" crossorigin>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cơm Bé Trâm - Quản lý</title>
-    <!-- Critical startup hide: visibility cannot be overridden by the status pulse animation. -->
-    <style>
-    html.paper-flip-pending #weather-hub,
-    html.paper-flip-pending #presence-count,
-    html.paper-flip-pending #sound-toggle,
-    html.paper-flip-pending #dark-toggle,
-    html.paper-flip-pending #load-speed-widget,
-    html.paper-flip-pending #crowd-status,
-    html.paper-flip-pending .header-title,
-    html.paper-flip-pending #net-speed-widget,
-    html.paper-flip-pending #btc-ticker,
-    html.paper-flip-pending #oil-ticker,
-    html.paper-flip-pending .flip-clock-container > .flip-unit,
-    html.paper-flip-pending .flip-clock-container > .flip-colon { visibility: hidden !important; }
-    </style>
-    <link rel="stylesheet" href="style.css?v=fx-sound-v37">
-    <script>window.__paperFlipFailsafe = setTimeout(() => document.documentElement.classList.remove('paper-flip-pending'), 3000);</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Order Cơm & Hải Sản</title>
+
+<!-- Lật giấy mở màn: Ẩn toàn bộ phần tử trước khi JS tính toán thứ tự lật sóng -->
+<script>
+  document.documentElement.classList.add('paper-flip-pending');
+  // Failsafe: Đảm bảo giao diện luôn hiện ra sau tối đa 3s kể cả khi mạng chậm
+  setTimeout(function() {
+    document.documentElement.classList.remove('paper-flip-pending');
+  }, 3000);
+</script>
+<style>
+  html.paper-flip-pending #weather-hub,
+  html.paper-flip-pending #crowd-status,
+  html.paper-flip-pending .header-title,
+  html.paper-flip-pending .bw-badge,
+  html.paper-flip-pending #btc-ticker,
+  html.paper-flip-pending #btn-theme-toggle,
+  html.paper-flip-pending .table-btn,
+  html.paper-flip-pending #hint,
+  html.paper-flip-pending .cat-btn,
+  html.paper-flip-pending .menu-item,
+  html.paper-flip-pending .bill-box,
+  html.paper-flip-pending #pay-btn {
+    visibility: hidden !important;
+  }
+</style>
+
+<!-- Tải song song CSS & JS modules ngay từ đầu để triệt tiêu độ trễ mạng nối đuôi -->
+<link rel="stylesheet" href="style.css?v=2026.11.19-v1">
+<link rel="modulepreload" href="app.js?v=2026.11.19-v1">
+<link rel="modulepreload" href="menu.js?v=2026.11.19-v1">
 </head>
 <body>
 
-<div id="paper-flip-overlay" aria-hidden="true"></div>
-
-<div class="top-bar">
-    <div id="weather-hub">
-        <div class="weather-group">
-            <span id="w-icon-container"></span>
-            <span id="w-temp">--°C</span>
-        </div>
-        <div class="weather-divider"></div>
-        <div class="weather-group">
-            <span id="w-wind-icon-container"></span>
-            <span id="w-wind-speed">-- km/h</span>
-            <svg class="wind-arrow" id="w-arrow" viewBox="0 0 24 24"><path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"/></svg>
-        </div>
+<div class="header-bar">
+  <div class="header-left-group">
+    <div id="weather-hub" class="weather-hub" title="Thời tiết & Không khí Đà Nẵng">
+      <div class="wx-main">
+        <span id="wx-icon" class="wx-icon">🌤️</span>
+        <span id="wx-temp" class="wx-temp">--°C</span>
+        <span id="wx-desc" class="wx-desc">Đà Nẵng</span>
+      </div>
+      <div class="wx-sub">
+        <span class="wx-chip" title="Độ ẩm không khí">💧 <b id="wx-hum">--%</b></span>
+        <span class="wx-chip" title="Khả năng mưa giờ tới">☔ <b id="wx-rain">--%</b></span>
+        <span class="wx-chip" title="Chỉ số chất lượng không khí US AQI">🍃 AQI <b id="wx-aqi" class="wx-aqi-pill">--</b></span>
+      </div>
     </div>
 
-    <div class="top-bar-right">
-        <div id="offline-badge" class="hidden" role="status" aria-live="polite">⚠️ Mất mạng</div>
-        <div id="presence-count">
-            <span class="online-dot"></span>
-            👥 Online: <span id="online-val">1</span>
-        </div>
-        <button id="sound-toggle" data-action="toggle-sound" aria-label="Bật/tắt âm thanh thông báo" title="Bật/tắt âm thanh (bấm để thử loa)">🔊</button>
-        <button id="dark-toggle" data-action="toggle-dark" aria-label="Chuyển giao diện sáng/tối">🌙</button>
+    <div id="crowd-status" class="crowd-badge crowd-empty" title="Tự động ước tính theo số lượng món ăn chính đang phục vụ">
+      🍃 Quán đang trống (0 khách)
     </div>
+  </div>
+
+  <div class="header-title">
+    <h2><span class="title-icon">🍽️</span> <span class="title-text">QUÁN CƠM & HẢI SẢN</span></h2>
+  </div>
+
+  <div class="header-actions">
+    <div class="bw-badge" title="Dữ liệu tải xuống từ Firebase">
+      <span class="bw-down">⬇ <b id="bw-down">0 B</b></span>
+    </div>
+
+    <div id="btc-ticker" class="btc-ticker" title="Giá Bitcoin (BTC/USDT) thời gian thực từ Binance">
+      <div class="btc-left">
+        <span class="btc-symbol">₿ BTC</span>
+        <span id="btc-price" class="btc-price">$--</span>
+        <span id="btc-change" class="btc-change">--%</span>
+      </div>
+      <canvas id="btc-spark" class="btc-spark" width="72" height="22"></canvas>
+    </div>
+
+    <button id="btn-theme-toggle" class="theme-toggle-btn" title="Chuyển đổi giao diện Sáng / Tối" aria-label="Chuyển đổi giao diện">🌙</button>
+  </div>
 </div>
 
-<div class="header-row">
-    <div class="side-widget side-left" id="load-speed-widget" title="Thời gian mở trang">
-        <span class="side-icon">⏱️</span>
-        <span id="load-speed-val">-- ms</span>
-    </div>
+<!-- Chọn bàn -->
+<div id="tables"></div>
 
-    <div class="header-center">
-        <div class="status-container">
-            <div id="crowd-status" class="status-badge status-empty">
-                <span id="crowd-icon">🟢</span>
-                <span id="crowd-text">Vắng khách</span>
-            </div>
-        </div>
-
-        <div class="header-title">
-            <div class="signboard-body">
-                <span class="signboard-inner-frame" aria-hidden="true"></span>
-                <span class="sb-corner tl" aria-hidden="true"><svg viewBox="0 0 12 12" fill="none"><path d="M1 11V1H11" stroke="currentColor" stroke-width="1.25"/><path d="M3.8 11V5.8H5.8V3.8H11" stroke="currentColor" stroke-width="1.05"/></svg></span>
-                <span class="sb-corner tr" aria-hidden="true"><svg viewBox="0 0 12 12" fill="none"><path d="M1 11V1H11" stroke="currentColor" stroke-width="1.25"/><path d="M3.8 11V5.8H5.8V3.8H11" stroke="currentColor" stroke-width="1.05"/></svg></span>
-                <span class="sb-corner bl" aria-hidden="true"><svg viewBox="0 0 12 12" fill="none"><path d="M1 11V1H11" stroke="currentColor" stroke-width="1.25"/><path d="M3.8 11V5.8H5.8V3.8H11" stroke="currentColor" stroke-width="1.05"/></svg></span>
-                <span class="sb-corner br" aria-hidden="true"><svg viewBox="0 0 12 12" fill="none"><path d="M1 11V1H11" stroke="currentColor" stroke-width="1.25"/><path d="M3.8 11V5.8H5.8V3.8H11" stroke="currentColor" stroke-width="1.05"/></svg></span>
-
-                <span class="signboard-seal seal-yang" aria-hidden="true">
-                    <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <rect x="1.3" y="1.3" width="17.4" height="17.4" rx="1.6" stroke="currentColor" stroke-width="1.45"/>
-                        <path d="M4.8 6.5L10 4.3L15.2 6.5M5.6 9.3H14.4M10 6.8V15.4M6.3 11.7L8.5 14M13.7 11.7L11.5 14" stroke="currentColor" stroke-width="1.4" stroke-linecap="square"/>
-                    </svg>
-                </span>
-
-                <span class="signboard-text">CƠM BÉ TRÂM</span>
-
-                <span class="signboard-seal seal-yin" aria-hidden="true">
-                    <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <rect x="1.5" y="1.5" width="17" height="17" rx="1.5" stroke="currentColor" stroke-width="1.3"/>
-                        <path d="M5 5.2H9.2V9.3H5V5.2ZM5 10.6H9.4V14.8H5V10.6ZM11 5.2H15.2M13.1 5.2V14.8M11 10H15" stroke="currentColor" stroke-width="1.45" stroke-linecap="square"/>
-                    </svg>
-                </span>
-            </div>
-        </div>
-    </div>
-
-    <div class="side-widget side-right" id="net-speed-widget" title="Ước tính payload Firebase (nhận ↓ / gửi ↑)">
-        <span class="side-icon">⇅</span>
-        <span id="net-down-val" class="net-val">↓0B</span>
-        <span class="net-divider"></span>
-        <span id="net-up-val" class="net-val">↑0B</span>
-    </div>
+<div id="hint">
+  <div class="hint-icon">👆</div>
+  <p>Vui lòng chọn bàn ở phía trên để bắt đầu gọi món</p>
 </div>
 
-<div class="flip-clock-container">
-    <div class="ticker-item" id="btc-ticker" title="Bitcoin / USD">
-        <span class="ticker-label">BTC / USD</span>
-        <span class="ticker-value">--</span>
-        <span class="ticker-delta">• --%</span>
-        <svg class="ticker-sparkline" viewBox="0 0 64 16" preserveAspectRatio="none" aria-hidden="true">
-            <polyline class="ticker-sparkline-line" points=""></polyline>
-        </svg>
+<!-- Khu vực gọi món & hóa đơn -->
+<div id="main-area" style="display:none;">
+  <div class="workspace-grid">
+    <!-- Cột trái: Danh mục + Thực đơn -->
+    <div class="menu-panel">
+      <div id="categories"></div>
+      <div id="menu"></div>
     </div>
 
-    <div class="flip-unit">
-        <div class="flip-card" id="c-h1"><div class="card-half card-top">0</div><div class="card-half card-bottom">0</div><div class="card-flip-wing">0</div><div class="card-flip-wing-back">0</div></div>
-        <div class="flip-card" id="c-h2"><div class="card-half card-top">0</div><div class="card-half card-bottom">0</div><div class="card-flip-wing">0</div><div class="card-flip-wing-back">0</div></div>
-    </div>
-    <div class="flip-colon">:</div>
-    <div class="flip-unit">
-        <div class="flip-card" id="c-m1"><div class="card-half card-top">0</div><div class="card-half card-bottom">0</div><div class="card-flip-wing">0</div><div class="card-flip-wing-back">0</div></div>
-        <div class="flip-card" id="c-m2"><div class="card-half card-top">0</div><div class="card-half card-bottom">0</div><div class="card-flip-wing">0</div><div class="card-flip-wing-back">0</div></div>
-    </div>
-    <div class="flip-colon">:</div>
-    <div class="flip-unit">
-        <div class="flip-card" id="c-s1"><div class="card-half card-top">0</div><div class="card-half card-bottom">0</div><div class="card-flip-wing">0</div><div class="card-flip-wing-back">0</div></div>
-        <div class="flip-card" id="c-s2"><div class="card-half card-top">0</div><div class="card-half card-bottom">0</div><div class="card-flip-wing">0</div><div class="card-flip-wing-back">0</div></div>
-    </div>
+    <!-- Cột phải: Hóa đơn + Chọn ngôn ngữ + Thanh toán -->
+    <div class="bill-panel">
+      <!-- Khe máy in hóa đơn -->
+      <div id="printer-slot" class="printer-slot" aria-hidden="true"></div>
+      <div id="bill-shell" class="bill-flip-shell">
+        <div id="bill" class="bill-box"></div>
+      </div>
 
-    <div class="ticker-item" id="oil-ticker" title="Dầu WTI / USD">
-        <span class="ticker-label">DẦU (WTI)</span>
-        <span class="ticker-value">--</span>
-        <span class="ticker-delta">• --%</span>
-        <svg class="ticker-sparkline" viewBox="0 0 64 16" preserveAspectRatio="none" aria-hidden="true">
-            <polyline class="ticker-sparkline-line" points=""></polyline>
-        </svg>
-    </div>
-</div>
-
-<div class="tables-container is-loading" id="tables-container" aria-busy="true">
-    <div class="table-card" id="tab-1" data-table="1"><strong>Bàn 1</strong><span class="table-price skeleton" id="sum-1">0đ</span><span class="table-meta" id="meta-1"></span><span class="table-time skeleton" id="time-1">⏱ 0 phút</span></div>
-    <div class="table-card" id="tab-2" data-table="2"><strong>Bàn 2</strong><span class="table-price skeleton" id="sum-2">0đ</span><span class="table-meta" id="meta-2"></span><span class="table-time skeleton" id="time-2">⏱ 0 phút</span></div>
-    <div class="table-card" id="tab-3" data-table="3"><strong>Bàn 3</strong><span class="table-price skeleton" id="sum-3">0đ</span><span class="table-meta" id="meta-3"></span><span class="table-time skeleton" id="time-3">⏱ 0 phút</span></div>
-    <div class="table-card" id="tab-4" data-table="4"><strong>Bàn 4</strong><span class="table-price skeleton" id="sum-4">0đ</span><span class="table-meta" id="meta-4"></span><span class="table-time skeleton" id="time-4">⏱ 0 phút</span></div>
-    <div class="table-card" id="tab-5" data-table="5"><strong>Bàn 5</strong><span class="table-price skeleton" id="sum-5">0đ</span><span class="table-meta" id="meta-5"></span><span class="table-time skeleton" id="time-5">⏱ 0 phút</span></div>
-    <div class="table-card" id="tab-6" data-table="6"><strong>Bàn 6</strong><span class="table-price skeleton" id="sum-6">0đ</span><span class="table-meta" id="meta-6"></span><span class="table-time skeleton" id="time-6">⏱ 0 phút</span></div>
-    <div class="table-card full-width" id="tab-7" data-table="7"><strong>BÀN TRONG HIÊN</strong><span class="table-price skeleton" id="sum-7">0đ</span><span class="table-meta" id="meta-7"></span><span class="table-time skeleton" id="time-7">⏱ 0 phút</span></div>
-    <div class="table-card half-width" id="tab-8" data-table="8"><strong>NGOÀI ĐƯỜNG (TRÁI)</strong><span class="table-price skeleton" id="sum-8">0đ</span><span class="table-meta" id="meta-8"></span><span class="table-time skeleton" id="time-8">⏱ 0 phút</span></div>
-    <div class="table-card half-width" id="tab-9" data-table="9"><strong>NGOÀI ĐƯỜNG (PHẢI)</strong><span class="table-price skeleton" id="sum-9">0đ</span><span class="table-meta" id="meta-9"></span><span class="table-time skeleton" id="time-9">⏱ 0 phút</span></div>
-</div>
-
-<div id="order-section" class="container" style="display:none;">
-    <h3 id="table-title" style="text-align: center; margin-top:0; margin-bottom: 8px; color:var(--blue);"></h3>
-    <div id="menu-area">
-        <div id="menu-cat-nav" class="menu-cat-nav" aria-label="Nhảy nhanh nhóm món"></div>
-        <div id="menu-list"></div>
-        <button class="btn-action btn-checkout" id="btn-checkout" data-action="lock-bill" disabled aria-disabled="true"><span class="btn-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h14v18l-2.3-1.5L14.4 21 12 19.5 9.6 21l-2.3-1.5L5 21V3z"/><path d="M8.5 8h7M8.5 12h7M8.5 16h4.5"/></svg></span><span class="btn-action-label">CHỐT ĐƠN &amp; XEM BILL</span></button>
-    </div>
-    <div id="bill-area" data-bill-lang="vi" style="display:none;">
-        <div class="printer-slot"></div>
-        <div class="bill-flip-shell" id="bill-flip-shell">
-            <div class="bill-flipper" id="bill-flipper">
-                <div class="bill-face bill-front" id="bill-face-front">
-                    <div class="bill-box">
-                        <div id="bill-list"></div>
-                        <div class="total-container" id="total-container">
-                            <div class="total-label-wrapper">
-                                <span id="txt-lang-flag"></span>
-                                <span id="txt-total-label">TỔNG</span>
-                            </div>
-                            <div class="arrow-container">
-                                <div class="arrow-shaft"></div>
-                                <div class="arrow-head"></div>
-                            </div>
-                            <span style="white-space: nowrap; flex-shrink: 0;"><span id="bill-total">0</span>đ</span>
-                        </div>
-                        <div class="bill-thanks" id="bill-thanks">Cảm ơn quý khách &amp; hẹn gặp lại!</div>
-                    </div>
-                </div>
-                <div class="bill-face bill-back" id="bill-face-qr" aria-hidden="true">
-                    <div class="bill-box qr-bill-box">
-                        <img id="payment-qr" src="payment-qr.png" alt="Mã QR thanh toán" decoding="async" draggable="false">
-                    </div>
-                </div>
-            </div>
+      <div class="lang-section">
+        <p class="lang-label">🌐 Ngôn ngữ hiển thị hóa đơn:</p>
+        <div id="lang-grid" class="lang-grid">
+          <button data-lang="vi" class="lang-btn active-lang">🇻🇳</button>
+          <button data-lang="en" class="lang-btn">🇺🇸</button>
+          <button data-lang="fr" class="lang-btn">🇫🇷</button>
+          <button data-lang="kr" class="lang-btn">🇰🇷</button>
+          <button data-lang="jp" class="lang-btn">🇯🇵</button>
+          <button data-lang="th" class="lang-btn">🇹🇭</button>
+          <button data-lang="it" class="lang-btn">🇮🇹</button>
+          <button data-lang="pt" class="lang-btn">🇵🇹</button>
+          <button data-lang="es" class="lang-btn">🇪🇸</button>
+          <button data-lang="cn" class="lang-btn">🇨🇳</button>
+          <button data-lang="de" class="lang-btn">🇩🇪</button>
+          <button data-lang="ru" class="lang-btn">🇷🇺</button>
+          <button data-lang="be" class="lang-btn">🇧🇪</button>
+          <button data-lang="hu" class="lang-btn">🇭🇺</button>
+          <button data-lang="at" class="lang-btn">🇦🇹</button>
+          <button data-lang="tw" class="lang-btn">🇹🇼</button>
+          <button data-lang="sg" class="lang-btn">🇸🇬</button>
+          <button data-lang="id" class="lang-btn">🇮🇩</button>
+          <button data-lang="my" class="lang-btn">🇲🇾</button>
+          <button data-lang="in" class="lang-btn">🇮🇳</button>
+          <button data-lang="fi" class="lang-btn">🇫🇮</button>
+          <button data-lang="nl" class="lang-btn">🇳🇱</button>
+          <button data-lang="se" class="lang-btn">🇸🇪</button>
+          <button data-lang="ch" class="lang-btn">🇨🇭</button>
         </div>
-        <button class="btn-action qr-toggle-btn btn-qr-paper" id="btn-qr-toggle" data-action="toggle-qr">
-            <span class="btn-action-icon" id="btn-qr-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                    <rect x="3" y="3" width="7" height="7" rx="1.2"/>
-                    <rect x="14" y="3" width="7" height="7" rx="1.2"/>
-                    <rect x="3" y="14" width="7" height="7" rx="1.2"/>
-                    <path d="M14 14h3v3h-3zM20 14v3M14 20h3M20 20h1"/>
-                </svg>
-            </span>
-            <span class="btn-action-label" id="btn-qr-label">MÃ QR</span>
-        </button>
-        <button class="btn-action btn-add-more" data-action="unlock-bill">
-            <span class="btn-action-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="12" cy="12" r="9"/>
-                    <path d="M12 8v8M8 12h8"/>
-                </svg>
-            </span>
-            <span class="btn-action-label">GỌI THÊM MÓN</span>
-        </button>
-        <button class="btn-action btn-pay-confirm" data-action="pay-bill">
-            <span class="btn-action-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="12" cy="12" r="9"/>
-                    <path d="M8.5 12.5l2.5 2.5 4.8-5.2"/>
-                </svg>
-            </span>
-            <span class="btn-action-label">XÁC NHẬN THANH TOÁN</span>
-        </button>
-        <div class="lang-grid" id="lang-grid">
-            <button class="lang-btn active-lang" data-lang="vi"><span>🇻🇳</span><span>VN</span></button>
-            <button class="lang-btn" data-lang="en"><span>🇺🇸</span><span>EN</span></button>
-            <button class="lang-btn" data-lang="fr"><span>🇫🇷</span><span>FR</span></button>
-            <button class="lang-btn" data-lang="kr"><span>🇰🇷</span><span>KR</span></button>
-            <button class="lang-btn" data-lang="jp"><span>🇯🇵</span><span>JP</span></button>
-            <button class="lang-btn" data-lang="th"><span>🇹🇭</span><span>TH</span></button>
-            <button class="lang-btn" data-lang="it"><span>🇮🇹</span><span>IT</span></button>
-            <button class="lang-btn" data-lang="pt"><span>🇵🇹</span><span>PT</span></button>
-            <button class="lang-btn" data-lang="es"><span>🇪🇸</span><span>ES</span></button>
-            <button class="lang-btn" data-lang="cn"><span>🇨🇳</span><span>CN</span></button>
-            <button class="lang-btn" data-lang="de"><span>🇩🇪</span><span>DE</span></button>
-            <button class="lang-btn" data-lang="ru"><span>🇷🇺</span><span>RU</span></button>
-            <button class="lang-btn" data-lang="be"><span>🇧🇪</span><span>BE</span></button>
-            <button class="lang-btn" data-lang="hu"><span>🇭🇺</span><span>HU</span></button>
-            <button class="lang-btn" data-lang="at"><span>🇦🇹</span><span>AT</span></button>
-            <button class="lang-btn" data-lang="tw"><span>🇹🇼</span><span>TW</span></button>
-            <button class="lang-btn" data-lang="sg"><span>🇸🇬</span><span>SG</span></button>
-            <button class="lang-btn" data-lang="id"><span>🇮🇩</span><span>ID</span></button>
-            <button class="lang-btn" data-lang="my"><span>🇲🇾</span><span>MY</span></button>
-            <button class="lang-btn" data-lang="in"><span>🇮🇳</span><span>IN</span></button>
-            <button class="lang-btn" data-lang="fi"><span>🇫🇮</span><span>FI</span></button>
-            <button class="lang-btn" data-lang="nl"><span>🇳🇱</span><span>NL</span></button>
-            <button class="lang-btn" data-lang="se"><span>🇸🇪</span><span>SE</span></button>
-            <button class="lang-btn" data-lang="ch"><span>🇨🇭</span><span>CH</span></button>
-        </div>
+      </div>
+
+      <button id="pay-btn" disabled>THANH TOÁN</button>
     </div>
+  </div>
 </div>
 
-<button id="scroll-to-checkout" class="hidden" data-action="scroll-checkout" aria-label="Cuộn xuống nút chốt đơn">⌄</button>
+<!-- Thông báo nhỏ (Toast) -->
+<div id="toast" class="toast"></div>
 
-<div id="app-modal-backdrop" class="app-modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="app-modal-title">
-    <div class="app-modal-card">
-        <div class="app-modal-title" id="app-modal-title">Xác nhận</div>
-        <div class="app-modal-message" id="app-modal-message"></div>
-        <div class="app-modal-actions">
-            <button type="button" id="app-modal-cancel" class="app-modal-btn app-modal-btn-cancel">Hủy</button>
-            <button type="button" id="app-modal-confirm" class="app-modal-btn app-modal-btn-confirm">Xác nhận</button>
-        </div>
+<!-- Modal Thanh toán VietQR -->
+<div id="modal">
+  <div id="modal-box">
+    <h3 id="modal-title">Thanh toán</h3>
+    <p class="modal-subtitle">Quét mã VietQR để chuyển khoản nhanh</p>
+    <div id="modal-total" class="modal-total">0đ</div>
+    <div class="qr-wrapper">
+      <img id="qr-img" src="" alt="Mã VietQR thanh toán">
     </div>
+    <p class="modal-note">Nội dung chuyển khoản & số tiền đã được điền tự động</p>
+    <div class="modal-actions">
+      <button id="confirm-pay">✅ XÁC NHẬN ĐÃ THU TIỀN</button>
+      <button id="cancel-pay">Hủy</button>
+    </div>
+  </div>
 </div>
-<div id="app-toast-container" class="app-toast-container" aria-live="polite"></div>
 
-<script type="module" src="app.js?v=fx-sound-v28"></script>
+<!-- Đổi tham số phiên bản đồng bộ với các thẻ link ở phần head khi cập nhật thực đơn -->
+<script type="module" src="app.js?v=2026.11.19-v1"></script>
 </body>
 </html>
