@@ -483,7 +483,15 @@ body.dark-mode .table-card {
 .half-width { grid-column: span 3; }
 .table-card strong, .table-card span { position: relative; z-index: 10; }
 
-/* Tên bàn + Huy hiệu icon phân khu màu vàng gold (Trong nhà / Ngoài hiên / Ngoài đường) */
+/* Tên bàn + Huy hiệu icon phân khu màu vàng gold có hiệu ứng phản chiếu ánh đèn (Shimmer / Light Sweep ~1s) */
+@keyframes tableIconLightSweep {
+    0%, 16% {
+        background-position: 100% 0, 0 0;
+    }
+    76%, 100% {
+        background-position: 0% 0, 0 0;
+    }
+}
 .table-card strong {
     display: flex;
     flex-direction: column;
@@ -503,11 +511,25 @@ body.dark-mode .table-card {
     width: 24px;
     height: 24px;
     border-radius: 8px;
-    background: linear-gradient(145deg, #fff9db 0%, #fde68a 58%, #f6cf59 100%);
+    background-color: #fde68a;
+    background-image:
+        linear-gradient(
+            115deg,
+            rgba(255, 255, 255, 0) 0%,
+            rgba(255, 255, 255, 0) 41%,
+            rgba(255, 255, 255, 0.94) 50%,
+            rgba(255, 255, 255, 0) 59%,
+            rgba(255, 255, 255, 0) 100%
+        ),
+        linear-gradient(145deg, #fff9db 0%, #fde68a 58%, #f6cf59 100%);
+    background-size: 260% 100%, 100% 100%;
+    background-position: 100% 0, 0 0;
+    background-repeat: no-repeat;
     border: 1px solid #d4af37;
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.90), 0 1px 3px rgba(212, 175, 55, 0.24);
     flex-shrink: 0;
-    transition: background 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+    animation: tableIconLightSweep 1.1s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    transition: border-color 0.25s ease, box-shadow 0.25s ease;
 }
 .table-card strong::after {
     content: "";
@@ -518,7 +540,19 @@ body.dark-mode .table-card {
     width: 15px;
     height: 15px;
     background-color: #d4af37;
-    background-image: linear-gradient(180deg, #eab308 0%, #ca8a04 55%, #a16207 100%);
+    background-image:
+        linear-gradient(
+            115deg,
+            rgba(255, 255, 255, 0) 0%,
+            rgba(255, 255, 255, 0) 40%,
+            rgba(255, 253, 228, 0.98) 50%,
+            rgba(255, 255, 255, 0) 60%,
+            rgba(255, 255, 255, 0) 100%
+        ),
+        linear-gradient(180deg, #eab308 0%, #ca8a04 55%, #a16207 100%);
+    background-size: 260% 100%, 100% 100%;
+    background-position: 100% 0, 0 0;
+    background-repeat: no-repeat;
     filter: drop-shadow(0 0.5px 0 rgba(255, 255, 255, 0.65));
     -webkit-mask-repeat: no-repeat;
     mask-repeat: no-repeat;
@@ -530,7 +564,8 @@ body.dark-mode .table-card {
     -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 10.5L12 3l9 7.5'/%3E%3Cpath d='M5.5 9.5V19.5h13V9.5'/%3E%3Cpath d='M10 19.5v-5.5h4v5.5'/%3E%3C/svg%3E");
     mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 10.5L12 3l9 7.5'/%3E%3Cpath d='M5.5 9.5V19.5h13V9.5'/%3E%3Cpath d='M10 19.5v-5.5h4v5.5'/%3E%3C/svg%3E");
     pointer-events: none;
-    transition: background-color 0.25s ease, filter 0.25s ease;
+    animation: tableIconLightSweep 1.1s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    transition: filter 0.25s ease;
 }
 /* Bàn trong hiên: Icon Mái hiên quán */
 .table-card.full-width strong::after {
@@ -546,13 +581,34 @@ body.dark-mode .table-card strong {
     color: #ffe89e;
 }
 body.dark-mode .table-card strong::before {
-    background: linear-gradient(145deg, rgba(255, 215, 0, 0.28) 0%, rgba(212, 175, 55, 0.14) 100%);
+    background-color: rgba(255, 215, 0, 0.22);
+    background-image:
+        linear-gradient(
+            115deg,
+            rgba(255, 255, 255, 0) 0%,
+            rgba(255, 255, 255, 0) 41%,
+            rgba(255, 248, 200, 0.62) 50%,
+            rgba(255, 255, 255, 0) 59%,
+            rgba(255, 255, 255, 0) 100%
+        ),
+        linear-gradient(145deg, rgba(255, 215, 0, 0.28) 0%, rgba(212, 175, 55, 0.14) 100%);
+    background-size: 260% 100%, 100% 100%;
     border-color: rgba(255, 215, 0, 0.56);
     box-shadow: inset 0 1px 0 rgba(255, 243, 176, 0.24), 0 1px 4px rgba(212, 175, 55, 0.20);
 }
 body.dark-mode .table-card strong::after {
     background-color: #ffd700;
-    background-image: linear-gradient(180deg, #fff099 0%, #ffd700 52%, #d4af37 100%);
+    background-image:
+        linear-gradient(
+            115deg,
+            rgba(255, 255, 255, 0) 0%,
+            rgba(255, 255, 255, 0) 40%,
+            rgba(255, 255, 255, 0.96) 50%,
+            rgba(255, 255, 255, 0) 60%,
+            rgba(255, 255, 255, 0) 100%
+        ),
+        linear-gradient(180deg, #fff099 0%, #ffd700 52%, #d4af37 100%);
+    background-size: 260% 100%, 100% 100%;
     filter: drop-shadow(0 0 2px rgba(255, 215, 0, 0.25));
 }
 .table-card.has-guest strong {
@@ -1512,6 +1568,8 @@ body.tab-hidden .wi-blow,
 body.tab-hidden .wi-blow2,
 body.tab-hidden .wi-blow3,
 body.tab-hidden .flip-colon,
+body.tab-hidden .table-card strong::before,
+body.tab-hidden .table-card strong::after,
 body.tab-hidden .table-card.has-viewer,
 body.tab-hidden .table-card.has-guest,
 body.tab-hidden .is-locked::before,
@@ -1529,6 +1587,8 @@ body.tab-hidden #scroll-to-checkout {
     .status-empty,
     .status-normal,
     .status-crowded::before,
+    .table-card strong::before,
+    .table-card strong::after,
     .table-card.is-locked::before {
         animation: none !important;
     }
