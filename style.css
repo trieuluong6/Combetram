@@ -1077,7 +1077,6 @@ body.dark-mode .bill-box { border-left-color: rgba(255, 255, 255, 0.08); border-
 .total-container::before { content: ''; position: absolute; inset: 0; width: 400%; background: linear-gradient(90deg, #ffecec 0%, #ecfaec 25%, #ecf3ff 50%, #fff8e6 75%, #ffecec 100%); z-index: -1; pointer-events: none; will-change: transform; animation: pulse-rgb-total 2.8s infinite linear; }
 body.dark-mode .total-container::before { background: linear-gradient(90deg, #2d1b1b 0%, #1b2d1f 25%, #1b2233 50%, #2d2719 75%, #2d1b1b 100%); }
 @keyframes pulse-rgb-total { 0% { transform: translate3d(0%, 0, 0); } 100% { transform: translate3d(-75%, 0, 0); } }
-.bill-thanks { margin-top: 12px; padding: 11px 4px 2px; border-top: 1.5px dashed var(--bg-bill-divider); text-align: center; font-size: 17.5px; font-weight: 800; line-height: 1.3; letter-spacing: 0.01em; color: var(--text-main); white-space: nowrap; transition: border-color 0.4s ease, color 0.4s ease; }
 .total-label-wrapper { display: flex; align-items: center; gap: 5px; min-width: 0; flex-shrink: 1; }
 #txt-total-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.85em; }
 .lang-btn { padding: 10px 2px; border: 1px solid var(--border-card); border-radius: 8px; background: var(--bg-card); font-size: 0.75em; font-weight: bold; color: var(--text-muted); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; cursor: pointer; transition: background 0.3s ease, color 0.3s ease, border-color 0.3s ease, transform 0.15s ease; }
@@ -1455,41 +1454,40 @@ body.dark-mode .remote-cursor { border-color: #1c232b; }
 
 /* MARKET CARDS: BTC & DẦU */
 .ticker-item {
-    width: 68px;
-    min-width: 68px;
+    width: 72px;
+    min-width: 72px;
     height: 58px;
     box-sizing: border-box;
-    padding: 5px 6px 4px;
+    padding: 4px 5px;
     border-radius: 11px;
     border: 1px solid var(--border-soft);
     background: linear-gradient(180deg, rgba(var(--bg-card-rgb),0.96), rgba(var(--bg-card-rgb),0.78));
     box-shadow: 0 3px 10px var(--shadow-card);
-    display: grid;
-    grid-template-rows: auto auto auto 1fr;
-    justify-items: center;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
     align-items: center;
+    gap: 3px;
+    text-align: center;
     flex-shrink: 0;
     overflow: hidden;
     transition: background 0.4s ease, border-color 0.35s ease, box-shadow 0.35s ease;
 }
 body.dark-mode .ticker-item { background: linear-gradient(180deg, rgba(39,49,60,0.96), rgba(28,35,43,0.82)); }
-.ticker-label { font-size: 0.47rem; line-height: 1; color: var(--text-muted); font-weight: 800; letter-spacing: 0.28px; white-space: nowrap; }
-.ticker-value { margin-top: 2px; font-size: 0.68rem; line-height: 1; font-weight: 900; color: var(--text-main); white-space: nowrap; font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1; transition: color 0.25s ease; }
-.ticker-delta { margin-top: 2px; font-size: 0.44rem; line-height: 1; font-weight: 850; color: var(--text-muted); white-space: nowrap; transition: color 0.25s ease; }
-.ticker-sparkline { width: 56px; height: 11px; margin-top: 2px; overflow: visible; }
-.ticker-sparkline-line { fill: none; stroke: var(--text-muted); stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; transition: stroke 0.25s ease; }
+.ticker-label { font-size: 0.52rem; line-height: 1.05; color: var(--text-muted); font-weight: 800; letter-spacing: 0.25px; white-space: nowrap; }
+.ticker-value { font-size: 0.78rem; line-height: 1.1; font-weight: 900; color: var(--text-main); white-space: nowrap; font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1; transition: color 0.25s ease; }
+.ticker-delta { font-size: 0.54rem; line-height: 1.05; font-weight: 850; color: var(--text-muted); white-space: nowrap; transition: color 0.25s ease; }
 .ticker-item.up { border-color: rgba(76,175,80,0.28); }
-.ticker-item.up .ticker-delta, .ticker-item.up .ticker-sparkline-line { color: var(--success-green); stroke: var(--success-green); }
+.ticker-item.up .ticker-delta { color: var(--success-green); }
 .ticker-item.down { border-color: rgba(211,47,47,0.25); }
-.ticker-item.down .ticker-delta, .ticker-item.down .ticker-sparkline-line { color: var(--primary-red); stroke: var(--primary-red); }
+.ticker-item.down .ticker-delta { color: var(--primary-red); }
 .ticker-item.flat .ticker-delta { color: var(--text-muted); }
 
 @media (max-width: 380px) {
-    .ticker-item { width: 54px; min-width: 54px; height: 53px; padding: 4px 3px 3px; border-radius: 9px; }
-    .ticker-label { font-size: 0.40rem; letter-spacing: 0; }
-    .ticker-value { font-size: 0.55rem; }
-    .ticker-delta { font-size: 0.38rem; }
-    .ticker-sparkline { width: 44px; height: 9px; }
+    .ticker-item { width: 58px; min-width: 58px; height: 53px; padding: 3px 3px; border-radius: 9px; gap: 2.5px; }
+    .ticker-label { font-size: 0.44rem; letter-spacing: 0; }
+    .ticker-value { font-size: 0.64rem; }
+    .ticker-delta { font-size: 0.46rem; }
 }
 
 /* ─── SINGLE-SHEET ORIGAMI INTRO V7 ───────────────────────────────── */

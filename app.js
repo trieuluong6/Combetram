@@ -650,7 +650,7 @@ function scheduleRefresh(tableIds = null, updateCurrentOrder = false) {
 }
 
 // ─── Lazy-load dict theo ngôn ngữ + Preload bill assets ─────────────────
-let dictCache = { vi: { flag: "🇻🇳", total: "TỔNG", thanks: "Cảm ơn quý khách & hẹn gặp lại!", items: {} } };
+let dictCache = { vi: { flag: "🇻🇳", total: "TỔNG", items: {} } };
 let dictLoadPromise = null;
 let billAssetsPreloaded = false;
 
@@ -786,14 +786,11 @@ fetchRealtimeWeather();
 setInterval(fetchRealtimeWeather, 600000);
 startWeatherFluctuationInterval();
 
-// TICKER BTC & DẦU
+// TICKER BTC & DẦU (GIÁ THỰC TẾ, KHÔNG NHẢY SỐ GIẢ)
 const BTC_TICKER_ID = 'btc-ticker';
 const OIL_TICKER_ID = 'oil-ticker';
 let realBitcoinPrice = null, realOilPrice = null;
-let displayedBitcoinPrice = null, displayedOilPrice = null;
 let realBitcoinChangePct = null, realOilChangePct = null;
-const tickerHistory = { btc: [], oil: [] };
-let lastSparkSampleAt = 0;
 
 function formatTickerPrice(kind, value) {
     if (!Number.isFinite(value)) return '--';
@@ -802,39 +799,7 @@ function formatTickerPrice(kind, value) {
         : `$${value.toFixed(2)}`;
 }
 
-function seedTickerHistory(kind, value, amplitude) {
-    if (tickerHistory[kind].length || !Number.isFinite(value)) return;
-    let cursor = value - amplitude * 0.3;
-    for (let i = 0; i < 18; i++) {
-        cursor += (Math.random() - 0.48) * amplitude;
-        tickerHistory[kind].push(cursor);
-    }
-    tickerHistory[kind][tickerHistory[kind].length - 1] = value;
-}
-
-function pushTickerHistory(kind, value) {
-    if (!Number.isFinite(value)) return;
-    const arr = tickerHistory[kind];
-    arr.push(value);
-    if (arr.length > 22) arr.shift();
-}
-
-function renderSparkline(elementId, history) {
-    const widget = document.getElementById(elementId);
-    const line = widget?.querySelector('.ticker-sparkline-line');
-    if (!line || history.length < 2) return;
-    const width = 64, height = 16, pad = 1.5;
-    const min = Math.min(...history), max = Math.max(...history);
-    const range = Math.max(max - min, Math.abs(max || 1) * 0.000001);
-    const points = history.map((v, i) => {
-        const x = pad + i * ((width - pad * 2) / (history.length - 1));
-        const y = height - pad - ((v - min) / range) * (height - pad * 2);
-        return `${x.toFixed(1)},${y.toFixed(1)}`;
-    }).join(' ');
-    line.setAttribute('points', points);
-}
-
-function renderTicker(elementId, kind, value, prevValue, changePct) {
+function renderTicker(elementId, kind, value, changePct) {
     const widget = document.getElementById(elementId);
     if (!widget || !Number.isFinite(value)) return;
     const valueSpan = widget.querySelector('.ticker-value');
@@ -842,8 +807,7 @@ function renderTicker(elementId, kind, value, prevValue, changePct) {
     if (!valueSpan) return;
 
     valueSpan.textContent = formatTickerPrice(kind, value);
-    const fallbackDelta = prevValue === null ? 0 : ((value - prevValue) / Math.max(Math.abs(prevValue), 1)) * 100;
-    const delta = Number.isFinite(changePct) ? changePct : fallbackDelta;
+    const delta = Number.isFinite(changePct) ? changePct : 0;
     const isUp = delta > 0.0001;
     const isDown = delta < -0.0001;
     widget.classList.toggle('up', isUp);
@@ -853,7 +817,6 @@ function renderTicker(elementId, kind, value, prevValue, changePct) {
         const arrow = isUp ? '▲' : isDown ? '▼' : '•';
         deltaSpan.textContent = `${arrow} ${Math.abs(delta).toFixed(2)}%`;
     }
-    renderSparkline(elementId, tickerHistory[kind]);
 }
 
 async function fetchBitcoinPrice() {
@@ -879,9 +842,7 @@ async function fetchBitcoinPrice() {
             if (!Number.isFinite(price) || price <= 0) continue;
             realBitcoinPrice = price;
             realBitcoinChangePct = Number.isFinite(changePct) ? changePct : realBitcoinChangePct;
-            if (displayedBitcoinPrice === null) displayedBitcoinPrice = price;
-            seedTickerHistory('btc', price, 70);
-            renderTicker(BTC_TICKER_ID, 'btc', displayedBitcoinPrice, null, realBitcoinChangePct);
+            renderTicker(BTC_TICKER_ID, 'btc', realBitcoinPrice, realBitcoinChangePct);
             return;
         } catch (err) { /* thử nguồn kế tiếp */ }
     }
@@ -914,9 +875,7 @@ async function fetchOilPrice() {
             if (!Number.isFinite(price) || price <= 0) continue;
             realOilPrice = price;
             realOilChangePct = Number.isFinite(changePct) ? changePct : realOilChangePct;
-            if (displayedOilPrice === null) displayedOilPrice = price;
-            seedTickerHistory('oil', price, 0.18);
-            renderTicker(OIL_TICKER_ID, 'oil', displayedOilPrice, null, realOilChangePct);
+            renderTicker(OIL_TICKER_ID, 'oil', realOilPrice, realOilChangePct);
             return;
         } catch (err) { /* thử nguồn kế tiếp */ }
     }
@@ -927,37 +886,7 @@ fetchBitcoinPrice(); fetchOilPrice();
 setInterval(fetchBitcoinPrice, 180000);
 setInterval(fetchOilPrice, 180000);
 
-let isTickersVisible = true;
-let tickerIntervalId = null;
-function tickMarketTickers() {
-    if (document.hidden || !isTickersVisible) return;
-    const now = Date.now();
-    const shouldSampleSpark = now - lastSparkSampleAt >= 3200;
-    if (realBitcoinPrice !== null) {
-        const newVal = realBitcoinPrice + (Math.random() - 0.5) * 100;
-        if (shouldSampleSpark) pushTickerHistory('btc', newVal);
-        renderTicker(BTC_TICKER_ID, 'btc', newVal, displayedBitcoinPrice, realBitcoinChangePct);
-        displayedBitcoinPrice = newVal;
-    }
-    if (realOilPrice !== null) {
-        const newVal = realOilPrice + (Math.random() - 0.5) * 0.3;
-        if (shouldSampleSpark) pushTickerHistory('oil', newVal);
-        renderTicker(OIL_TICKER_ID, 'oil', newVal, displayedOilPrice, realOilChangePct);
-        displayedOilPrice = newVal;
-    }
-    if (shouldSampleSpark) lastSparkSampleAt = now;
-}
-function startTickerInterval() {
-    if (tickerIntervalId || document.hidden || !isTickersVisible) return;
-    tickerIntervalId = setInterval(tickMarketTickers, 800);
-}
-function stopTickerInterval() {
-    clearInterval(tickerIntervalId);
-    tickerIntervalId = null;
-}
-startTickerInterval();
-
-// ─── TỰ ĐỘNG TẠM DỪNG TICKER & THỜI TIẾT KHI CUỘN KHUẤT MÀN HÌNH ───────
+// ─── TỰ ĐỘNG TẠM DỪNG THỜI TIẾT KHI CUỘN KHUẤT MÀN HÌNH ───────────────
 (function initTopWidgetsVisibilityObserver() {
     if (!('IntersectionObserver' in window)) return;
 
@@ -975,29 +904,6 @@ startTickerInterval();
             }
         }, { rootMargin: '60px 0px' });
         weatherObserver.observe(weatherEl);
-    }
-
-    const btcEl = document.getElementById(BTC_TICKER_ID);
-    const oilEl = document.getElementById(OIL_TICKER_ID);
-    const tickerTargets = [btcEl, oilEl].filter(Boolean);
-    if (tickerTargets.length) {
-        const visibleSet = new Set(tickerTargets);
-        const tickerObserver = new IntersectionObserver((entries) => {
-            for (const entry of entries) {
-                if (entry.isIntersecting) visibleSet.add(entry.target);
-                else visibleSet.delete(entry.target);
-            }
-            const anyVisible = visibleSet.size > 0;
-            if (anyVisible === isTickersVisible) return;
-            isTickersVisible = anyVisible;
-            if (anyVisible) {
-                tickMarketTickers();
-                startTickerInterval();
-            } else {
-                stopTickerInterval();
-            }
-        }, { rootMargin: '60px 0px' });
-        tickerTargets.forEach(el => tickerObserver.observe(el));
     }
 })();
 
@@ -1095,11 +1001,9 @@ document.addEventListener('visibilitychange', () => {
     document.body.classList.toggle('tab-hidden', document.hidden);
     if (document.hidden) {
         handleAppBackgrounded();
-        stopTickerInterval();
         stopWeatherFluctuationInterval();
         stopClockInterval();
     } else {
-        startTickerInterval();
         startWeatherFluctuationInterval();
         startClockInterval();
         runPeriodicMaintenance();
@@ -2038,7 +1942,6 @@ let scrollTicking = false;
 window.addEventListener('resize', () => {
     scheduleRenderRemoteCursors(true);
     if (currentTab && data.locked?.[currentTab] && billViewMode === 'bill') {
-        fitBillThanksText();
         syncBillFlipHeight(false);
     }
 });
@@ -3302,29 +3205,6 @@ function refresh(tableIds = null, updateCurrentOrder = true) {
     flushRemoteOrderFlashes();
 }
 
-function fitBillThanksText() {
-    const el = document.getElementById('bill-thanks');
-    if (!el) return;
-    const availableWidth = el.clientWidth;
-    if (!availableWidth) return;
-
-    const maxFontPx = 17.5;
-    const minFontPx = 12;
-    el.style.whiteSpace = 'nowrap';
-    el.style.fontSize = `${maxFontPx}px`;
-
-    const textWidth = el.scrollWidth;
-    if (textWidth > availableWidth) {
-        const fittedSize = Math.floor((availableWidth / textWidth) * maxFontPx * 10) / 10;
-        if (fittedSize >= minFontPx) {
-            el.style.fontSize = `${fittedSize}px`;
-        } else {
-            el.style.fontSize = '12.5px';
-            el.style.whiteSpace = 'normal';
-        }
-    }
-}
-
 async function renderBillAsync(tab) {
     const targetLang = currentBillLang;
     const langData = await getLangData(targetLang);
@@ -3336,10 +3216,6 @@ async function renderBillAsync(tab) {
     let h = "", t = 0, my = getMergedOrder(tab);
     document.getElementById('txt-total-label').textContent = langData.total;
     document.getElementById('txt-lang-flag').textContent = langData.flag;
-    const thanksEl = document.getElementById('bill-thanks');
-    if (thanksEl) {
-        thanksEl.textContent = langData.thanks || dictCache.vi.thanks;
-    }
     let idx = 0;
     for (let id in my) {
         const itm = ITEM_MAP.get(Number(id));
@@ -3363,9 +3239,7 @@ async function renderBillAsync(tab) {
         setTimeout(() => tBox.classList.remove('total-pop'), 400);
     }
     updateDynamicVietQr(tab, t);
-    fitBillThanksText();
     requestAnimationFrame(() => {
-        fitBillThanksText();
         syncBillFlipHeight(false);
     });
 }
