@@ -764,16 +764,27 @@ async function fetchRealtimeWeather() {
 }
 
 function simulateWeatherFluctuation() {
-    if (document.hidden) return;
+    if (document.hidden || !isWeatherVisible) return;
     const tempOffset = (Math.random() - 0.5) * 0.4;
     const windSpeedOffset = (Math.random() - 0.5) * 0.6;
     const windDirOffset = Math.floor((Math.random() - 0.5) * 4);
     renderWeather(weatherCache.status, Math.max(10, Math.min(45, weatherCache.temp + tempOffset)), Math.max(0, Math.min(120, weatherCache.windSpeed + windSpeedOffset)), (weatherCache.windDir + windDirOffset + 360) % 360);
 }
 
+let isWeatherVisible = true;
+let weatherFluctuationIntervalId = null;
+function startWeatherFluctuationInterval() {
+    if (weatherFluctuationIntervalId || document.hidden || !isWeatherVisible) return;
+    weatherFluctuationIntervalId = setInterval(simulateWeatherFluctuation, 5000);
+}
+function stopWeatherFluctuationInterval() {
+    clearInterval(weatherFluctuationIntervalId);
+    weatherFluctuationIntervalId = null;
+}
+
 fetchRealtimeWeather();
 setInterval(fetchRealtimeWeather, 600000);
-setInterval(simulateWeatherFluctuation, 5000);
+startWeatherFluctuationInterval();
 
 // TICKER BTC & DẦU
 const BTC_TICKER_ID = 'btc-ticker';
@@ -916,32 +927,79 @@ fetchBitcoinPrice(); fetchOilPrice();
 setInterval(fetchBitcoinPrice, 180000);
 setInterval(fetchOilPrice, 180000);
 
+let isTickersVisible = true;
 let tickerIntervalId = null;
+function tickMarketTickers() {
+    if (document.hidden || !isTickersVisible) return;
+    const now = Date.now();
+    const shouldSampleSpark = now - lastSparkSampleAt >= 3200;
+    if (realBitcoinPrice !== null) {
+        const newVal = realBitcoinPrice + (Math.random() - 0.5) * 100;
+        if (shouldSampleSpark) pushTickerHistory('btc', newVal);
+        renderTicker(BTC_TICKER_ID, 'btc', newVal, displayedBitcoinPrice, realBitcoinChangePct);
+        displayedBitcoinPrice = newVal;
+    }
+    if (realOilPrice !== null) {
+        const newVal = realOilPrice + (Math.random() - 0.5) * 0.3;
+        if (shouldSampleSpark) pushTickerHistory('oil', newVal);
+        renderTicker(OIL_TICKER_ID, 'oil', newVal, displayedOilPrice, realOilChangePct);
+        displayedOilPrice = newVal;
+    }
+    if (shouldSampleSpark) lastSparkSampleAt = now;
+}
 function startTickerInterval() {
-    if (tickerIntervalId) return;
-    tickerIntervalId = setInterval(() => {
-        const now = Date.now();
-        const shouldSampleSpark = now - lastSparkSampleAt >= 3200;
-        if (realBitcoinPrice !== null) {
-            const newVal = realBitcoinPrice + (Math.random() - 0.5) * 100;
-            if (shouldSampleSpark) pushTickerHistory('btc', newVal);
-            renderTicker(BTC_TICKER_ID, 'btc', newVal, displayedBitcoinPrice, realBitcoinChangePct);
-            displayedBitcoinPrice = newVal;
-        }
-        if (realOilPrice !== null) {
-            const newVal = realOilPrice + (Math.random() - 0.5) * 0.3;
-            if (shouldSampleSpark) pushTickerHistory('oil', newVal);
-            renderTicker(OIL_TICKER_ID, 'oil', newVal, displayedOilPrice, realOilChangePct);
-            displayedOilPrice = newVal;
-        }
-        if (shouldSampleSpark) lastSparkSampleAt = now;
-    }, 800);
+    if (tickerIntervalId || document.hidden || !isTickersVisible) return;
+    tickerIntervalId = setInterval(tickMarketTickers, 800);
 }
 function stopTickerInterval() {
     clearInterval(tickerIntervalId);
     tickerIntervalId = null;
 }
 startTickerInterval();
+
+// ─── TỰ ĐỘNG TẠM DỪNG TICKER & THỜI TIẾT KHI CUỘN KHUẤT MÀN HÌNH ───────
+(function initTopWidgetsVisibilityObserver() {
+    if (!('IntersectionObserver' in window)) return;
+
+    const weatherEl = document.getElementById('weather-hub');
+    if (weatherEl) {
+        const weatherObserver = new IntersectionObserver((entries) => {
+            const visible = entries.some(e => e.isIntersecting);
+            if (visible === isWeatherVisible) return;
+            isWeatherVisible = visible;
+            if (visible) {
+                renderWeather(weatherCache.status, weatherCache.temp, weatherCache.windSpeed, weatherCache.windDir);
+                startWeatherFluctuationInterval();
+            } else {
+                stopWeatherFluctuationInterval();
+            }
+        }, { rootMargin: '60px 0px' });
+        weatherObserver.observe(weatherEl);
+    }
+
+    const btcEl = document.getElementById(BTC_TICKER_ID);
+    const oilEl = document.getElementById(OIL_TICKER_ID);
+    const tickerTargets = [btcEl, oilEl].filter(Boolean);
+    if (tickerTargets.length) {
+        const visibleSet = new Set(tickerTargets);
+        const tickerObserver = new IntersectionObserver((entries) => {
+            for (const entry of entries) {
+                if (entry.isIntersecting) visibleSet.add(entry.target);
+                else visibleSet.delete(entry.target);
+            }
+            const anyVisible = visibleSet.size > 0;
+            if (anyVisible === isTickersVisible) return;
+            isTickersVisible = anyVisible;
+            if (anyVisible) {
+                tickMarketTickers();
+                startTickerInterval();
+            } else {
+                stopTickerInterval();
+            }
+        }, { rootMargin: '60px 0px' });
+        tickerTargets.forEach(el => tickerObserver.observe(el));
+    }
+})();
 
 // ─── ĐỒNG HỒ LẬT (tự dừng khi ẩn tab, dùng textContent tránh reflow) ─────
 const CLOCK_CARD_DOM = ['h1', 'h2', 'm1', 'm2', 's1', 's2'].reduce((acc, k) => {
@@ -1038,9 +1096,11 @@ document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
         handleAppBackgrounded();
         stopTickerInterval();
+        stopWeatherFluctuationInterval();
         stopClockInterval();
     } else {
         startTickerInterval();
+        startWeatherFluctuationInterval();
         startClockInterval();
         runPeriodicMaintenance();
     }
@@ -1864,10 +1924,10 @@ function scheduleCursorTrail(id, startX, startY, endX, endY, color) {
     }
 }
 
-function positionCursorOnTable(id, el, rect, offsetIndex, color) {
-    if (!rect) { el.classList.remove('visible'); return; }
-    const x = rect.left + 12 + (offsetIndex * 16);
-    const y = rect.top + 12;
+function positionCursorOnTable(id, el, pos, offsetIndex, color) {
+    if (!pos) { el.classList.remove('visible'); return; }
+    const x = pos.left + 12 + (offsetIndex * 16);
+    const y = pos.top - window.scrollY + 12;
     const prev = lastCursorPos[id];
     if (prev && (Math.abs(prev.x - x) > 6 || Math.abs(prev.y - y) > 6)) {
         scheduleCursorTrail(id, prev.x, prev.y, x, y, color);
@@ -1877,23 +1937,43 @@ function positionCursorOnTable(id, el, rect, offsetIndex, color) {
     el.classList.add('visible');
 }
 
-const cachedTableRects = new Map();
-let tableRectsDirty = true;
+// Lưu tọa độ cố định theo document (left, top) -> cuộn trang không cần gọi getBoundingClientRect()
+const cachedTableDocPos = new Map();
+let tableDocPosDirty = true;
 
-function measureAllTableRects() {
-    cachedTableRects.clear();
+function measureAllTableDocPos() {
+    cachedTableDocPos.clear();
+    const scrollX = window.scrollX;
+    const scrollY = window.scrollY;
     for (let t = 1; t <= 9; t++) {
         const card = TABLE_DOM[t - 1]?.card;
-        cachedTableRects.set(t, card ? card.getBoundingClientRect() : null);
+        if (!card) {
+            cachedTableDocPos.set(t, null);
+            continue;
+        }
+        const rect = card.getBoundingClientRect();
+        cachedTableDocPos.set(t, {
+            left: rect.left + scrollX,
+            top: rect.top + scrollY
+        });
     }
-    tableRectsDirty = false;
+    tableDocPosDirty = false;
 }
 
-function getCachedTableRect(tableNum) {
-    if (tableRectsDirty || !cachedTableRects.has(tableNum)) {
-        measureAllTableRects();
+function getCachedTableDocPos(tableNum) {
+    if (tableDocPosDirty || !cachedTableDocPos.has(tableNum)) {
+        measureAllTableDocPos();
     }
-    return cachedTableRects.get(tableNum) || null;
+    return cachedTableDocPos.get(tableNum) || null;
+}
+
+function hasActiveRemoteCursors(now = getServerNow()) {
+    for (const [id, s] of Object.entries(sessionsMap)) {
+        if (id === mySessionId || !s || !Number(s.table)) continue;
+        const ts = Number(s.ts);
+        if (!Number.isFinite(ts) || (now - ts) < STALE_CURSOR_MS) return true;
+    }
+    return false;
 }
 
 function renderRemoteCursors(now = getServerNow()) {
@@ -1927,7 +2007,7 @@ function renderRemoteCursors(now = getServerNow()) {
             remoteCursorEls[id] = el;
         }
         el.style.background = s.color || '#999';
-        positionCursorOnTable(id, el, getCachedTableRect(tableNum), idx, s.color);
+        positionCursorOnTable(id, el, getCachedTableDocPos(tableNum), idx, s.color);
     });
 
     for (let t = 1; t <= 9; t++) {
@@ -1945,11 +2025,11 @@ function renderRemoteCursors(now = getServerNow()) {
 
 let cursorRenderTicking = false;
 function scheduleRenderRemoteCursors(remeasure = false) {
-    if (remeasure) tableRectsDirty = true;
+    if (remeasure) tableDocPosDirty = true;
     if (cursorRenderTicking) return;
     cursorRenderTicking = true;
     requestAnimationFrame(() => {
-        if (tableRectsDirty) measureAllTableRects();
+        if (tableDocPosDirty) measureAllTableDocPos();
         renderRemoteCursors();
         cursorRenderTicking = false;
     });
@@ -1963,14 +2043,13 @@ window.addEventListener('resize', () => {
     }
 });
 window.addEventListener('scroll', () => {
-    tableRectsDirty = true;
+    // Không cần đo lại layout khi cuộn; nếu không có con trỏ đồng nghiệp nào thì bỏ qua hoàn toàn
+    if (!hasActiveRemoteCursors() && Object.keys(remoteCursorEls).length === 0) return;
     if (scrollTicking) return;
     scrollTicking = true;
     requestAnimationFrame(() => {
         scrollTicking = false;
-        if (tableRectsDirty) measureAllTableRects();
         renderRemoteCursors();
-        updateActiveMenuCatPill();
     });
 }, { passive: true });
 
@@ -2263,6 +2342,16 @@ onValue(onlineRef, (snap) => {
 
 // ─── MENU + THANH NHẢY NHANH THEO NHÓM MÓN ─────────────────────────────
 const SHORT_CAT_LABELS = ['Cơm / Mỳ', 'Hấp / Cháo', 'Món thêm', 'Nước uống', 'Bia'];
+const CAT_PILL_ELS = [];
+let activeCatIdx = 0;
+
+function setActiveCatPill(idx) {
+    if (idx === activeCatIdx && CAT_PILL_ELS[idx]?.classList.contains('active')) return;
+    activeCatIdx = idx;
+    for (let i = 0; i < CAT_PILL_ELS.length; i++) {
+        CAT_PILL_ELS[i]?.classList.toggle('active', i === idx);
+    }
+}
 
 function renderMenu() {
     const navParts = [];
@@ -2283,7 +2372,13 @@ function renderMenu() {
         });
     });
     const catNav = document.getElementById('menu-cat-nav');
-    if (catNav) catNav.innerHTML = navParts.join('');
+    if (catNav) {
+        catNav.innerHTML = navParts.join('');
+        CAT_PILL_ELS.length = 0;
+        catNav.querySelectorAll('.cat-pill').forEach((pill, idx) => {
+            CAT_PILL_ELS[idx] = pill;
+        });
+    }
     document.getElementById('menu-list').innerHTML = parts.join('');
 }
 renderMenu();
@@ -2294,27 +2389,49 @@ ALL_ITEMS.forEach(item => {
     });
 });
 
+// Theo dõi tiêu đề nhóm món qua IntersectionObserver (không đọc getBoundingClientRect khi cuộn)
+(function initMenuCategoryObserver() {
+    if (!('IntersectionObserver' in window)) return;
+    const catSections = menu.map((_, idx) => document.getElementById(`cat-sec-${idx}`)).filter(Boolean);
+    if (!catSections.length) return;
+
+    const visibleCats = new Set();
+    const catObserver = new IntersectionObserver((entries) => {
+        for (const entry of entries) {
+            const idx = Number(entry.target.dataset.catIdx);
+            if (!Number.isInteger(idx)) continue;
+            if (entry.isIntersecting) {
+                visibleCats.add(idx);
+            } else {
+                visibleCats.delete(idx);
+                // Khi tiêu đề nhóm vừa cuộn vượt qua mép trên (boundingClientRect.top < 0),
+                // nội dung của chính nhóm đó đang nằm ngay phía dưới thanh nav
+                if (entry.boundingClientRect.top < 80) {
+                    setActiveCatPill(idx);
+                } else if (entry.boundingClientRect.top >= 80 && idx > 0 && visibleCats.size === 0) {
+                    setActiveCatPill(idx - 1);
+                }
+            }
+        }
+        if (visibleCats.size > 0) {
+            setActiveCatPill(Math.min(...visibleCats));
+        }
+    }, {
+        rootMargin: '-56px 0px -55% 0px',
+        threshold: 0
+    });
+
+    catSections.forEach(sec => catObserver.observe(sec));
+})();
+
 document.getElementById('menu-cat-nav')?.addEventListener('click', (e) => {
     const pill = e.target.closest('.cat-pill');
     if (!pill) return;
     triggerHaptic('nav');
-    const idx = pill.dataset.catIdx;
-    document.querySelectorAll('#menu-cat-nav .cat-pill').forEach(p => p.classList.toggle('active', p === pill));
+    const idx = Number(pill.dataset.catIdx);
+    setActiveCatPill(idx);
     document.getElementById(`cat-sec-${idx}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 });
-
-function updateActiveMenuCatPill() {
-    if (!currentTab || data.locked?.[currentTab]) return;
-    const nav = document.getElementById('menu-cat-nav');
-    if (!nav) return;
-    const threshold = nav.getBoundingClientRect().bottom + 14;
-    let activeIdx = 0;
-    for (let i = 0; i < menu.length; i++) {
-        const sec = document.getElementById(`cat-sec-${i}`);
-        if (sec && sec.getBoundingClientRect().top <= threshold) activeIdx = i;
-    }
-    nav.querySelectorAll('.cat-pill').forEach((p, idx) => p.classList.toggle('active', idx === activeIdx));
-}
 
 // Mở khóa toàn bộ kênh âm thanh ngay từ chạm đầu tiên
 ['pointerdown', 'touchstart', 'keydown'].forEach(evt => {
@@ -2693,6 +2810,7 @@ function selectTable(n, options = {}) {
     renderRemotePaying();
     const section = document.getElementById('order-section');
     if (currentTab) {
+        setActiveCatPill(0);
         document.getElementById('table-title').textContent = getTableDisplayName(n);
         section.style.display = 'block';
         requestAnimationFrame(() => requestAnimationFrame(() => section.classList.add('section-visible')));
@@ -3083,17 +3201,19 @@ function renderCurrentOrder() {
     syncCurrentTableRemotePayingUi(isTableRemotePaying(currentTab));
     syncLockButtonsState(currentTab);
 
-    ALL_ITEMS.forEach(item => {
-        const q = getEffectiveItemQty(currentTab, item.id);
-        const itemDom = ITEM_DOM.get(item.id);
-        const row = itemDom?.row, qSpan = itemDom?.qty;
-        if (row && qSpan && qSpan.textContent !== String(q)) {
-            qSpan.textContent = q;
-            applyMenuRowQtyClasses(row, q);
-        }
-    });
-
-    if (isLock) renderBillAsync(currentTab);
+    if (!isLock) {
+        ALL_ITEMS.forEach(item => {
+            const q = getEffectiveItemQty(currentTab, item.id);
+            const itemDom = ITEM_DOM.get(item.id);
+            const row = itemDom?.row, qSpan = itemDom?.qty;
+            if (row && qSpan && qSpan.textContent !== String(q)) {
+                qSpan.textContent = q;
+                applyMenuRowQtyClasses(row, q);
+            }
+        });
+    } else {
+        renderBillAsync(currentTab);
+    }
 }
 
 function renderTableTime(tableId, now = getServerNow()) {
@@ -3621,7 +3741,7 @@ function finishPaperFlipIntro() {
     }
     singleFoldTargets.clear();
     document.getElementById('paper-flip-overlay')?.replaceChildren();
-    tableRectsDirty = true;
+    tableDocPosDirty = true;
 }
 
 function runPaperFlipIntro() {
