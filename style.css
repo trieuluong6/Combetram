@@ -999,13 +999,13 @@ body.dark-mode .btn-add { background: #1f3a23; color: #81c784; }
 .bill-front { position: relative; transform: rotateY(0deg); }
 .bill-back { position: absolute; inset: 0 0 auto 0; transform: rotateY(180deg); }
 .bill-back[aria-hidden="true"] { visibility: hidden !important; opacity: 0 !important; }
-.bill-box { position: relative; border: none; border-left: 1px solid rgba(15, 23, 42, 0.08); border-right: 1px solid rgba(15, 23, 42, 0.08); padding: 14px 14px 12px; background: var(--paper-bg); border-radius: 0; margin-top: 12px; margin-bottom: 10px; overflow: visible; filter: drop-shadow(0 2px 3px rgba(15, 23, 42, 0.16)) drop-shadow(0 6px 14px rgba(15, 23, 42, 0.10)); transition: background 0.4s ease, border-color 0.4s ease, filter 0.4s ease; }
-body.dark-mode .bill-box { border-left-color: rgba(255, 255, 255, 0.08); border-right-color: rgba(255, 255, 255, 0.08); filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.45)) drop-shadow(0 8px 18px rgba(0, 0, 0, 0.35)); }
+.bill-box { position: relative; border: none; border-left: 1px solid rgba(15, 23, 42, 0.08); border-right: 1px solid rgba(15, 23, 42, 0.08); padding: 14px 14px 12px; background: var(--paper-bg); border-radius: 0; margin-top: 12px; margin-bottom: 10px; overflow: visible; box-shadow: 0 2px 3px rgba(15, 23, 42, 0.16), 0 6px 14px rgba(15, 23, 42, 0.10); transition: background 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease; }
+body.dark-mode .bill-box { border-left-color: rgba(255, 255, 255, 0.08); border-right-color: rgba(255, 255, 255, 0.08); box-shadow: 0 3px 6px rgba(0, 0, 0, 0.45), 0 8px 18px rgba(0, 0, 0, 0.35); }
 .bill-box::before,
 .bill-box::after { content: ""; position: absolute; left: -1px; right: -1px; height: 7px; pointer-events: none; transition: background 0.4s ease; }
 .bill-box::before { top: -6.5px; background: conic-gradient(from 135deg at 50% 0, var(--paper-bg) 90deg, transparent 0) 0 0 / 14px 7px repeat-x; }
 .bill-box::after { bottom: -6.5px; background: conic-gradient(from 315deg at 50% 100%, var(--paper-bg) 90deg, transparent 0) 0 0 / 14px 7px repeat-x; }
-.qr-bill-box { display: flex; align-items: center; justify-content: center; padding: 4px 6px; background: #fff; border: 2px solid var(--border-card); border-radius: 12px; margin-top: 4px; margin-bottom: 0; overflow: hidden; filter: none; box-shadow: 0 2px 8px var(--shadow-card); }
+.qr-bill-box { display: flex; align-items: center; justify-content: center; padding: 4px 6px; background: #fff; border: 2px solid var(--border-card); border-radius: 12px; margin-top: 4px; margin-bottom: 0; overflow: hidden; box-shadow: 0 2px 8px var(--shadow-card); }
 .qr-bill-box::before,
 .qr-bill-box::after { display: none; }
 #payment-qr { display: block; width: 100%; max-width: 100%; height: auto; object-fit: contain; margin: 0 auto; background: #fff; }
