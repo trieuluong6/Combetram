@@ -734,39 +734,41 @@ body.dark-mode .table-time { color: #cbd5e1; }
     .table-meta { font-size: 0.58em; padding: 2px 7px; }
 }
 
-/* Hiệu ứng chớp thở xanh ngọc chạy thuần GPU Compositor (opacity trên ::before) */
-@keyframes pulse-guest-opacity {
-    0%, 100% { opacity: 1; }
-    50%      { opacity: 0; }
+/* Hiệu ứng chớp thở xanh ngọc khi bàn đang có khách / đang gọi món (.has-guest) */
+@keyframes pulse-guest-glass {
+    0%, 100% {
+        background-color: rgba(220, 252, 231, 0.95);
+        border-color: rgba(22, 163, 74, 0.72);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.90), 0 1px 0 rgba(22, 163, 74, 0.20), 0 4px 10px rgba(22, 163, 74, 0.14);
+    }
+    50% {
+        background-color: rgba(187, 247, 208, 0.72);
+        border-color: rgba(34, 197, 94, 0.36);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.84), 0 1px 0 rgba(22, 163, 74, 0.12), 0 2px 6px rgba(22, 163, 74, 0.07);
+    }
+}
+@keyframes pulse-guest-glass-dark {
+    0%, 100% {
+        background-color: rgba(20, 62, 43, 0.95);
+        border-color: rgba(74, 222, 128, 0.62);
+        box-shadow: inset 0 1px 0 rgba(167, 243, 208, 0.18), 0 1px 0 rgba(6, 24, 16, 0.55), 0 4px 12px rgba(16, 185, 129, 0.20);
+    }
+    50% {
+        background-color: rgba(24, 42, 36, 0.80);
+        border-color: rgba(74, 222, 128, 0.26);
+        box-shadow: inset 0 1px 0 rgba(167, 243, 208, 0.10), 0 1px 0 rgba(6, 24, 16, 0.45), 0 3px 8px rgba(0, 0, 0, 0.26);
+    }
 }
 
 .table-card.has-guest {
-    background: rgba(187, 247, 208, 0.72);
+    background: none;
     border: 1.25px solid rgba(22, 163, 74, 0.70);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.84), 0 1px 0 rgba(22, 163, 74, 0.12), 0 2px 6px rgba(22, 163, 74, 0.07);
-    animation: none;
-}
-.table-card.has-guest::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    background: rgba(220, 252, 231, 0.95);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.90), inset 0 0 0 1px rgba(22, 163, 74, 0.18);
-    pointer-events: none;
-    z-index: 0;
-    will-change: opacity;
-    animation: pulse-guest-opacity 1.7s infinite ease-in-out;
+    animation: pulse-guest-glass 1.7s infinite ease-in-out;
 }
 body.dark-mode .table-card.has-guest {
-    background: rgba(24, 42, 36, 0.80);
+    background: none;
     border-color: rgba(74, 222, 128, 0.60);
-    box-shadow: inset 0 1px 0 rgba(167, 243, 208, 0.10), 0 1px 0 rgba(6, 24, 16, 0.45), 0 3px 8px rgba(0, 0, 0, 0.26);
-    animation: none;
-}
-body.dark-mode .table-card.has-guest::before {
-    background: rgba(20, 62, 43, 0.95);
-    box-shadow: inset 0 1px 0 rgba(167, 243, 208, 0.18), inset 0 0 0 1px rgba(74, 222, 128, 0.22);
+    animation: pulse-guest-glass-dark 1.7s infinite ease-in-out;
 }
 
 /* Bàn đang chọn (.active): giữ nguyên kích thước thẻ, viền xanh iOS sắc nét + nổi khối nhẹ */
@@ -792,15 +794,15 @@ body.dark-mode .table-card.active {
     color: #bae6fd;
 }
 
-/* Chốt chặn 1: Bàn vừa đang chọn (.active) vừa có món (.has-guest) — giữ Focus Ring xanh dương + nền vẫn chớp xanh ngọc */
+/* Khi bàn vừa đang chọn (.active) vừa có món (.has-guest): giữ viền Focus Ring xanh dương + nền vẫn chớp xanh ngọc */
 .table-card.has-guest.active {
-    background: rgba(187, 247, 208, 0.72);
-    animation: none;
+    background: none;
+    animation: pulse-guest-glass 1.7s infinite ease-in-out;
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.92), 0 1px 0 rgba(0, 122, 255, 0.20), 0 0 0 2.5px rgba(0, 122, 255, 0.21), 0 4px 10px rgba(0, 122, 255, 0.13);
 }
 body.dark-mode .table-card.has-guest.active {
-    background: rgba(24, 42, 36, 0.80);
-    animation: none;
+    background: none;
+    animation: pulse-guest-glass-dark 1.7s infinite ease-in-out;
     box-shadow: inset 0 1px 0 rgba(186, 230, 253, 0.18), 0 1px 0 rgba(7, 18, 32, 0.55), 0 0 0 2.5px rgba(56, 189, 248, 0.22), 0 5px 12px rgba(0, 0, 0, 0.36);
 }
 
@@ -863,13 +865,6 @@ body.dark-mode .table-card.active.is-locked::after {
 @keyframes rotate-led {
     from { transform: translate(-50%, -50%) rotate(0deg); }
     to   { transform: translate(-50%, -50%) rotate(360deg); }
-}
-
-/* Chốt chặn 2: Tắt lớp phủ ::before của .has-guest khi nháy tăng (+) / giảm (-) món để hiện trọn vẹn màu flash */
-.table-card.has-guest.flash-add::before,
-.table-card.has-guest.flash-sub::before {
-    display: none !important;
-    animation: none !important;
 }
 
 /* Hiệu ứng nháy tức thì khi bấm tăng (+) / giảm (-) món (ghi đè cả trạng thái .active & .has-guest) */
@@ -1350,7 +1345,9 @@ body.dark-mode .btn-pay-confirm:active {
     justify-content: center;
 }
 .app-toast {
-    background: rgba(var(--bg-card-rgb), 0.97);
+    background: rgba(var(--bg-card-rgb), 0.92);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
     color: var(--text-main);
     border: 1.5px solid var(--border-card);
     padding: 9px 16px;
@@ -1381,7 +1378,7 @@ body.dark-mode .app-toast-loading {
     border-color: #ffcc80;
 }
 body.dark-mode .app-toast-warning {
-    background: rgba(93, 64, 55, 0.96);
+    background: rgba(93, 64, 55, 0.92);
     color: #ffe0b2;
     border-color: rgba(255, 183, 77, 0.45);
 }
@@ -1391,7 +1388,7 @@ body.dark-mode .app-toast-warning {
     border-color: #ef9a9a;
 }
 body.dark-mode .app-toast-error {
-    background: rgba(127, 29, 29, 0.96);
+    background: rgba(127, 29, 29, 0.92);
     color: #ffcdd2;
     border-color: rgba(239, 154, 154, 0.5);
 }
@@ -1598,7 +1595,7 @@ body.tab-hidden .wi-blow3,
 body.tab-hidden .flip-colon,
 body.tab-hidden .table-card.is-locked .table-badge::before,
 body.tab-hidden .table-card.has-viewer,
-body.tab-hidden .table-card.has-guest::before,
+body.tab-hidden .table-card.has-guest,
 body.tab-hidden .is-locked::before,
 body.tab-hidden .total-container::before,
 body.tab-hidden .arrow-shaft::after,
@@ -1615,7 +1612,6 @@ body.tab-hidden #scroll-to-checkout {
     .status-normal,
     .status-crowded::before,
     .table-card.is-locked .table-badge::before,
-    .table-card.has-guest::before,
     .table-card.is-locked::before {
         animation: none !important;
     }
