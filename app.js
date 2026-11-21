@@ -87,12 +87,27 @@ function buildDynamicVietQrUrl(tab, amount, overrideAccountNo = '') {
     return `https://img.vietqr.io/image/${encodeURIComponent(bankId)}-${encodeURIComponent(accountNo)}-${encodeURIComponent(template)}.png?${params.toString()}`;
 }
 
-function loadDynamicQrCandidate(qrImg, candidates, idx = 0) {
+function setQrLoadingState(isLoading) {
+    const box = document.getElementById('qr-bill-box');
+    if (box) box.classList.toggle('is-loading', Boolean(isLoading));
+}
+
+function setQrFallbackNote(show) {
+    const note = document.getElementById('qr-fallback-note');
+    if (note) note.classList.toggle('hidden', !show);
+}
+
+function loadDynamicQrCandidate(qrImg, candidates, idx = 0, totalAmount = 0) {
     if (idx >= candidates.length) {
         latestRequestedQrUrl = '';
+        setQrLoadingState(false);
         if (initialStaticQrSrc && currentAppliedQrUrl !== initialStaticQrSrc) {
             currentAppliedQrUrl = initialStaticQrSrc;
             qrImg.src = initialStaticQrSrc;
+        }
+        setQrFallbackNote(totalAmount > 0);
+        if (billViewMode === 'qr') {
+            requestAnimationFrame(() => syncBillFlipHeight(true));
         }
         return;
     }
@@ -102,6 +117,8 @@ function loadDynamicQrCandidate(qrImg, candidates, idx = 0) {
     loader.onload = () => {
         if (latestRequestedQrUrl !== candidates[0]) return;
         currentAppliedQrUrl = url;
+        setQrLoadingState(false);
+        setQrFallbackNote(false);
         qrImg.src = url;
         if (billViewMode === 'qr') {
             requestAnimationFrame(() => syncBillFlipHeight(true));
@@ -109,7 +126,7 @@ function loadDynamicQrCandidate(qrImg, candidates, idx = 0) {
     };
     loader.onerror = () => {
         if (latestRequestedQrUrl !== candidates[0]) return;
-        loadDynamicQrCandidate(qrImg, candidates, idx + 1);
+        loadDynamicQrCandidate(qrImg, candidates, idx + 1, totalAmount);
     };
     loader.src = url;
 }
@@ -118,26 +135,36 @@ function updateDynamicVietQr(tab, totalAmount) {
     const qrImg = document.getElementById('payment-qr');
     if (!qrImg) return;
 
-    const primaryUrl = buildDynamicVietQrUrl(tab, totalAmount);
+    const cleanAmount = Math.max(0, Math.round(Number(totalAmount) || 0));
+    const primaryUrl = buildDynamicVietQrUrl(tab, cleanAmount);
     if (!primaryUrl) {
         latestRequestedQrUrl = '';
+        setQrLoadingState(false);
         if (initialStaticQrSrc && currentAppliedQrUrl !== initialStaticQrSrc) {
             currentAppliedQrUrl = initialStaticQrSrc;
             qrImg.src = initialStaticQrSrc;
         }
+        setQrFallbackNote(cleanAmount > 0);
         return;
     }
 
     const candidates = [primaryUrl];
     const fallbackAcc = (VIETQR_CONFIG.fallbackAccountNo || '').trim();
     if (fallbackAcc && fallbackAcc !== (VIETQR_CONFIG.accountNo || '').trim()) {
-        const fallbackUrl = buildDynamicVietQrUrl(tab, totalAmount, fallbackAcc);
+        const fallbackUrl = buildDynamicVietQrUrl(tab, cleanAmount, fallbackAcc);
         if (fallbackUrl && fallbackUrl !== primaryUrl) candidates.push(fallbackUrl);
     }
 
-    if (candidates.includes(currentAppliedQrUrl) || primaryUrl === latestRequestedQrUrl) return;
+    if (candidates.includes(currentAppliedQrUrl)) {
+        setQrLoadingState(false);
+        setQrFallbackNote(false);
+        return;
+    }
+    if (primaryUrl === latestRequestedQrUrl) return;
     latestRequestedQrUrl = primaryUrl;
-    loadDynamicQrCandidate(qrImg, candidates, 0);
+    setQrFallbackNote(false);
+    setQrLoadingState(true);
+    loadDynamicQrCandidate(qrImg, candidates, 0, cleanAmount);
 }
 
 
@@ -408,10 +435,27 @@ function syncLockButtonsState(tab = currentTab) {
         const disabled = isBusy || !hasItems;
         checkoutBtn.disabled = disabled;
         checkoutBtn.setAttribute('aria-disabled', String(disabled));
+        checkoutBtn.classList.toggle('is-busy', isBusy);
+        const labelEl = checkoutBtn.querySelector('.btn-action-label');
+        if (labelEl) {
+            labelEl.textContent = isBusy ? 'ĐANG CHỐT ĐƠN...' : 'CHỐT ĐƠN & XEM BILL';
+        }
     }
     if (unlockBtn) {
         unlockBtn.disabled = isBusy;
         unlockBtn.setAttribute('aria-disabled', String(isBusy));
+    }
+}
+
+function setPayButtonBusy(isBusy) {
+    const payBtn = document.getElementById('btn-pay-confirm');
+    if (!payBtn) return;
+    payBtn.disabled = Boolean(isBusy);
+    payBtn.setAttribute('aria-disabled', String(Boolean(isBusy)));
+    payBtn.classList.toggle('is-busy', Boolean(isBusy));
+    const labelEl = payBtn.querySelector('.btn-action-label');
+    if (labelEl) {
+        labelEl.textContent = isBusy ? 'ĐANG THANH TOÁN...' : 'XÁC NHẬN THANH TOÁN';
     }
 }
 
@@ -680,6 +724,12 @@ function syncActiveLangButton(lang) {
     if (billArea) {
         billArea.dataset.billLang = lang || 'vi';
     }
+}
+
+function setLangButtonLoading(lang = null) {
+    document.querySelectorAll('#lang-grid .lang-btn').forEach(btn => {
+        btn.classList.toggle('is-loading-lang', Boolean(lang && btn.dataset.lang === lang));
+    });
 }
 
 // CACHE THỜI TIẾT
@@ -2248,7 +2298,7 @@ function renderMenu() {
             parts.push(`<div class="menu-item" id="row-${i.id}">
                 <div class="item-info"><b>${i.name}</b><small>${i.price.toLocaleString()}đ</small></div>
                 <div class="controls">
-                    <button class="btn-qty btn-sub" data-item-id="${i.id}">-</button>
+                    <button class="btn-qty btn-sub is-zero" data-item-id="${i.id}">-</button>
                     <span class="qty-num" id="q-${i.id}">0</span>
                     <button class="btn-qty btn-add" data-item-id="${i.id}">+</button>
                 </div>
@@ -2267,9 +2317,11 @@ function renderMenu() {
 }
 renderMenu();
 ALL_ITEMS.forEach(item => {
+    const row = document.getElementById(`row-${item.id}`);
     ITEM_DOM.set(item.id, {
-        row: document.getElementById(`row-${item.id}`),
-        qty: document.getElementById(`q-${item.id}`)
+        row,
+        qty: document.getElementById(`q-${item.id}`),
+        subBtn: row?.querySelector('.btn-sub') || null
     });
 });
 
@@ -2373,14 +2425,30 @@ document.addEventListener('click', (e) => {
     triggerButtonRipple(e);
 });
 
-// ─── TỰ ẨN NÚT CUỘN XUỐNG KHI NÚT CHỐT ĐƠN ĐÃ HIỆN RA HOẶC BÀN 0Đ ─────
+// ─── MINI-CART PILL & TỰ ẨN KHI NÚT CHỐT ĐƠN ĐÃ HIỆN RA HOẶC BÀN 0Đ ─────
 let checkoutBtnVisible = false;
+let lastMiniCartSummary = '';
 function updateScrollCheckoutButton() {
     const scrollBtn = document.getElementById('scroll-to-checkout');
     if (!scrollBtn) return;
     const hasItems = Boolean(currentTab && effectiveTableHasItems(currentTab));
     const shouldShow = Boolean(currentTab && !data.locked?.[currentTab] && hasItems && !checkoutBtnVisible);
     scrollBtn.classList.toggle('hidden', !shouldShow);
+    if (!shouldShow || !currentTab) return;
+
+    const { total, foodQty, drinkQty } = calculateTableStats(currentTab);
+    const totalCount = foodQty + drinkQty;
+    const summaryText = `${totalCount} món · ${total.toLocaleString()}đ`;
+    const textEl = document.getElementById('mini-cart-text');
+    if (textEl && textEl.textContent !== summaryText) {
+        textEl.textContent = summaryText;
+        if (lastMiniCartSummary && lastMiniCartSummary !== summaryText) {
+            scrollBtn.classList.remove('is-updated');
+            void scrollBtn.offsetWidth;
+            scrollBtn.classList.add('is-updated');
+        }
+    }
+    lastMiniCartSummary = summaryText;
 }
 
 const checkoutBtnEl = document.getElementById('btn-checkout');
@@ -2695,11 +2763,19 @@ function selectTable(n, options = {}) {
     renderRemoteFocus();
     renderRemotePaying();
     const section = document.getElementById('order-section');
+    const sectionBody = document.getElementById('order-section-body');
     if (currentTab) {
         setActiveCatPill(0);
         document.getElementById('table-title').textContent = getTableDisplayName(n);
         section.style.display = 'block';
         requestAnimationFrame(() => requestAnimationFrame(() => section.classList.add('section-visible')));
+        if (sectionBody) {
+            sectionBody.classList.remove('slide-next', 'slide-prev');
+            if (previousTab && previousTab !== n) {
+                void sectionBody.offsetWidth;
+                sectionBody.classList.add(n > previousTab ? 'slide-next' : 'slide-prev');
+            }
+        }
         refresh(new Set([previousTab, currentTab].filter(Boolean)));
         const isLockedTable = (data.locked && data.locked[n]) || false;
         if (isLockedTable) {
@@ -2994,15 +3070,31 @@ function applyMenuRowQtyClasses(row, qty) {
     if (preserveRemoteFocus) row.classList.add('remote-focus');
 }
 
+function syncItemSubButtonZeroState(itemDom, qty) {
+    if (itemDom?.subBtn) {
+        itemDom.subBtn.classList.toggle('is-zero', qty <= 0);
+    }
+}
+
 function change(id, delta) {
     if (!currentTab || (data.locked && data.locked[currentTab]) || lockInProgressTables.has(Number(currentTab))) return;
-    const sfxType = delta > 0 ? 'add' : 'sub';
-    triggerHaptic(sfxType);
-    broadcastActivity({ sfx: sfxType, tableId: currentTab, itemId: id, immediate: false });
 
     const tab = currentTab;
     const currentQty = getEffectiveItemQty(tab, id);
-    if (delta < 0 && currentQty <= 0) return;
+    const itemDom = ITEM_DOM.get(id);
+
+    if (delta < 0 && currentQty <= 0) {
+        if (itemDom?.subBtn) {
+            itemDom.subBtn.classList.remove('is-shake-zero');
+            void itemDom.subBtn.offsetWidth;
+            itemDom.subBtn.classList.add('is-shake-zero');
+        }
+        return;
+    }
+
+    const sfxType = delta > 0 ? 'add' : 'sub';
+    triggerHaptic(sfxType);
+    broadcastActivity({ sfx: sfxType, tableId: currentTab, itemId: id, immediate: false });
 
     if (!pendingDeltas[tab]) pendingDeltas[tab] = {};
     const nextDelta = (pendingDeltas[tab][id] || 0) + delta;
@@ -3014,7 +3106,6 @@ function change(id, delta) {
     }
 
     const newQty = getEffectiveItemQty(tab, id);
-    const itemDom = ITEM_DOM.get(id);
     const qSpan = itemDom?.qty;
     const row = itemDom?.row;
     if (qSpan) {
@@ -3022,9 +3113,10 @@ function change(id, delta) {
         applyMenuRowQtyClasses(row, newQty);
         playQtyBump(qSpan);
     }
+    syncItemSubButtonZeroState(itemDom, newQty);
     syncLockButtonsState(tab);
-    updateScrollCheckoutButton();
     renderTable(tab, getServerNow());
+    updateScrollCheckoutButton();
     renderCrowdStatus();
     flashTableCard(delta);
 
@@ -3041,6 +3133,21 @@ function flashTableCard(delta) {
     const cls = delta > 0 ? 'flash-add' : 'flash-sub';
     tabBtn.classList.add(cls);
     setTimeout(() => tabBtn.classList.remove(cls), 320);
+}
+
+const errorFlashTimers = {};
+function flashTableError(tableId) {
+    const num = Number(tableId);
+    const tabBtn = num ? TABLE_DOM[num - 1]?.card : null;
+    if (!tabBtn) return;
+    tabBtn.classList.remove('flash-error');
+    void tabBtn.offsetWidth;
+    tabBtn.classList.add('flash-error');
+    clearTimeout(errorFlashTimers[num]);
+    errorFlashTimers[num] = setTimeout(() => {
+        tabBtn.classList.remove('flash-error');
+        delete errorFlashTimers[num];
+    }, 2100);
 }
 
 function changeBillLang(l) {
@@ -3096,6 +3203,7 @@ function renderCurrentOrder() {
                 qSpan.textContent = q;
                 applyMenuRowQtyClasses(row, q);
             }
+            syncItemSubButtonZeroState(itemDom, q);
         });
     } else {
         renderBillAsync(currentTab);
@@ -3145,6 +3253,7 @@ function renderTable(tableId, now = getServerNow()) {
         const preserveRemotePaying = dom.card.classList.contains('is-remote-paying');
         const preserveFlashAdd = dom.card.classList.contains('flash-add');
         const preserveFlashSub = dom.card.classList.contains('flash-sub');
+        const preserveFlashError = dom.card.classList.contains('flash-error');
         let className = tableId === 7 ? 'table-card full-width' : (tableId >= 8 ? 'table-card half-width' : 'table-card');
         if (tableId === currentTab) className += ' active';
         if (locked) className += ' is-locked';
@@ -3155,6 +3264,7 @@ function renderTable(tableId, now = getServerNow()) {
             if (preserveRemotePaying) dom.card.classList.add('is-remote-paying');
             if (preserveFlashAdd) dom.card.classList.add('flash-add');
             if (preserveFlashSub) dom.card.classList.add('flash-sub');
+            if (preserveFlashError) dom.card.classList.add('flash-error');
         }
     }
 }
@@ -3181,16 +3291,19 @@ function renderCrowdStatus() {
 function refresh(tableIds = null, updateCurrentOrder = true) {
     const ids = tableIds === null ? new Set(Array.from({ length: 9 }, (_, i) => i + 1)) : tableIds;
     const currentAffected = currentTab && (tableIds === null || ids.has(currentTab));
-    if (updateCurrentOrder && currentAffected) renderCurrentOrder();
     const now = getServerNow();
     for (const id of ids) renderTable(Number(id), now);
+    if (updateCurrentOrder && currentAffected) renderCurrentOrder();
     renderCrowdStatus();
     flushRemoteOrderFlashes();
 }
 
 async function renderBillAsync(tab) {
     const targetLang = currentBillLang;
+    const needsDictFetch = targetLang !== 'vi' && !dictCache[targetLang];
+    if (needsDictFetch) setLangButtonLoading(targetLang);
     const langData = await getLangData(targetLang);
+    if (needsDictFetch) setLangButtonLoading(null);
     if (currentTab !== tab || currentBillLang !== targetLang || !data.locked?.[tab]) return;
 
     const billArea = document.getElementById('bill-area');
@@ -3223,7 +3336,9 @@ async function renderBillAsync(tab) {
     }
     updateDynamicVietQr(tab, t);
     requestAnimationFrame(() => {
-        syncBillFlipHeight(false);
+        if (billViewMode === 'bill') {
+            syncBillFlipHeight(billWasShown);
+        }
     });
 }
 
@@ -3359,6 +3474,7 @@ async function doPay() {
 
     payingTables.add(tab);
     localPaymentEchoTables.add(tab);
+    setPayButtonBusy(true);
     clearPendingForTable(tab);
     stopBillScrollAnimation();
     triggerHaptic('success');
@@ -3402,6 +3518,7 @@ async function doPay() {
                 if (backupTime !== null) {
                     data.times[tab] = backupTime;
                 }
+                flashTableError(tab);
             } else {
                 delete data.orders[tab];
                 delete data.locked[tab];
@@ -3421,10 +3538,12 @@ async function doPay() {
             finalizeSuccessfulPayment(false);
         } else {
             restoreTableState();
+            flashTableError(tab);
             showToast('Mất kết nối! Thanh toán chưa lưu được, dữ liệu bàn đã được khôi phục.', 'error', 4500);
         }
     } finally {
         payingTables.delete(tab);
+        setPayButtonBusy(false);
         stopLocalPayingBroadcast(null, currentTab || 0);
     }
 }

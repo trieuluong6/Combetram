@@ -21,7 +21,7 @@
     html.paper-flip-pending .flip-clock-container > .flip-unit,
     html.paper-flip-pending .flip-clock-container > .flip-colon { visibility: hidden !important; }
     </style>
-    <link rel="stylesheet" href="style.css?v=fx-sound-v40">
+    <link rel="stylesheet" href="style.css?v=fx-sound-v41">
     <script>window.__paperFlipFailsafe = setTimeout(() => document.documentElement.classList.remove('paper-flip-pending'), 3000);</script>
 </head>
 <body>
@@ -144,6 +144,7 @@
 </div>
 
 <div id="order-section" class="container" style="display:none;">
+    <div id="order-section-body" class="order-section-body">
     <h3 id="table-title" style="text-align: center; margin-top:0; margin-bottom: 8px; color:var(--blue);"></h3>
     <div id="menu-area">
         <div id="menu-cat-nav" class="menu-cat-nav" aria-label="Nhảy nhanh nhóm món"></div>
@@ -171,8 +172,13 @@
                     </div>
                 </div>
                 <div class="bill-face bill-back" id="bill-face-qr" aria-hidden="true">
-                    <div class="bill-box qr-bill-box">
+                    <div class="bill-box qr-bill-box" id="qr-bill-box">
+                        <div class="qr-loading-overlay" id="qr-loading-overlay" aria-hidden="true">
+                            <span class="qr-spinner"></span>
+                            <span>Đang tạo mã QR...</span>
+                        </div>
                         <img id="payment-qr" src="payment-qr.png" alt="Mã QR thanh toán" decoding="async" draggable="false">
+                        <div class="qr-fallback-note hidden" id="qr-fallback-note">QR tĩnh • Khách tự nhập số tiền</div>
                     </div>
                 </div>
             </div>
@@ -197,7 +203,7 @@
             </span>
             <span class="btn-action-label">GỌI THÊM MÓN</span>
         </button>
-        <button class="btn-action btn-pay-confirm" data-action="pay-bill">
+        <button class="btn-action btn-pay-confirm" id="btn-pay-confirm" data-action="pay-bill">
             <span class="btn-action-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="12" cy="12" r="9"/>
@@ -233,9 +239,13 @@
             <button class="lang-btn" data-lang="ph"><span>🇵🇭</span><span>PH</span></button>
         </div>
     </div>
+    </div>
 </div>
 
-<button id="scroll-to-checkout" class="hidden" data-action="scroll-checkout" aria-label="Cuộn xuống nút chốt đơn">⌄</button>
+<button id="scroll-to-checkout" class="hidden" data-action="scroll-checkout" aria-label="Xem tóm tắt và cuộn xuống nút chốt đơn">
+    <span id="mini-cart-text">0 món · 0đ</span>
+    <span class="mini-cart-arrow" aria-hidden="true">⌄</span>
+</button>
 
 <div id="app-modal-backdrop" class="app-modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="app-modal-title">
     <div class="app-modal-card">
@@ -249,6 +259,6 @@
 </div>
 <div id="app-toast-container" class="app-toast-container" aria-live="polite"></div>
 
-<script type="module" src="app.js?v=fx-sound-v28"></script>
+<script type="module" src="app.js?v=fx-sound-v29"></script>
 </body>
 </html>
