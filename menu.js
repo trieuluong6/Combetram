@@ -45,8 +45,8 @@ export const menu = [
       { id: 40, name: "Cơm thêm", price: 5000 },
       { id: 28, name: "Đùi gà xối mỡ thêm", price: 40000 },
       { id: 41, name: "Bò xào rau củ thêm", price: 50000 },
-      { id: 42, name: "Dĩa rau lớn", price: 50000 },
-      { id: 43, name: "Dĩa rau nhỏ", price: 30000 }
+      { id: 42, name: "Dĩa rau nhỏ", price: 30000 },
+      { id: 43, name: "Dĩa rau lớn", price: 50000 }
     ]
   },
   {
