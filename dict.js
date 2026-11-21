@@ -736,11 +736,6 @@ export const dict = {
     total: "TOTAL",
     items: {
       ...enItems,
-      9: "Stir-fried beef glass noodles",
-      10: "Stir-fried seafood glass noodles",
-      11: "Chicken glass noodle soup",
-      12: "Beef glass noodle soup",
-      13: "Seafood glass noodle soup",
       18: "Steamed prawns",
       19: "Fried prawns with fish sauce",
       23: "Extra bitter gourd soup",

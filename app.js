@@ -151,10 +151,8 @@ onValue(ref(database, '.info/serverTimeOffset'), (snap) => {
         serverTimeOffset = offset;
         const firstSync = !hasServerTimeOffset;
         hasServerTimeOffset = true;
-        if (typeof bindActiveSessionsListeners === 'function') {
-            if (firstSync || Math.abs(offset - prevOffset) >= 3000) {
-                bindActiveSessionsListeners(true);
-            }
+        if (firstSync || Math.abs(offset - prevOffset) >= 3000) {
+            bindActiveSessionsListeners(true);
         }
     }
 });
@@ -220,7 +218,7 @@ function updateNetWidget(direction) {
 function set(refArg, value) { fbUpBytes += byteSizeOf(value); updateNetWidget('up'); return _fbSet(refArg, value); }
 function update(refArg, value) { fbUpBytes += byteSizeOf(value); updateNetWidget('up'); return _fbUpdate(refArg, value); }
 function remove(refArg) { fbUpBytes += byteSizeOf(null); updateNetWidget('up'); return _fbRemove(refArg); }
-function push(refArg, value) { if (value !== undefined) { fbUpBytes += byteSizeOf(value); updateNetWidget('up'); } return _fbPush(refArg, value); }
+function push(refArg) { return _fbPush(refArg); }
 function transaction(refArg, updateFn, options) {
     return runTransaction(refArg, updateFn, options).then((res) => {
         if (res?.committed) {
@@ -850,36 +848,19 @@ async function fetchBitcoinPrice() {
 }
 
 async function fetchOilPrice() {
-    const sources = [
-        async () => {
-            const res = await fetchWithTimeout('https://americasoilwatch.com/api/v1/wti', { cache: 'no-store' }, 4500);
-            if (!res.ok) throw new Error(`AmericasOilWatch HTTP ${res.status}`);
-            const d = await res.json();
-            return { price: Number(d?.priceUsd), changePct: Number(d?.changePct) };
-        },
-        ...['https://api.allorigins.win/raw?url=', 'https://corsproxy.io/?url='].map(proxy => async () => {
-            const targetUrl = 'https://query1.finance.yahoo.com/v8/finance/chart/CL=F';
-            const res = await fetchWithTimeout(proxy + encodeURIComponent(targetUrl), { cache: 'no-store' }, 4500);
-            if (!res.ok) throw new Error(`Oil fallback HTTP ${res.status}`);
-            const d = await res.json();
-            const meta = d?.chart?.result?.[0]?.meta || {};
-            const price = Number(meta.regularMarketPrice);
-            const prevClose = Number(meta.chartPreviousClose || meta.previousClose);
-            return { price, changePct: Number.isFinite(prevClose) && prevClose > 0 ? ((price - prevClose) / prevClose) * 100 : null };
-        })
-    ];
-
-    for (const getPrice of sources) {
-        try {
-            const { price, changePct } = await getPrice();
-            if (!Number.isFinite(price) || price <= 0) continue;
-            realOilPrice = price;
-            realOilChangePct = Number.isFinite(changePct) ? changePct : realOilChangePct;
-            renderTicker(OIL_TICKER_ID, 'oil', realOilPrice, realOilChangePct);
-            return;
-        } catch (err) { /* thử nguồn kế tiếp */ }
+    try {
+        const res = await fetchWithTimeout('https://americasoilwatch.com/api/v1/wti', { cache: 'no-store' }, 4500);
+        if (!res.ok) throw new Error(`AmericasOilWatch HTTP ${res.status}`);
+        const d = await res.json();
+        const price = Number(d?.priceUsd);
+        const changePct = Number(d?.changePct);
+        if (!Number.isFinite(price) || price <= 0) return;
+        realOilPrice = price;
+        realOilChangePct = Number.isFinite(changePct) ? changePct : realOilChangePct;
+        renderTicker(OIL_TICKER_ID, 'oil', realOilPrice, realOilChangePct);
+    } catch (err) {
+        console.error('[ticker] Không lấy được giá dầu:', err);
     }
-    console.error('[ticker] Không lấy được giá dầu từ mọi nguồn dự phòng');
 }
 
 fetchBitcoinPrice(); fetchOilPrice();
@@ -2363,31 +2344,33 @@ document.addEventListener('click', (e) => {
     }
 
     const actionEl = e.target.closest('[data-action]');
-    if (!actionEl) return;
-
-    switch (actionEl.dataset.action) {
-        case 'toggle-sound':
-            toggleSoundMute();
-            break;
-        case 'toggle-dark':
-            toggleDarkMode();
-            break;
-        case 'lock-bill':
-            setLock(true);
-            break;
-        case 'unlock-bill':
-            setLock(false);
-            break;
-        case 'toggle-qr':
-            toggleBillQr();
-            break;
-        case 'pay-bill':
-            doPay();
-            break;
-        case 'scroll-checkout':
-            scrollToCheckout();
-            break;
+    if (actionEl) {
+        switch (actionEl.dataset.action) {
+            case 'toggle-sound':
+                toggleSoundMute();
+                break;
+            case 'toggle-dark':
+                toggleDarkMode();
+                break;
+            case 'lock-bill':
+                setLock(true);
+                break;
+            case 'unlock-bill':
+                setLock(false);
+                break;
+            case 'toggle-qr':
+                toggleBillQr();
+                break;
+            case 'pay-bill':
+                doPay();
+                break;
+            case 'scroll-checkout':
+                scrollToCheckout();
+                break;
+        }
     }
+
+    triggerButtonRipple(e);
 });
 
 // ─── TỰ ẨN NÚT CUỘN XUỐNG KHI NÚT CHỐT ĐƠN ĐÃ HIỆN RA HOẶC BÀN 0Đ ─────
@@ -3448,7 +3431,7 @@ async function doPay() {
 
 // RIPPLE (tái sử dụng 1 node/nút + Web Animations API, không tạo/xóa DOM hay setTimeout)
 const buttonRipples = new WeakMap();
-document.addEventListener('click', (e) => {
+function triggerButtonRipple(e) {
     const btn = e.target.closest('.btn-action');
     if (!btn || btn.disabled) return;
     if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
@@ -3483,7 +3466,7 @@ document.addEventListener('click', (e) => {
             }
         };
     }
-});
+}
 
 // ─── SINGLE-SHEET ORIGAMI INTRO V7 ────────────────────────────────────
 const SINGLE_FOLD_DURATION = 420;
@@ -3694,16 +3677,3 @@ if (document.readyState === 'complete') {
 
 updateNetWidget();
 
-// ─── GỠ BỎ SERVICE WORKER & DỌN CACHE CŨ (KHÔNG DÙNG sw.js) ─────────────
-if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
-    window.addEventListener('load', () => {
-        navigator.serviceWorker.getRegistrations()
-            .then((regs) => Promise.all(regs.map((r) => r.unregister())))
-            .catch(() => {});
-        if ('caches' in window) {
-            caches.keys()
-                .then((keys) => Promise.all(keys.map((k) => caches.delete(k))))
-                .catch(() => {});
-        }
-    }, { once: true });
-}
