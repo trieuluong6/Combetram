@@ -21,7 +21,7 @@
     html.paper-flip-pending .flip-clock-container > .flip-unit,
     html.paper-flip-pending .flip-clock-container > .flip-colon { visibility: hidden !important; }
     </style>
-    <link rel="stylesheet" href="style.css?v=fx-sound-v41">
+    <link rel="stylesheet" href="style.css?v=fx-sound-v43">
     <script>window.__paperFlipFailsafe = setTimeout(() => document.documentElement.classList.remove('paper-flip-pending'), 3000);</script>
 </head>
 <body>
@@ -242,9 +242,8 @@
     </div>
 </div>
 
-<button id="scroll-to-checkout" class="hidden" data-action="scroll-checkout" aria-label="Xem tóm tắt và cuộn xuống nút chốt đơn">
-    <span id="mini-cart-text">0 món · 0đ</span>
-    <span class="mini-cart-arrow" aria-hidden="true">⌄</span>
+<button id="scroll-to-checkout" class="hidden" data-action="scroll-checkout" aria-label="Cuộn xuống nút chốt đơn" title="Cuộn xuống nút chốt đơn">
+    <span class="mini-cart-arrow" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11"/><path d="M7.5 10.5L12 15l4.5-4.5"/><path d="M6 19.5h12"/></svg></span>
 </button>
 
 <div id="app-modal-backdrop" class="app-modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="app-modal-title">
@@ -259,6 +258,6 @@
 </div>
 <div id="app-toast-container" class="app-toast-container" aria-live="polite"></div>
 
-<script type="module" src="app.js?v=fx-sound-v29"></script>
+<script type="module" src="app.js?v=fx-sound-v30"></script>
 </body>
 </html>

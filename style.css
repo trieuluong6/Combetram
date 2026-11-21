@@ -1534,38 +1534,43 @@ body.dark-mode .remote-cursor { border-color: #1c232b; }
 .remote-focus-tag { position: absolute; top: -7px; right: 8px; font-size: 0.62em; font-weight: 700; padding: 1px 6px; border-radius: 8px; color: #fff; opacity: 0; transform: translateY(2px); transition: opacity 0.25s ease, transform 0.25s ease; pointer-events: none; z-index: 5; }
 .remote-focus-tag.visible { opacity: 1; transform: translateY(0); }
 
-/* THANH MINI-CART & CUỘN XUỐNG CHỐT ĐƠN */
+/* NÚT ICON CUỘN XUỐNG CHỐT ĐƠN */
 #scroll-to-checkout {
     position: fixed;
     right: 14px;
     bottom: calc(118px + env(safe-area-inset-bottom, 0px));
-    padding: 9px 14px;
-    border-radius: 999px;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border-radius: 50%;
     border: 1.5px solid rgba(255, 255, 255, 0.28);
     background: linear-gradient(135deg, #ef6c00 0%, #fb8c00 100%);
     color: #fff;
-    font-size: 0.82em;
-    font-weight: 850;
-    line-height: 1.1;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 7px;
     cursor: pointer;
     opacity: 0.95;
     box-shadow: 0 6px 18px rgba(239, 108, 0, 0.34), 0 2px 6px rgba(0, 0, 0, 0.16);
     z-index: 50;
     transition: opacity 0.22s ease, transform 0.16s cubic-bezier(0.22, 1, 0.36, 1);
 }
-#scroll-to-checkout:active { opacity: 1; transform: scale(0.94); }
+#scroll-to-checkout:active { opacity: 1; transform: scale(0.92); }
 #scroll-to-checkout.hidden { display: none; }
 #scroll-to-checkout.is-updated { animation: miniCartPop 0.28s cubic-bezier(0.34, 1.56, 0.64, 1); }
 .mini-cart-arrow {
-    display: inline-block;
-    font-size: 1.15em;
-    font-weight: 900;
-    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
     animation: bobArrow 1.5s ease-in-out infinite;
+}
+.mini-cart-arrow svg {
+    width: 100%;
+    height: 100%;
+    display: block;
 }
 @keyframes miniCartPop {
     0%   { transform: scale(1); }

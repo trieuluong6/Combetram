@@ -2425,30 +2425,28 @@ document.addEventListener('click', (e) => {
     triggerButtonRipple(e);
 });
 
-// ─── MINI-CART PILL & TỰ ẨN KHI NÚT CHỐT ĐƠN ĐÃ HIỆN RA HOẶC BÀN 0Đ ─────
+// ─── NÚT CUỘN XUỐNG CHỐT ĐƠN (TỰ ẨN KHI NÚT CHỐT ĐƠN ĐÃ HIỆN RA HOẶC BÀN 0Đ) ─────
 let checkoutBtnVisible = false;
-let lastMiniCartSummary = '';
+let lastMiniCartState = '';
 function updateScrollCheckoutButton() {
     const scrollBtn = document.getElementById('scroll-to-checkout');
     if (!scrollBtn) return;
     const hasItems = Boolean(currentTab && effectiveTableHasItems(currentTab));
     const shouldShow = Boolean(currentTab && !data.locked?.[currentTab] && hasItems && !checkoutBtnVisible);
     scrollBtn.classList.toggle('hidden', !shouldShow);
-    if (!shouldShow || !currentTab) return;
+    if (!shouldShow || !currentTab) {
+        lastMiniCartState = '';
+        return;
+    }
 
     const { total, foodQty, drinkQty } = calculateTableStats(currentTab);
-    const totalCount = foodQty + drinkQty;
-    const summaryText = `${totalCount} món · ${total.toLocaleString()}đ`;
-    const textEl = document.getElementById('mini-cart-text');
-    if (textEl && textEl.textContent !== summaryText) {
-        textEl.textContent = summaryText;
-        if (lastMiniCartSummary && lastMiniCartSummary !== summaryText) {
-            scrollBtn.classList.remove('is-updated');
-            void scrollBtn.offsetWidth;
-            scrollBtn.classList.add('is-updated');
-        }
+    const currentState = `${currentTab}:${foodQty + drinkQty}:${total}`;
+    if (lastMiniCartState && lastMiniCartState !== currentState) {
+        scrollBtn.classList.remove('is-updated');
+        void scrollBtn.offsetWidth;
+        scrollBtn.classList.add('is-updated');
     }
-    lastMiniCartSummary = summaryText;
+    lastMiniCartState = currentState;
 }
 
 const checkoutBtnEl = document.getElementById('btn-checkout');
