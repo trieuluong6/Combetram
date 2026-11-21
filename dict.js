@@ -40,7 +40,9 @@ const enItems = {
   38: "Tiger Beer",
   39: "Heineken Beer",
   40: "Extra rice",
-  41: "Extra stir-fried beef with vegetables"
+  41: "Extra stir-fried beef with vegetables",
+  42: "Large plate of vegetables",
+  43: "Small plate of vegetables"
 };
 
 const deItems = {
@@ -84,7 +86,9 @@ const deItems = {
   38: "Tiger-Bier",
   39: "Heineken-Bier",
   40: "Extra Reis",
-  41: "Extra gebratenes Rindfleisch mit Gemüse"
+  41: "Extra gebratenes Rindfleisch mit Gemüse",
+  42: "Großer Teller Gemüse",
+  43: "Kleiner Teller Gemüse"
 };
 
 const nlItems = {
@@ -128,7 +132,9 @@ const nlItems = {
   38: "Tiger bier",
   39: "Heineken bier",
   40: "Extra rijst",
-  41: "Extra roergebakken rundvlees met groenten"
+  41: "Extra roergebakken rundvlees met groenten",
+  42: "Groot bord groenten",
+  43: "Klein bord groenten"
 };
 
 export const dict = {
@@ -184,7 +190,9 @@ export const dict = {
       38: "Bière Tiger",
       39: "Bière Heineken",
       40: "Riz supplémentaire",
-      41: "Bœuf sauté aux légumes supplémentaire"
+      41: "Bœuf sauté aux légumes supplémentaire",
+      42: "Grande assiette de légumes",
+      43: "Petite assiette de légumes"
     }
   },
 
@@ -232,7 +240,9 @@ export const dict = {
       38: "타이거 맥주",
       39: "하이네켄 맥주",
       40: "공깃밥 추가",
-      41: "소고기 채소 볶음 추가"
+      41: "소고기 채소 볶음 추가",
+      42: "채소 한 접시 (대)",
+      43: "채소 한 접시 (소)"
     }
   },
 
@@ -280,7 +290,9 @@ export const dict = {
       38: "タイガービール",
       39: "ハイネケンビール",
       40: "追加ご飯",
-      41: "追加牛肉と野菜炒め"
+      41: "追加牛肉と野菜炒め",
+      42: "野菜盛り (大)",
+      43: "野菜盛り (小)"
     }
   },
 
@@ -328,7 +340,9 @@ export const dict = {
       38: "เบียร์ Tiger",
       39: "เบียร์ Heineken",
       40: "เพิ่มข้าว",
-      41: "เพิ่มเนื้อผัดผัก"
+      41: "เพิ่มเนื้อผัดผัก",
+      42: "ผักจานใหญ่",
+      43: "ผักจานเล็ก"
     }
   },
 
@@ -376,7 +390,9 @@ export const dict = {
       38: "Birra Tiger",
       39: "Birra Heineken",
       40: "Riso extra",
-      41: "Manzo saltato con verdure extra"
+      41: "Manzo saltato con verdure extra",
+      42: "Piatto grande di verdure",
+      43: "Piatto piccolo di verdure"
     }
   },
 
@@ -424,7 +440,9 @@ export const dict = {
       38: "Cerveja Tiger",
       39: "Cerveja Heineken",
       40: "Arroz extra",
-      41: "Carne de vaca refogada com legumes extra"
+      41: "Carne de vaca refogada com legumes extra",
+      42: "Prato grande de legumes",
+      43: "Prato pequeno de legumes"
     }
   },
 
@@ -472,7 +490,9 @@ export const dict = {
       38: "Cerveza Tiger",
       39: "Cerveza Heineken",
       40: "Arroz extra",
-      41: "Ternera salteada con verduras extra"
+      41: "Ternera salteada con verduras extra",
+      42: "Plato grande de verduras",
+      43: "Plato pequeño de verduras"
     }
   },
 
@@ -520,7 +540,9 @@ export const dict = {
       38: "老虎啤酒",
       39: "喜力啤酒",
       40: "加饭",
-      41: "加牛肉炒时蔬"
+      41: "加牛肉炒时蔬",
+      42: "大盘时蔬",
+      43: "小盘时蔬"
     }
   },
 
@@ -574,7 +596,9 @@ export const dict = {
       38: "Пиво Tiger",
       39: "Пиво Heineken",
       40: "Дополнительный рис",
-      41: "Дополнительная говядина с овощами"
+      41: "Дополнительная говядина с овощами",
+      42: "Большая тарелка овощей",
+      43: "Маленькая тарелка овощей"
     }
   },
 
@@ -647,7 +671,9 @@ export const dict = {
       38: "Tiger sör",
       39: "Heineken sör",
       40: "Plusz rizs",
-      41: "Plusz marhahús zöldségekkel"
+      41: "Plusz marhahús zöldségekkel",
+      42: "Nagy tál zöldség",
+      43: "Kis tál zöldség"
     }
   },
 
@@ -727,7 +753,9 @@ export const dict = {
       38: "老虎啤酒",
       39: "海尼根啤酒",
       40: "加飯",
-      41: "加牛肉炒時蔬"
+      41: "加牛肉炒時蔬",
+      42: "大盤時蔬",
+      43: "小盤時蔬"
     }
   },
 
@@ -790,7 +818,9 @@ export const dict = {
       38: "Bir Tiger",
       39: "Bir Heineken",
       40: "Tambahan nasi",
-      41: "Tambahan tumis daging sapi dengan sayuran"
+      41: "Tambahan tumis daging sapi dengan sayuran",
+      42: "Sepiring besar sayuran",
+      43: "Sepiring kecil sayuran"
     }
   },
 
@@ -838,7 +868,9 @@ export const dict = {
       38: "Bir Tiger",
       39: "Bir Heineken",
       40: "Nasi tambahan",
-      41: "Tambahan daging lembu goreng kilas dengan sayur"
+      41: "Tambahan daging lembu goreng kilas dengan sayur",
+      42: "Sepinggan besar sayur",
+      43: "Sepinggan kecil sayur"
     }
   },
 
@@ -886,7 +918,9 @@ export const dict = {
       38: "टाइगर बियर (Tiger Beer)",
       39: "हेनेकेन बियर (Heineken Beer)",
       40: "अतिरिक्त चावल (Extra Rice)",
-      41: "अतिरिक्त बीफ़ सब्ज़ी (Extra Stir-fried Beef)"
+      41: "अतिरिक्त बीफ़ सब्ज़ी (Extra Stir-fried Beef)",
+      42: "सब्ज़ियों की बड़ी प्लेट (Large Plate of Vegetables)",
+      43: "सब्ज़ियों की छोटी प्लेट (Small Plate of Vegetables)"
     }
   },
 
@@ -934,7 +968,9 @@ export const dict = {
       38: "Tiger-olut",
       39: "Heineken-olut",
       40: "Lisäriisi",
-      41: "Ylimääräinen paistettu nauta vihanneksilla"
+      41: "Ylimääräinen paistettu nauta vihanneksilla",
+      42: "Iso lautanen vihanneksia",
+      43: "Pieni lautanen vihanneksia"
     }
   },
 
@@ -988,7 +1024,9 @@ export const dict = {
       38: "Tiger-öl",
       39: "Heineken-öl",
       40: "Extra ris",
-      41: "Extra wokat nötkött med grönsaker"
+      41: "Extra wokat nötkött med grönsaker",
+      42: "Stor tallrik grönsaker",
+      43: "Liten tallrik grönsaker"
     }
   },
 
@@ -1036,7 +1074,9 @@ export const dict = {
       38: "Serbesang Tiger",
       39: "Serbesang Heineken",
       40: "Dagdag na kanin",
-      41: "Dagdag na ginisang karne ng baka na may gulay"
+      41: "Dagdag na ginisang karne ng baka na may gulay",
+      42: "Malaking plato ng gulay",
+      43: "Maliit na plato ng gulay"
     }
   }
 };

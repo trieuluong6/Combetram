@@ -1,6 +1,6 @@
 // menu.js
-// Lưu ý ID món: 1..39 liền mạch theo nhóm; 40 & 41 được bổ sung trong nhóm "MÓN THÊM".
-// ID khả dụng tiếp theo khi thêm món mới: 42 (nhớ cập nhật đồng bộ trong dict.js).
+// Lưu ý ID món: 1..39 liền mạch theo nhóm; 40..43 được bổ sung trong nhóm "MÓN THÊM".
+// ID khả dụng tiếp theo khi thêm món mới: 44 (nhớ cập nhật đồng bộ trong dict.js).
 export const menu = [
   {
     cat: "MÓN ĐẶC BIỆT / ĐỒ TRỘN",
@@ -44,7 +44,9 @@ export const menu = [
       { id: 27, name: "Phần gà xé thêm", price: 30000 },
       { id: 40, name: "Cơm thêm", price: 5000 },
       { id: 28, name: "Đùi gà xối mỡ thêm", price: 40000 },
-      { id: 41, name: "Bò xào rau củ thêm", price: 50000 }
+      { id: 41, name: "Bò xào rau củ thêm", price: 50000 },
+      { id: 42, name: "Dĩa rau lớn", price: 50000 },
+      { id: 43, name: "Dĩa rau nhỏ", price: 30000 }
     ]
   },
   {
