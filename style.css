@@ -1583,6 +1583,17 @@ body.dark-mode .fbi-pill.is-error {
 .fbi-val.is-error { color: #dc2626; }
 body.dark-mode .fbi-val.is-warn { color: #fbbf24; }
 body.dark-mode .fbi-val.is-error { color: #f87171; }
+.fbi-val.is-muted {
+    color: var(--text-muted);
+    font-weight: 600;
+}
+.fbi-error-section {
+    margin-top: auto;
+    border-color: rgba(239, 68, 68, 0.24);
+}
+body.dark-mode .fbi-error-section {
+    border-color: rgba(239, 68, 68, 0.32);
+}
 .fbi-error-list {
     display: flex;
     flex-direction: column;

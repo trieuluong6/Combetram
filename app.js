@@ -105,6 +105,13 @@ function loadDynamicQrCandidate(qrImg, candidates, idx = 0, totalAmount = 0) {
             currentAppliedQrUrl = initialStaticQrSrc;
             qrImg.src = initialStaticQrSrc;
         }
+        if (totalAmount > 0) {
+            const failedKey = candidates[0] || 'vietqr';
+            if (loadDynamicQrCandidate.lastErrorKey !== failedKey) {
+                loadDynamicQrCandidate.lastErrorKey = failedKey;
+                recordFbError('QR_FALLBACK', 'Lỗi tải VietQR động, chuyển sang QR tĩnh', Number(currentTab) || null);
+            }
+        }
         setQrFallbackNote(totalAmount > 0);
         if (billViewMode === 'qr') {
             requestAnimationFrame(() => syncBillFlipHeight(true));
@@ -226,6 +233,85 @@ let fbInspectorOpen = false;
 let fbInspectorTimer = null;
 let lastHealthDotState = 'ok';
 
+const perfMetrics = {
+    longTaskCount: 0,
+    maxLongTaskMs: 0,
+    longTaskSupported: false,
+    fps: null,
+    eventLoopLagMs: 0,
+    maxEventLoopLagMs: 0
+};
+let perfRafId = 0;
+let perfLagTimer = null;
+let perfFrameCount = 0;
+let perfFpsWindowStart = 0;
+let perfExpectedTick = 0;
+
+(function initPassiveLongTaskObserver() {
+    if (typeof PerformanceObserver === 'undefined') return;
+    try {
+        const supported = PerformanceObserver.supportedEntryTypes;
+        if (Array.isArray(supported) && !supported.includes('longtask')) return;
+        const observer = new PerformanceObserver((list) => {
+            for (const entry of list.getEntries()) {
+                perfMetrics.longTaskCount++;
+                if (entry.duration > perfMetrics.maxLongTaskMs) {
+                    perfMetrics.maxLongTaskMs = entry.duration;
+                }
+            }
+        });
+        observer.observe({ type: 'longtask', buffered: true });
+        perfMetrics.longTaskSupported = true;
+    } catch (e) {}
+})();
+
+function startInspectorPerfSampler() {
+    stopInspectorPerfSampler();
+    perfFrameCount = 0;
+    perfFpsWindowStart = performance.now();
+    perfMetrics.fps = null;
+    perfMetrics.eventLoopLagMs = 0;
+    perfMetrics.maxEventLoopLagMs = 0;
+    perfExpectedTick = performance.now() + 250;
+
+    const tickFrame = (now) => {
+        if (!fbInspectorOpen || document.hidden) {
+            perfRafId = 0;
+            return;
+        }
+        perfFrameCount++;
+        const elapsed = now - perfFpsWindowStart;
+        if (elapsed >= 500) {
+            perfMetrics.fps = Math.min(120, Math.round((perfFrameCount * 1000) / elapsed));
+            perfFrameCount = 0;
+            perfFpsWindowStart = now;
+        }
+        perfRafId = requestAnimationFrame(tickFrame);
+    };
+    perfRafId = requestAnimationFrame(tickFrame);
+
+    perfLagTimer = setInterval(() => {
+        const now = performance.now();
+        const drift = Math.max(0, Math.round(now - perfExpectedTick));
+        perfMetrics.eventLoopLagMs = drift;
+        if (drift > perfMetrics.maxEventLoopLagMs) {
+            perfMetrics.maxEventLoopLagMs = drift;
+        }
+        perfExpectedTick = now + 250;
+    }, 250);
+}
+
+function stopInspectorPerfSampler() {
+    if (perfRafId) {
+        cancelAnimationFrame(perfRafId);
+        perfRafId = 0;
+    }
+    if (perfLagTimer) {
+        clearInterval(perfLagTimer);
+        perfLagTimer = null;
+    }
+}
+
 function classifyFbRef(refOrQuery) {
     try {
         const target = refOrQuery?.ref || refOrQuery;
@@ -329,10 +415,11 @@ function recordFbError(code, message, table = null) {
     updateHealthDot();
 }
 
-function getSyncQueueSnapshot(nowPerf = performance.now()) {
+function getSyncQueueSnapshot(nowPerf = performance.now(), nowServer = getServerNow()) {
     let pendingItems = 0;
     let pendingQty = 0;
     const pendingTables = [];
+    const pendingByTable = new Map();
     if (typeof pendingDeltas === 'object' && pendingDeltas !== null) {
         for (const [rawTab, items] of Object.entries(pendingDeltas)) {
             if (!items || typeof items !== 'object') continue;
@@ -345,26 +432,99 @@ function getSyncQueueSnapshot(nowPerf = performance.now()) {
                 }
             }
             if (tableItems > 0) {
+                const tabNum = Number(rawTab);
                 pendingItems += tableItems;
-                pendingTables.push(Number(rawTab));
+                pendingTables.push(tabNum);
+                pendingByTable.set(tabNum, tableItems);
             }
         }
     }
 
     let inFlightSales = 0;
     let oldestMs = 0;
+    const inFlightByTable = new Map();
     for (const op of fbMetrics.inFlightOps.values()) {
         if (op.bucket !== 'sales') continue;
         inFlightSales++;
+        if (op.table) {
+            inFlightByTable.set(op.table, (inFlightByTable.get(op.table) || 0) + 1);
+        }
         const ageMs = Math.max(0, nowPerf - op.startedAt);
         if (ageMs > oldestMs) oldestMs = ageMs;
     }
+
+    if (typeof inFlightItemCommits !== 'undefined' && inFlightItemCommits instanceof Map) {
+        for (const [tabNum, commits] of inFlightItemCommits.entries()) {
+            const count = commits?.size || 0;
+            if (count > (inFlightByTable.get(tabNum) || 0)) {
+                inFlightByTable.set(tabNum, count);
+            }
+        }
+    }
+
+    let echoItems = 0;
+    let echoQty = 0;
+    const echoByTable = new Map();
+    if (typeof localEchoDeltas === 'object' && localEchoDeltas !== null) {
+        for (const [rawTab, items] of Object.entries(localEchoDeltas)) {
+            if (!items || typeof items !== 'object') continue;
+            let tableEchoItems = 0;
+            for (const delta of Object.values(items)) {
+                const absDelta = Math.abs(Number(delta) || 0);
+                if (absDelta > 0) {
+                    tableEchoItems++;
+                    echoQty += absDelta;
+                }
+            }
+            if (tableEchoItems > 0) {
+                echoItems += tableEchoItems;
+                echoByTable.set(Number(rawTab), tableEchoItems);
+            }
+        }
+    }
+
+    const localLocks = [];
+    if (typeof lockInProgressTables !== 'undefined') {
+        for (const t of lockInProgressTables) localLocks.push(`Chốt B${t}`);
+    }
+    if (typeof payingTables !== 'undefined') {
+        for (const t of payingTables) localLocks.push(`Thu B${t}`);
+    }
+    if (typeof localPaymentEchoTables !== 'undefined') {
+        for (const t of localPaymentEchoTables) {
+            if (!payingTables.has(t)) localLocks.push(`Chờ xóa B${t}`);
+        }
+    }
+
+    const remotePaying = [];
+    if (typeof getActiveRemotePayingByTable === 'function') {
+        const remoteMap = getActiveRemotePayingByTable(nowServer);
+        for (const [t, info] of remoteMap.entries()) {
+            const heldSec = Math.max(0, Math.round((nowServer - Number(info.ts || nowServer)) / 1000));
+            remotePaying.push(`Máy khác thu B${t} (${heldSec}s)`);
+        }
+    }
+
+    const requiredBranches = ['orders', 'locked', 'times'];
+    const loadedBranchCount = typeof initialBranchesLoaded !== 'undefined' ? initialBranchesLoaded.size : 3;
+    const missingBranches = typeof initialBranchesLoaded !== 'undefined'
+        ? requiredBranches.filter(b => !initialBranchesLoaded.has(b))
+        : [];
 
     return {
         pendingItems,
         pendingQty,
         pendingTables,
+        pendingByTable,
         inFlightSales,
+        inFlightByTable,
+        echoItems,
+        echoQty,
+        echoByTable,
+        localLocks,
+        remotePaying,
+        loadedBranchCount,
+        missingBranches,
         totalUnsynced: pendingItems + inFlightSales,
         oldestSec: oldestMs / 1000
     };
@@ -384,7 +544,7 @@ function updateHealthDot() {
         const queue = getSyncQueueSnapshot();
         const slowDirect = fbMetrics.lastDirectRtt !== null && fbMetrics.lastDirectRtt > 800;
         const slowTx = fbMetrics.lastTxRtt !== null && fbMetrics.lastTxRtt > 1000;
-        if (queue.totalUnsynced > 0 || slowDirect || slowTx) {
+        if (queue.totalUnsynced > 0 || queue.echoItems > 0 || slowDirect || slowTx) {
             nextState = 'warn';
         }
     }
@@ -1280,11 +1440,13 @@ document.addEventListener('visibilitychange', () => {
             clearInterval(fbInspectorTimer);
             fbInspectorTimer = null;
         }
+        stopInspectorPerfSampler();
     } else {
         startWeatherFluctuationInterval();
         startClockInterval();
         runPeriodicMaintenance();
         if (fbInspectorOpen && !fbInspectorTimer) {
+            startInspectorPerfSampler();
             renderFirebaseInspector();
             fbInspectorTimer = setInterval(renderFirebaseInspector, 500);
         }
@@ -2950,6 +3112,9 @@ function handleSingleTableTimeSnapshot(rawKey, rawVal) {
 
 function bindBranchWithInitialSync(branchRef, branchName, applyInitialVal, handleChildVal) {
     let unsubInitial = null;
+    const onBranchError = (err) => {
+        recordFbError('SYNC_ERR', `[${branchName}] ${err?.message || 'Mất luồng đồng bộ'}`);
+    };
     unsubInitial = onValue(branchRef, (initialSnap) => {
         if (unsubInitial) {
             unsubInitial();
@@ -2958,10 +3123,10 @@ function bindBranchWithInitialSync(branchRef, branchName, applyInitialVal, handl
         applyInitialVal(initialSnap.val() || {});
         markInitialBranchLoaded(branchName);
 
-        _fbOnChildAdded(branchRef, (snap) => handleChildVal(snap.key, snap.val()));
-        _fbOnChildChanged(branchRef, (snap) => handleChildVal(snap.key, snap.val()));
-        _fbOnChildRemoved(branchRef, (snap) => handleChildVal(snap.key, null));
-    });
+        _fbOnChildAdded(branchRef, (snap) => handleChildVal(snap.key, snap.val()), onBranchError);
+        _fbOnChildChanged(branchRef, (snap) => handleChildVal(snap.key, snap.val()), onBranchError);
+        _fbOnChildRemoved(branchRef, (snap) => handleChildVal(snap.key, null), onBranchError);
+    }, onBranchError);
 }
 
 bindBranchWithInitialSync(
@@ -4071,6 +4236,14 @@ function calcAvgRtt(samples) {
     return Math.round(sum / samples.length);
 }
 
+function formatTableCountMap(countMap) {
+    if (!countMap || countMap.size === 0) return '';
+    return Array.from(countMap.entries())
+        .sort((a, b) => a[0] - b[0])
+        .map(([tab, cnt]) => `B${tab}(${cnt})`)
+        .join(', ');
+}
+
 function renderFirebaseInspector() {
     if (!fbInspectorOpen) return;
     const nowPerf = performance.now();
@@ -4080,18 +4253,20 @@ function renderFirebaseInspector() {
     const headerDot = document.getElementById('fbi-header-dot');
     if (headerDot) headerDot.className = `fb-health-dot is-${lastHealthDotState}`;
 
-    // 1. Sync Queue
-    const q = getSyncQueueSnapshot(nowPerf);
+    // 1. Sync Queue (mở rộng đầy đủ hàng chờ, echo buffer, lock/pay guards & nạp gốc)
+    const q = getSyncQueueSnapshot(nowPerf, nowServer);
     const qBadge = document.getElementById('fbi-queue-badge');
     const qTotal = document.getElementById('fbi-queue-total');
     const qDetail = document.getElementById('fbi-queue-detail');
-    const qOldest = document.getElementById('fbi-queue-oldest');
+    const qEcho = document.getElementById('fbi-echo-buffer');
+    const qLocks = document.getElementById('fbi-lock-guards');
+    const qInitOldest = document.getElementById('fbi-queue-init-oldest');
 
     if (qBadge) {
-        if (q.oldestSec >= 3 || (!isFirebaseConnected && q.totalUnsynced > 0)) {
+        if (q.oldestSec >= 3 || (!isFirebaseConnected && q.totalUnsynced > 0) || q.missingBranches.length > 0) {
             qBadge.className = 'fbi-pill is-error';
-            qBadge.textContent = 'Đang nghẽn';
-        } else if (q.totalUnsynced > 0) {
+            qBadge.textContent = q.missingBranches.length > 0 ? 'Chưa nạp xong' : 'Đang nghẽn';
+        } else if (q.totalUnsynced > 0 || q.echoItems > 0 || q.localLocks.length > 0 || q.remotePaying.length > 0) {
             qBadge.className = 'fbi-pill is-warn';
             qBadge.textContent = 'Đang đồng bộ';
         } else {
@@ -4106,14 +4281,37 @@ function renderFirebaseInspector() {
         qTotal.className = `fbi-val${q.totalUnsynced > 0 ? ' is-warn' : ''}`;
     }
     if (qDetail) {
-        const tableNote = q.pendingTables.length > 0
-            ? ` · Bàn ${q.pendingTables.join(', ')}`
-            : '';
-        qDetail.textContent = `${q.pendingItems} chờ · ${q.inFlightSales} đang gửi${tableNote}`;
+        const pendingStr = formatTableCountMap(q.pendingByTable);
+        const sendingStr = formatTableCountMap(q.inFlightByTable);
+        const parts = [`${q.pendingItems} chờ${pendingStr ? ` [${pendingStr}]` : ''}`, `${q.inFlightSales} gửi${sendingStr ? ` [${sendingStr}]` : ''}`];
+        qDetail.textContent = parts.join(' · ');
     }
-    if (qOldest) {
-        qOldest.textContent = `${q.oldestSec.toFixed(1)}s`;
-        qOldest.className = `fbi-val${q.oldestSec >= 3 ? ' is-error' : (q.oldestSec >= 1 ? ' is-warn' : '')}`;
+    if (qEcho) {
+        if (q.echoItems > 0) {
+            const echoStr = formatTableCountMap(q.echoByTable);
+            qEcho.textContent = `${q.echoItems} món (${q.echoQty} phần)${echoStr ? ` · ${echoStr}` : ''}`;
+            qEcho.className = 'fbi-val is-warn';
+        } else {
+            qEcho.textContent = '0 chờ xác nhận';
+            qEcho.className = 'fbi-val';
+        }
+    }
+    if (qLocks) {
+        const allGuards = [...q.localLocks, ...q.remotePaying];
+        if (allGuards.length > 0) {
+            qLocks.textContent = allGuards.join(' · ');
+            qLocks.className = 'fbi-val is-warn';
+        } else {
+            qLocks.textContent = 'Không có khóa';
+            qLocks.className = 'fbi-val';
+        }
+    }
+    if (qInitOldest) {
+        const rootStatus = q.missingBranches.length === 0
+            ? `Gốc: ${q.loadedBranchCount}/3 nhánh`
+            : `Thiếu: ${q.missingBranches.join(', ')}`;
+        qInitOldest.textContent = `${rootStatus} · Treo: ${q.oldestSec.toFixed(1)}s`;
+        qInitOldest.className = `fbi-val${(q.oldestSec >= 3 || q.missingBranches.length > 0) ? ' is-error' : (q.oldestSec >= 1 ? ' is-warn' : '')}`;
     }
 
     // 2. Write RTT & Link
@@ -4123,8 +4321,9 @@ function renderFirebaseInspector() {
     const linkMetaEl = document.getElementById('fbi-link-meta');
 
     if (connPill) {
+        const deviceOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
         connPill.className = `fbi-pill ${isFirebaseConnected ? 'is-ok' : 'is-error'}`;
-        connPill.textContent = isFirebaseConnected ? 'Online' : 'Offline';
+        connPill.textContent = isFirebaseConnected ? 'Online' : (deviceOffline ? 'Mất mạng' : 'Mất Firebase');
     }
     if (directEl) {
         if (fbMetrics.lastDirectRtt !== null) {
@@ -4172,7 +4371,72 @@ function renderFirebaseInspector() {
         sessEl.textContent = `${activeCount} hoạt động / ${totalNodes} node${leaderTag}`;
     }
 
-    // 4. Error Buffer
+    // 4. Browser RAM & CPU (Main-thread load)
+    const perfBadge = document.getElementById('fbi-perf-badge');
+    const ramEl = document.getElementById('fbi-ram-usage');
+    const cpuEl = document.getElementById('fbi-cpu-load');
+    const longTaskEl = document.getElementById('fbi-long-tasks');
+
+    const mem = typeof performance !== 'undefined' ? performance.memory : null;
+    let ramPct = null;
+    if (ramEl) {
+        if (mem && Number.isFinite(mem.usedJSHeapSize) && Number.isFinite(mem.jsHeapSizeLimit) && mem.jsHeapSizeLimit > 0) {
+            const usedMB = (mem.usedJSHeapSize / 1048576).toFixed(1);
+            const totalMB = (mem.totalJSHeapSize / 1048576).toFixed(1);
+            const limitMB = Math.round(mem.jsHeapSizeLimit / 1048576);
+            ramPct = Math.round((mem.usedJSHeapSize / mem.jsHeapSizeLimit) * 100);
+            ramEl.textContent = `${usedMB} / ${totalMB} MB (${ramPct}% của ${limitMB} MB)`;
+            ramEl.className = `fbi-val${ramPct >= 90 ? ' is-error' : (ramPct >= 75 ? ' is-warn' : '')}`;
+        } else {
+            ramEl.textContent = 'Không hỗ trợ (Safari/iOS)';
+            ramEl.className = 'fbi-val is-muted';
+        }
+    }
+
+    const cores = typeof navigator !== 'undefined' && Number.isFinite(navigator.hardwareConcurrency)
+        ? `${navigator.hardwareConcurrency} nhân`
+        : '? nhân';
+    const fpsTxt = perfMetrics.fps !== null ? `${perfMetrics.fps} fps` : 'đang đo...';
+    const lagMs = perfMetrics.eventLoopLagMs;
+    if (cpuEl) {
+        cpuEl.textContent = `${cores} · ${fpsTxt} · trễ ${lagMs} ms`;
+        const isCpuError = (perfMetrics.fps !== null && perfMetrics.fps < 25) || lagMs > 120;
+        const isCpuWarn = (perfMetrics.fps !== null && perfMetrics.fps < 45) || lagMs > 40;
+        cpuEl.className = `fbi-val${isCpuError ? ' is-error' : (isCpuWarn ? ' is-warn' : '')}`;
+    }
+
+    if (longTaskEl) {
+        if (perfMetrics.longTaskSupported) {
+            longTaskEl.textContent = perfMetrics.longTaskCount > 0
+                ? `${perfMetrics.longTaskCount} lần (tối đa ${Math.round(perfMetrics.maxLongTaskMs)} ms)`
+                : '0 lần (mượt)';
+            longTaskEl.className = `fbi-val${perfMetrics.maxLongTaskMs >= 200 ? ' is-error' : (perfMetrics.longTaskCount > 0 ? ' is-warn' : '')}`;
+        } else {
+            longTaskEl.textContent = 'Không hỗ trợ trên trình duyệt này';
+            longTaskEl.className = 'fbi-val is-muted';
+        }
+    }
+
+    if (perfBadge) {
+        const isPerfError = (ramPct !== null && ramPct >= 90)
+            || (perfMetrics.fps !== null && perfMetrics.fps < 25)
+            || lagMs > 120;
+        const isPerfWarn = (ramPct !== null && ramPct >= 75)
+            || (perfMetrics.fps !== null && perfMetrics.fps < 45)
+            || lagMs > 40;
+        if (isPerfError) {
+            perfBadge.className = 'fbi-pill is-error';
+            perfBadge.textContent = 'Quá tải';
+        } else if (isPerfWarn) {
+            perfBadge.className = 'fbi-pill is-warn';
+            perfBadge.textContent = 'Hơi tải';
+        } else {
+            perfBadge.className = 'fbi-pill is-ok';
+            perfBadge.textContent = 'Mượt';
+        }
+    }
+
+    // 5. Error Buffer (luôn nằm ở dưới cùng)
     const errCountEl = document.getElementById('fbi-error-count');
     const errListEl = document.getElementById('fbi-error-list');
     if (errCountEl) {
@@ -4202,6 +4466,7 @@ function openFirebaseInspector() {
     fbMetrics.hasUnreadError = false;
     updateHealthDot();
     backdrop.classList.remove('hidden');
+    startInspectorPerfSampler();
     renderFirebaseInspector();
     clearInterval(fbInspectorTimer);
     fbInspectorTimer = setInterval(renderFirebaseInspector, 500);
@@ -4214,6 +4479,7 @@ function closeFirebaseInspector() {
     fbInspectorOpen = false;
     clearInterval(fbInspectorTimer);
     fbInspectorTimer = null;
+    stopInspectorPerfSampler();
     updateHealthDot();
 }
 

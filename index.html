@@ -22,7 +22,7 @@
     html.paper-flip-pending .flip-clock-container > .flip-unit,
     html.paper-flip-pending .flip-clock-container > .flip-colon { visibility: hidden !important; }
     </style>
-    <link rel="stylesheet" href="style.css?v=fb-inspector-v2">
+    <link rel="stylesheet" href="style.css?v=fb-inspector-v3">
     <script>window.__paperFlipFailsafe = setTimeout(() => document.documentElement.classList.remove('paper-flip-pending'), 3000);</script>
 </head>
 <body>
@@ -263,7 +263,7 @@
         <div class="fbi-header">
             <div class="fbi-title-wrap">
                 <span id="fbi-header-dot" class="fb-health-dot is-ok" aria-hidden="true"></span>
-                <span class="fbi-title" id="fb-inspector-title">Thông số Firebase</span>
+                <span class="fbi-title" id="fb-inspector-title">Thông số hệ thống &amp; Firebase</span>
             </div>
             <button type="button" id="fb-inspector-close" class="fbi-close-btn" aria-label="Đóng bảng thông số">✕</button>
         </div>
@@ -280,12 +280,20 @@
                         <span class="fbi-val" id="fbi-queue-total">0 tác vụ</span>
                     </div>
                     <div class="fbi-row">
-                        <span class="fbi-label">Chi tiết hàng chờ</span>
+                        <span class="fbi-label">Chi tiết theo bàn</span>
                         <span class="fbi-val" id="fbi-queue-detail">0 chờ · 0 đang gửi</span>
                     </div>
                     <div class="fbi-row">
-                        <span class="fbi-label">Tác vụ treo lâu nhất</span>
-                        <span class="fbi-val" id="fbi-queue-oldest">0.0s</span>
+                        <span class="fbi-label">Đệm dội ngược (Echo)</span>
+                        <span class="fbi-val" id="fbi-echo-buffer">0 chờ xác nhận</span>
+                    </div>
+                    <div class="fbi-row">
+                        <span class="fbi-label">Khóa &amp; Thu tiền</span>
+                        <span class="fbi-val" id="fbi-lock-guards">Không có khóa</span>
+                    </div>
+                    <div class="fbi-row">
+                        <span class="fbi-label">Nạp gốc &amp; Treo lâu nhất</span>
+                        <span class="fbi-val" id="fbi-queue-init-oldest">Gốc: 3/3 nhánh · Treo: 0.0s</span>
                     </div>
                 </div>
             </section>
@@ -333,7 +341,28 @@
 
             <section class="fbi-section">
                 <div class="fbi-sec-head">
-                    <span>4. Nhật ký lỗi gần nhất</span>
+                    <span>4. Hiệu năng trình duyệt (RAM &amp; CPU)</span>
+                    <span id="fbi-perf-badge" class="fbi-pill is-ok">Mượt</span>
+                </div>
+                <div class="fbi-grid">
+                    <div class="fbi-row">
+                        <span class="fbi-label">Bộ nhớ RAM (JS Heap)</span>
+                        <span class="fbi-val" id="fbi-ram-usage">--</span>
+                    </div>
+                    <div class="fbi-row">
+                        <span class="fbi-label">CPU &amp; Luồng chính</span>
+                        <span class="fbi-val" id="fbi-cpu-load">--</span>
+                    </div>
+                    <div class="fbi-row">
+                        <span class="fbi-label">Tác vụ nặng (&gt;50ms)</span>
+                        <span class="fbi-val" id="fbi-long-tasks">0 lần</span>
+                    </div>
+                </div>
+            </section>
+
+            <section class="fbi-section fbi-error-section">
+                <div class="fbi-sec-head">
+                    <span>5. Nhật ký lỗi gần nhất</span>
                     <span id="fbi-error-count" class="fbi-muted-tag">0 lỗi</span>
                 </div>
                 <div id="fbi-error-list" class="fbi-error-list">
@@ -346,6 +375,6 @@
 
 <div id="app-toast-container" class="app-toast-container" aria-live="polite"></div>
 
-<script type="module" src="app.js?v=fb-inspector-v2"></script>
+<script type="module" src="app.js?v=fb-inspector-v3"></script>
 </body>
 </html>
