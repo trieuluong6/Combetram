@@ -21,7 +21,7 @@
     html.paper-flip-pending .flip-clock-container > .flip-unit,
     html.paper-flip-pending .flip-clock-container > .flip-colon { visibility: hidden !important; }
     </style>
-    <link rel="stylesheet" href="style.css?v=fb-inspector-v1">
+    <link rel="stylesheet" href="style.css?v=fx-sound-v43">
     <script>window.__paperFlipFailsafe = setTimeout(() => document.documentElement.classList.remove('paper-flip-pending'), 3000);</script>
 </head>
 <body>
@@ -94,13 +94,12 @@
         </div>
     </div>
 
-    <button type="button" class="side-widget side-right net-inspector-btn" id="net-speed-widget" data-action="open-fb-inspector" aria-label="Mở bảng thông số Firebase" aria-haspopup="dialog" title="Thông số hoạt động Firebase (bấm để xem chi tiết)">
-        <span id="fb-health-dot" class="fb-health-dot is-ok" aria-hidden="true"></span>
+    <div class="side-widget side-right" id="net-speed-widget" title="Ước tính payload Firebase (nhận ↓ / gửi ↑)">
         <span class="side-icon">⇅</span>
         <span id="net-down-val" class="net-val">↓0B</span>
         <span class="net-divider"></span>
         <span id="net-up-val" class="net-val">↑0B</span>
-    </button>
+    </div>
 </div>
 
 <div class="flip-clock-container">
@@ -257,94 +256,8 @@
         </div>
     </div>
 </div>
-<div id="fb-inspector-backdrop" class="app-modal-backdrop fb-inspector-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="fb-inspector-title">
-    <div class="app-modal-card fb-inspector-card">
-        <div class="fbi-header">
-            <div class="fbi-title-wrap">
-                <span id="fbi-header-dot" class="fb-health-dot is-ok" aria-hidden="true"></span>
-                <span class="fbi-title" id="fb-inspector-title">Thông số Firebase</span>
-            </div>
-            <button type="button" id="fb-inspector-close" class="fbi-close-btn" aria-label="Đóng bảng thông số">✕</button>
-        </div>
-
-        <div class="fbi-body">
-            <section class="fbi-section">
-                <div class="fbi-sec-head">
-                    <span>1. Hàng đợi đồng bộ (Sync Queue)</span>
-                    <span id="fbi-queue-badge" class="fbi-pill is-ok">An toàn</span>
-                </div>
-                <div class="fbi-grid">
-                    <div class="fbi-row">
-                        <span class="fbi-label">Chưa lên server</span>
-                        <span class="fbi-val" id="fbi-queue-total">0 tác vụ</span>
-                    </div>
-                    <div class="fbi-row">
-                        <span class="fbi-label">Chi tiết hàng chờ</span>
-                        <span class="fbi-val" id="fbi-queue-detail">0 chờ · 0 đang gửi</span>
-                    </div>
-                    <div class="fbi-row">
-                        <span class="fbi-label">Tác vụ treo lâu nhất</span>
-                        <span class="fbi-val" id="fbi-queue-oldest">0.0s</span>
-                    </div>
-                </div>
-            </section>
-
-            <section class="fbi-section">
-                <div class="fbi-sec-head">
-                    <span>2. Độ trễ &amp; Kết nối (Write RTT)</span>
-                    <span id="fbi-conn-pill" class="fbi-pill is-ok">Online</span>
-                </div>
-                <div class="fbi-grid">
-                    <div class="fbi-row">
-                        <span class="fbi-label">Ghi trực tiếp (set/update)</span>
-                        <span class="fbi-val" id="fbi-direct-rtt">--</span>
-                    </div>
-                    <div class="fbi-row">
-                        <span class="fbi-label">Giao dịch món (transaction)</span>
-                        <span class="fbi-val" id="fbi-tx-rtt">--</span>
-                    </div>
-                    <div class="fbi-row">
-                        <span class="fbi-label">Rớt mạng / Lệch giờ server</span>
-                        <span class="fbi-val" id="fbi-link-meta">0 lần · --</span>
-                    </div>
-                </div>
-            </section>
-
-            <section class="fbi-section">
-                <div class="fbi-sec-head">
-                    <span>3. Lưu lượng &amp; Phiên (Payload)</span>
-                </div>
-                <div class="fbi-grid">
-                    <div class="fbi-row">
-                        <span class="fbi-label">Bán hàng (orders/locked/times)</span>
-                        <span class="fbi-val" id="fbi-sales-traffic">↓0B / ↑0B · 0 lượt</span>
-                    </div>
-                    <div class="fbi-row">
-                        <span class="fbi-label">Đồng bộ (sessions)</span>
-                        <span class="fbi-val" id="fbi-rt-traffic">↓0B / ↑0B · 0 lượt</span>
-                    </div>
-                    <div class="fbi-row">
-                        <span class="fbi-label">Sức khỏe phiên</span>
-                        <span class="fbi-val" id="fbi-session-health">1 hoạt động / 1 node</span>
-                    </div>
-                </div>
-            </section>
-
-            <section class="fbi-section">
-                <div class="fbi-sec-head">
-                    <span>4. Nhật ký lỗi gần nhất</span>
-                    <span id="fbi-error-count" class="fbi-muted-tag">0 lỗi</span>
-                </div>
-                <div id="fbi-error-list" class="fbi-error-list">
-                    <div class="fbi-error-empty">Chưa ghi nhận lỗi trong phiên này</div>
-                </div>
-            </section>
-        </div>
-    </div>
-</div>
-
 <div id="app-toast-container" class="app-toast-container" aria-live="polite"></div>
 
-<script type="module" src="app.js?v=fb-inspector-v1"></script>
+<script type="module" src="app.js?v=fx-sound-v30"></script>
 </body>
 </html>
