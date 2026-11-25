@@ -169,6 +169,7 @@ function updateDynamicVietQr(tab, totalAmount) {
 
 
 // ─── ĐỒNG BỘ GIỜ SERVER FIREBASE ──────────────────────────────────────
+
 let serverTimeOffset = 0;
 let hasServerTimeOffset = false;
 onValue(ref(database, '.info/serverTimeOffset'), (snap) => {
@@ -198,8 +199,201 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 5500) {
     }
 }
 
-// ─── ƯỚC TÍNH PAYLOAD JSON ĐẨY LÊN/XUỐNG FIREBASE (không gồm overhead WebSocket) ───
+// ─── ĐO LƯỜNG THỤ ĐỘNG & PAYLOAD JSON FIREBASE (0 byte mạng, 0 render khi đóng) ───
 let fbDownBytes = 0, fbUpBytes = 0;
+const FB_RTT_WINDOW = 10;
+const FB_ERROR_MAX = 8;
+const fbMetrics = {
+    inFlightOps: new Map(),
+    nextOpId: 1,
+    directRttSamples: [],
+    lastDirectRtt: null,
+    txRttSamples: [],
+    lastTxRtt: null,
+    lastTxPasses: 0,
+    txRetryCount: 0,
+    disconnectCount: 0,
+    salesDownBytes: 0,
+    salesUpBytes: 0,
+    salesOps: 0,
+    rtDownBytes: 0,
+    rtUpBytes: 0,
+    rtOps: 0,
+    errors: [],
+    hasUnreadError: false
+};
+let fbInspectorOpen = false;
+let fbInspectorTimer = null;
+let lastHealthDotState = 'ok';
+
+function classifyFbRef(refOrQuery) {
+    try {
+        const target = refOrQuery?.ref || refOrQuery;
+        const str = typeof target?.toString === 'function' ? target.toString() : '';
+        if (str.includes('/combetram_v6_data')) return 'sales';
+    } catch (e) {}
+    return 'rt';
+}
+
+function extractTableFromRef(refArg) {
+    try {
+        const target = refArg?.ref || refArg;
+        const str = typeof target?.toString === 'function' ? target.toString() : '';
+        const m = str.match(/\/combetram_v6_data\/(?:orders|locked|times)\/([1-9])(?:\/|$)/);
+        return m ? Number(m[1]) : null;
+    } catch (e) {
+        return null;
+    }
+}
+
+function recordFbTraffic(bucket, direction, bytes) {
+    if (direction === 'down') {
+        fbDownBytes += bytes;
+        if (bucket === 'sales') {
+            fbMetrics.salesDownBytes += bytes;
+            fbMetrics.salesOps++;
+        } else {
+            fbMetrics.rtDownBytes += bytes;
+            fbMetrics.rtOps++;
+        }
+    } else {
+        fbUpBytes += bytes;
+        if (bucket === 'sales') {
+            fbMetrics.salesUpBytes += bytes;
+            fbMetrics.salesOps++;
+        } else {
+            fbMetrics.rtUpBytes += bytes;
+            fbMetrics.rtOps++;
+        }
+    }
+}
+
+function recordDirectRtt(ms) {
+    fbMetrics.lastDirectRtt = ms;
+    fbMetrics.directRttSamples.push(ms);
+    if (fbMetrics.directRttSamples.length > FB_RTT_WINDOW) {
+        fbMetrics.directRttSamples.shift();
+    }
+    updateHealthDot();
+}
+
+function recordTxRtt(ms, passes) {
+    fbMetrics.lastTxRtt = ms;
+    fbMetrics.lastTxPasses = passes;
+    if (passes > 1) fbMetrics.txRetryCount++;
+    fbMetrics.txRttSamples.push(ms);
+    if (fbMetrics.txRttSamples.length > FB_RTT_WINDOW) {
+        fbMetrics.txRttSamples.shift();
+    }
+    updateHealthDot();
+}
+
+function beginInFlightOp(kind, bucket, table = null) {
+    const id = fbMetrics.nextOpId++;
+    fbMetrics.inFlightOps.set(id, {
+        kind,
+        bucket,
+        table,
+        startedAt: performance.now()
+    });
+    if (bucket === 'sales') updateHealthDot();
+    return id;
+}
+
+function endInFlightOp(id) {
+    const op = fbMetrics.inFlightOps.get(id);
+    fbMetrics.inFlightOps.delete(id);
+    if (op?.bucket === 'sales') updateHealthDot();
+}
+
+function formatClockTime(d = new Date()) {
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mm = String(d.getMinutes()).padStart(2, '0');
+    const ss = String(d.getSeconds()).padStart(2, '0');
+    return `${hh}:${mm}:${ss}`;
+}
+
+function recordFbError(code, message, table = null) {
+    const prefix = table ? `Bàn ${table}: ` : '';
+    fbMetrics.errors.unshift({
+        time: formatClockTime(),
+        code: String(code || 'ERR'),
+        msg: `${prefix}${String(message || 'Lỗi không xác định')}`
+    });
+    if (fbMetrics.errors.length > FB_ERROR_MAX) {
+        fbMetrics.errors.length = FB_ERROR_MAX;
+    }
+    if (!fbInspectorOpen) {
+        fbMetrics.hasUnreadError = true;
+    }
+    updateHealthDot();
+}
+
+function getSyncQueueSnapshot(nowPerf = performance.now()) {
+    let pendingItems = 0;
+    let pendingQty = 0;
+    const pendingTables = [];
+    if (typeof pendingDeltas === 'object' && pendingDeltas !== null) {
+        for (const [rawTab, items] of Object.entries(pendingDeltas)) {
+            if (!items || typeof items !== 'object') continue;
+            let tableItems = 0;
+            for (const delta of Object.values(items)) {
+                const absDelta = Math.abs(Number(delta) || 0);
+                if (absDelta > 0) {
+                    tableItems++;
+                    pendingQty += absDelta;
+                }
+            }
+            if (tableItems > 0) {
+                pendingItems += tableItems;
+                pendingTables.push(Number(rawTab));
+            }
+        }
+    }
+
+    let inFlightSales = 0;
+    let oldestMs = 0;
+    for (const op of fbMetrics.inFlightOps.values()) {
+        if (op.bucket !== 'sales') continue;
+        inFlightSales++;
+        const ageMs = Math.max(0, nowPerf - op.startedAt);
+        if (ageMs > oldestMs) oldestMs = ageMs;
+    }
+
+    return {
+        pendingItems,
+        pendingQty,
+        pendingTables,
+        inFlightSales,
+        totalUnsynced: pendingItems + inFlightSales,
+        oldestSec: oldestMs / 1000
+    };
+}
+
+function updateHealthDot() {
+    const dotEl = document.getElementById('fb-health-dot');
+    if (!dotEl) return;
+
+    const isOffline = (typeof navigator !== 'undefined' && navigator.onLine === false)
+        || (typeof hasEverConnected !== 'undefined' && hasEverConnected && !isFirebaseConnected);
+
+    let nextState = 'ok';
+    if (isOffline || fbMetrics.hasUnreadError) {
+        nextState = 'error';
+    } else {
+        const queue = getSyncQueueSnapshot();
+        const slowDirect = fbMetrics.lastDirectRtt !== null && fbMetrics.lastDirectRtt > 800;
+        const slowTx = fbMetrics.lastTxRtt !== null && fbMetrics.lastTxRtt > 1000;
+        if (queue.totalUnsynced > 0 || slowDirect || slowTx) {
+            nextState = 'warn';
+        }
+    }
+
+    if (nextState === lastHealthDotState) return;
+    lastHealthDotState = nextState;
+    dotEl.className = `fb-health-dot is-${nextState}`;
+}
+
 const textEncoder = typeof TextEncoder !== 'undefined' ? new TextEncoder() : null;
 function formatBytes(n) {
     if (n < 1024) return `${n}B`;
@@ -242,43 +436,83 @@ function updateNetWidget(direction) {
     if (direction === 'down' && downEl) flashNetValue(downEl, 'down');
     if (direction === 'up' && upEl) flashNetValue(upEl, 'up');
 }
-function set(refArg, value) { fbUpBytes += byteSizeOf(value); updateNetWidget('up'); return _fbSet(refArg, value); }
-function update(refArg, value) { fbUpBytes += byteSizeOf(value); updateNetWidget('up'); return _fbUpdate(refArg, value); }
-function remove(refArg) { fbUpBytes += byteSizeOf(null); updateNetWidget('up'); return _fbRemove(refArg); }
+function trackDirectWrite(refArg, bytes, promise) {
+    const bucket = classifyFbRef(refArg);
+    const table = extractTableFromRef(refArg);
+    recordFbTraffic(bucket, 'up', bytes);
+    updateNetWidget('up');
+    const opId = beginInFlightOp('write', bucket, table);
+    const startedAt = performance.now();
+    return promise.then((res) => {
+        const rtt = Math.max(1, Math.round(performance.now() - startedAt));
+        endInFlightOp(opId);
+        recordDirectRtt(rtt);
+        return res;
+    }, (err) => {
+        endInFlightOp(opId);
+        if (bucket === 'sales') {
+            recordFbError('WRITE_ERR', err?.message || 'Lỗi ghi dữ liệu Firebase', table);
+        }
+        throw err;
+    });
+}
+function set(refArg, value) { return trackDirectWrite(refArg, byteSizeOf(value), _fbSet(refArg, value)); }
+function update(refArg, value) { return trackDirectWrite(refArg, byteSizeOf(value), _fbUpdate(refArg, value)); }
+function remove(refArg) { return trackDirectWrite(refArg, byteSizeOf(null), _fbRemove(refArg)); }
 function push(refArg) { return _fbPush(refArg); }
 function transaction(refArg, updateFn, options) {
-    return runTransaction(refArg, updateFn, options).then((res) => {
+    const bucket = classifyFbRef(refArg);
+    const table = extractTableFromRef(refArg);
+    const opId = beginInFlightOp('tx', bucket, table);
+    const startedAt = performance.now();
+    let passes = 0;
+    const wrappedUpdateFn = (cur) => {
+        passes++;
+        return updateFn(cur);
+    };
+    return runTransaction(refArg, wrappedUpdateFn, options).then((res) => {
+        const rtt = Math.max(1, Math.round(performance.now() - startedAt));
+        endInFlightOp(opId);
+        recordTxRtt(rtt, passes);
         if (res?.committed) {
-            fbUpBytes += byteSizeOf(res.snapshot?.val());
+            recordFbTraffic(bucket, 'up', byteSizeOf(res.snapshot?.val()));
             updateNetWidget('up');
         }
         return res;
+    }, (err) => {
+        endInFlightOp(opId);
+        recordFbError('TX_ERR', err?.message || 'Lỗi transaction Firebase', table);
+        throw err;
     });
 }
 function onValue(refArg, callback, ...rest) {
+    const bucket = classifyFbRef(refArg);
     return _fbOnValue(refArg, (snap) => {
-        fbDownBytes += byteSizeOf(snap.val());
+        recordFbTraffic(bucket, 'down', byteSizeOf(snap.val()));
         updateNetWidget('down');
         callback(snap);
     }, ...rest);
 }
 function onChildAdded(refArg, callback, ...rest) {
+    const bucket = classifyFbRef(refArg);
     return _fbOnChildAdded(refArg, (snap, prevKey) => {
-        fbDownBytes += byteSizeOf(snap.val());
+        recordFbTraffic(bucket, 'down', byteSizeOf(snap.val()));
         updateNetWidget('down');
         callback(snap, prevKey);
     }, ...rest);
 }
 function onChildChanged(refArg, callback, ...rest) {
+    const bucket = classifyFbRef(refArg);
     return _fbOnChildChanged(refArg, (snap, prevKey) => {
-        fbDownBytes += byteSizeOf(snap.val());
+        recordFbTraffic(bucket, 'down', byteSizeOf(snap.val()));
         updateNetWidget('down');
         callback(snap, prevKey);
     }, ...rest);
 }
 function onChildRemoved(refArg, callback, ...rest) {
+    const bucket = classifyFbRef(refArg);
     return _fbOnChildRemoved(refArg, (snap) => {
-        fbDownBytes += byteSizeOf(null);
+        recordFbTraffic(bucket, 'down', byteSizeOf(null));
         updateNetWidget('down');
         callback(snap);
     }, ...rest);
@@ -386,9 +620,16 @@ function showAppModal({
         if (e.target === backdrop) closeAppModal(false);
     });
     document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && activeModalResolver) {
-            e.preventDefault();
-            closeAppModal(false);
+        if (e.key === 'Escape') {
+            if (fbInspectorOpen) {
+                e.preventDefault();
+                closeFirebaseInspector();
+                return;
+            }
+            if (activeModalResolver) {
+                e.preventDefault();
+                closeAppModal(false);
+            }
         }
     });
 })();
@@ -703,6 +944,7 @@ async function getLangData(lang) {
             dictCache = m.dict;
         }).catch((err) => {
             console.error('[dict] Lỗi tải từ điển đa ngôn ngữ:', err);
+            recordFbError('DICT_ERR', err?.message || 'Lỗi tải từ điển đa ngôn ngữ');
             dictLoadPromise = null;
         });
     }
@@ -1034,10 +1276,18 @@ document.addEventListener('visibilitychange', () => {
         handleAppBackgrounded();
         stopWeatherFluctuationInterval();
         stopClockInterval();
+        if (fbInspectorTimer) {
+            clearInterval(fbInspectorTimer);
+            fbInspectorTimer = null;
+        }
     } else {
         startWeatherFluctuationInterval();
         startClockInterval();
         runPeriodicMaintenance();
+        if (fbInspectorOpen && !fbInspectorTimer) {
+            renderFirebaseInspector();
+            fbInspectorTimer = setInterval(renderFirebaseInspector, 500);
+        }
     }
 });
 window.addEventListener('pagehide', handleAppBackgrounded);
@@ -1605,9 +1855,11 @@ function cleanupStaleSessions(now = getServerNow()) {
 
 function updateNetworkStatusBadge() {
     const badge = document.getElementById('offline-badge');
-    if (!badge) return;
-    const isOffline = navigator.onLine === false || (hasEverConnected && !isFirebaseConnected);
-    badge.classList.toggle('hidden', !isOffline);
+    if (badge) {
+        const isOffline = navigator.onLine === false || (hasEverConnected && !isFirebaseConnected);
+        badge.classList.toggle('hidden', !isOffline);
+    }
+    updateHealthDot();
 }
 window.addEventListener('online', updateNetworkStatusBadge);
 window.addEventListener('offline', updateNetworkStatusBadge);
@@ -2244,6 +2496,7 @@ sessionBindFallbackTimer = setTimeout(() => {
 }, 900);
 
 onValue(onlineRef, (snap) => {
+    const prevConnected = isFirebaseConnected;
     isFirebaseConnected = snap.val() === true;
     if (isFirebaseConnected) {
         hasEverConnected = true;
@@ -2265,11 +2518,18 @@ onValue(onlineRef, (snap) => {
         };
         sessionsMap[mySessionId] = initialSessionPayload;
         set(mySessionRef, initialSessionPayload)
-            .catch(e => console.error('[sessions] LỖI GHI SESSION:', e.message));
+            .catch(e => {
+                console.error('[sessions] LỖI GHI SESSION:', e.message);
+                recordFbError('SESSION_ERR', e?.message || 'Lỗi khởi tạo session');
+            });
 
         renderPresenceCount();
         cleanupStaleSessions();
     } else {
+        if (hasEverConnected && prevConnected) {
+            fbMetrics.disconnectCount++;
+            recordFbError('DISCONNECT', 'Mất kết nối tới Firebase Realtime Database');
+        }
         updateNetworkStatusBadge();
     }
 });
@@ -2418,6 +2678,9 @@ document.addEventListener('click', (e) => {
                 break;
             case 'scroll-checkout':
                 scrollToCheckout();
+                break;
+            case 'open-fb-inspector':
+                openFirebaseInspector();
                 break;
         }
     }
@@ -2598,7 +2861,7 @@ function handleSingleTableOrderSnapshot(rawKey, tableVal) {
     const prevTableOrder = data.orders?.[tableId] || {};
     if (shallowRecordEqual(prevTableOrder, nextTableOrder)) return;
 
-    fbDownBytes += byteSizeOf(tableVal);
+    recordFbTraffic('sales', 'down', byteSizeOf(tableVal));
     updateNetWidget('down');
 
     const wasLocalPay = localPaymentEchoTables.has(tableId);
@@ -2646,7 +2909,7 @@ function handleSingleTableLockSnapshot(rawKey, rawVal) {
     const prevLocked = Boolean(data.locked?.[tableId]);
     if (prevLocked === nextLocked) return;
 
-    fbDownBytes += byteSizeOf(rawVal);
+    recordFbTraffic('sales', 'down', byteSizeOf(rawVal));
     updateNetWidget('down');
 
     if (nextLocked) {
@@ -2671,7 +2934,7 @@ function handleSingleTableTimeSnapshot(rawKey, rawVal) {
     const prevTime = data.times?.[tableId] !== undefined ? Number(data.times[tableId]) : null;
     if (prevTime === nextTime) return;
 
-    fbDownBytes += byteSizeOf(rawVal);
+    recordFbTraffic('sales', 'down', byteSizeOf(rawVal));
     updateNetWidget('down');
 
     if (nextTime !== null) {
@@ -2832,6 +3095,7 @@ function clearPendingForTable(tab) {
     tableEpoch[tab] = (tableEpoch[tab] || 0) + 1;
     delete pendingDeltas[tab];
     delete localEchoDeltas[tab];
+    updateHealthDot();
     pendingStartTimes.delete(tab);
     const prefix = `${tab}_`;
     for (const key of Object.keys(debounceTimers)) {
@@ -2935,6 +3199,7 @@ function commitPendingItem(tab, id, expectedVersion = null) {
                 delete debounceTimers[key];
                 delete debounceVersions[key];
             }
+            updateHealthDot();
         });
 
     return trackTableCommit(tab, txPromise);
@@ -3118,6 +3383,7 @@ function change(id, delta) {
     renderCrowdStatus();
     flashTableCard(delta);
 
+    updateHealthDot();
     const key = `${tab}_${id}`;
     const version = (debounceVersions[key] || 0) + 1;
     debounceVersions[key] = version;
@@ -3506,6 +3772,7 @@ async function doPay() {
         });
 
         if (!txResult.committed) {
+            recordFbError('PAY_CONFLICT', 'Đơn bàn thay đổi hoặc đã thanh toán ở máy khác', tab);
             localPaymentEchoTables.delete(tab);
             const serverOrderVal = normalizeOrderMap(txResult.snapshot?.val());
             if (Object.keys(serverOrderVal).length > 0) {
@@ -3794,3 +4061,169 @@ if (document.readyState === 'complete') {
 
 updateNetWidget();
 
+
+
+// ─── FIREBASE INSPECTOR MODAL (1-BUTTON DIAGNOSTICS) ────────────────────
+function calcAvgRtt(samples) {
+    if (!samples || samples.length === 0) return null;
+    let sum = 0;
+    for (let i = 0; i < samples.length; i++) sum += samples[i];
+    return Math.round(sum / samples.length);
+}
+
+function renderFirebaseInspector() {
+    if (!fbInspectorOpen) return;
+    const nowPerf = performance.now();
+    const nowServer = getServerNow();
+
+    // Header dot
+    const headerDot = document.getElementById('fbi-header-dot');
+    if (headerDot) headerDot.className = `fb-health-dot is-${lastHealthDotState}`;
+
+    // 1. Sync Queue
+    const q = getSyncQueueSnapshot(nowPerf);
+    const qBadge = document.getElementById('fbi-queue-badge');
+    const qTotal = document.getElementById('fbi-queue-total');
+    const qDetail = document.getElementById('fbi-queue-detail');
+    const qOldest = document.getElementById('fbi-queue-oldest');
+
+    if (qBadge) {
+        if (q.oldestSec >= 3 || (!isFirebaseConnected && q.totalUnsynced > 0)) {
+            qBadge.className = 'fbi-pill is-error';
+            qBadge.textContent = 'Đang nghẽn';
+        } else if (q.totalUnsynced > 0) {
+            qBadge.className = 'fbi-pill is-warn';
+            qBadge.textContent = 'Đang đồng bộ';
+        } else {
+            qBadge.className = 'fbi-pill is-ok';
+            qBadge.textContent = 'An toàn';
+        }
+    }
+    if (qTotal) {
+        qTotal.textContent = q.totalUnsynced > 0
+            ? `${q.totalUnsynced} tác vụ (${q.pendingQty} phần món)`
+            : '0 tác vụ';
+        qTotal.className = `fbi-val${q.totalUnsynced > 0 ? ' is-warn' : ''}`;
+    }
+    if (qDetail) {
+        const tableNote = q.pendingTables.length > 0
+            ? ` · Bàn ${q.pendingTables.join(', ')}`
+            : '';
+        qDetail.textContent = `${q.pendingItems} chờ · ${q.inFlightSales} đang gửi${tableNote}`;
+    }
+    if (qOldest) {
+        qOldest.textContent = `${q.oldestSec.toFixed(1)}s`;
+        qOldest.className = `fbi-val${q.oldestSec >= 3 ? ' is-error' : (q.oldestSec >= 1 ? ' is-warn' : '')}`;
+    }
+
+    // 2. Write RTT & Link
+    const connPill = document.getElementById('fbi-conn-pill');
+    const directEl = document.getElementById('fbi-direct-rtt');
+    const txEl = document.getElementById('fbi-tx-rtt');
+    const linkMetaEl = document.getElementById('fbi-link-meta');
+
+    if (connPill) {
+        connPill.className = `fbi-pill ${isFirebaseConnected ? 'is-ok' : 'is-error'}`;
+        connPill.textContent = isFirebaseConnected ? 'Online' : 'Offline';
+    }
+    if (directEl) {
+        if (fbMetrics.lastDirectRtt !== null) {
+            const avgDirect = calcAvgRtt(fbMetrics.directRttSamples);
+            directEl.textContent = `${fbMetrics.lastDirectRtt} ms (TB: ${avgDirect} ms)`;
+            directEl.className = `fbi-val${fbMetrics.lastDirectRtt > 800 ? ' is-warn' : ''}`;
+        } else {
+            directEl.textContent = '--';
+            directEl.className = 'fbi-val';
+        }
+    }
+    if (txEl) {
+        if (fbMetrics.lastTxRtt !== null) {
+            const avgTx = calcAvgRtt(fbMetrics.txRttSamples);
+            txEl.textContent = `${fbMetrics.lastTxRtt} ms · ${fbMetrics.lastTxPasses} vòng (TB: ${avgTx} ms · retry: ${fbMetrics.txRetryCount})`;
+            txEl.className = `fbi-val${fbMetrics.lastTxRtt > 1000 ? ' is-warn' : ''}`;
+        } else {
+            txEl.textContent = '--';
+            txEl.className = 'fbi-val';
+        }
+    }
+    if (linkMetaEl) {
+        const offsetTxt = hasServerTimeOffset
+            ? `${serverTimeOffset >= 0 ? '+' : ''}${Math.round(serverTimeOffset)} ms`
+            : 'Chưa đồng bộ';
+        linkMetaEl.textContent = `${fbMetrics.disconnectCount} lần rớt · Lệch: ${offsetTxt}`;
+        linkMetaEl.className = `fbi-val${fbMetrics.disconnectCount > 0 ? ' is-warn' : ''}`;
+    }
+
+    // 3. Traffic & Sessions
+    const salesEl = document.getElementById('fbi-sales-traffic');
+    const rtEl = document.getElementById('fbi-rt-traffic');
+    const sessEl = document.getElementById('fbi-session-health');
+
+    if (salesEl) {
+        salesEl.textContent = `↓${formatBytes(fbMetrics.salesDownBytes)} / ↑${formatBytes(fbMetrics.salesUpBytes)} · ${fbMetrics.salesOps} lượt`;
+    }
+    if (rtEl) {
+        rtEl.textContent = `↓${formatBytes(fbMetrics.rtDownBytes)} / ↑${formatBytes(fbMetrics.rtUpBytes)} · ${fbMetrics.rtOps} lượt`;
+    }
+    if (sessEl) {
+        const activeCount = getActiveSessionEntries(nowServer).length;
+        const totalNodes = Object.keys(sessionsMap).length;
+        const leaderTag = isSessionGarbageLeader(nowServer) ? ' · Leader' : '';
+        sessEl.textContent = `${activeCount} hoạt động / ${totalNodes} node${leaderTag}`;
+    }
+
+    // 4. Error Buffer
+    const errCountEl = document.getElementById('fbi-error-count');
+    const errListEl = document.getElementById('fbi-error-list');
+    if (errCountEl) {
+        errCountEl.textContent = `${fbMetrics.errors.length} lỗi`;
+    }
+    if (errListEl) {
+        if (fbMetrics.errors.length === 0) {
+            errListEl.innerHTML = '<div class="fbi-error-empty">Chưa ghi nhận lỗi trong phiên này</div>';
+        } else {
+            const frag = document.createDocumentFragment();
+            for (const item of fbMetrics.errors) {
+                const row = document.createElement('div');
+                row.className = 'fbi-error-item';
+                row.textContent = `[${item.time}] ${item.code}: ${item.msg}`;
+                frag.appendChild(row);
+            }
+            errListEl.replaceChildren(frag);
+        }
+    }
+}
+
+function openFirebaseInspector() {
+    const backdrop = document.getElementById('fb-inspector-backdrop');
+    if (!backdrop) return;
+    triggerHaptic('nav');
+    fbInspectorOpen = true;
+    fbMetrics.hasUnreadError = false;
+    updateHealthDot();
+    backdrop.classList.remove('hidden');
+    renderFirebaseInspector();
+    clearInterval(fbInspectorTimer);
+    fbInspectorTimer = setInterval(renderFirebaseInspector, 500);
+    requestAnimationFrame(() => document.getElementById('fb-inspector-close')?.focus());
+}
+
+function closeFirebaseInspector() {
+    const backdrop = document.getElementById('fb-inspector-backdrop');
+    if (backdrop) backdrop.classList.add('hidden');
+    fbInspectorOpen = false;
+    clearInterval(fbInspectorTimer);
+    fbInspectorTimer = null;
+    updateHealthDot();
+}
+
+(function bindFirebaseInspectorEvents() {
+    const backdrop = document.getElementById('fb-inspector-backdrop');
+    const closeBtn = document.getElementById('fb-inspector-close');
+    if (closeBtn) closeBtn.addEventListener('click', closeFirebaseInspector);
+    if (backdrop) {
+        backdrop.addEventListener('click', (e) => {
+            if (e.target === backdrop) closeFirebaseInspector();
+        });
+    }
+})();

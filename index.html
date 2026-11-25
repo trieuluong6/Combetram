@@ -3,6 +3,7 @@
 <head>
 <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
 <link rel="preconnect" href="https://combetram-default-rtdb.asia-southeast1.firebasedatabase.app" crossorigin>
+<link rel="modulepreload" href="menu.js">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cơm Bé Trâm - Quản lý</title>
@@ -21,7 +22,7 @@
     html.paper-flip-pending .flip-clock-container > .flip-unit,
     html.paper-flip-pending .flip-clock-container > .flip-colon { visibility: hidden !important; }
     </style>
-    <link rel="stylesheet" href="style.css?v=fx-sound-v43">
+    <link rel="stylesheet" href="style.css?v=fb-inspector-v2">
     <script>window.__paperFlipFailsafe = setTimeout(() => document.documentElement.classList.remove('paper-flip-pending'), 3000);</script>
 </head>
 <body>
@@ -48,8 +49,8 @@
             <span class="online-dot"></span>
             👥 Online: <span id="online-val">1</span>
         </div>
-        <button id="sound-toggle" data-action="toggle-sound" aria-label="Bật/tắt âm thanh thông báo" title="Bật/tắt âm thanh (bấm để thử loa)">🔊</button>
-        <button id="dark-toggle" data-action="toggle-dark" aria-label="Chuyển giao diện sáng/tối">🌙</button>
+        <button type="button" id="sound-toggle" data-action="toggle-sound" aria-label="Bật/tắt âm thanh thông báo" title="Bật/tắt âm thanh (bấm để thử loa)">🔊</button>
+        <button type="button" id="dark-toggle" data-action="toggle-dark" aria-label="Chuyển giao diện sáng/tối">🌙</button>
     </div>
 </div>
 
@@ -94,12 +95,13 @@
         </div>
     </div>
 
-    <div class="side-widget side-right" id="net-speed-widget" title="Ước tính payload Firebase (nhận ↓ / gửi ↑)">
+    <button type="button" class="side-widget side-right net-inspector-btn" id="net-speed-widget" data-action="open-fb-inspector" aria-label="Mở bảng thông số Firebase" aria-haspopup="dialog" title="Thông số hoạt động Firebase (bấm để xem chi tiết)">
+        <span id="fb-health-dot" class="fb-health-dot is-ok" aria-hidden="true"></span>
         <span class="side-icon">⇅</span>
         <span id="net-down-val" class="net-val">↓0B</span>
         <span class="net-divider"></span>
         <span id="net-up-val" class="net-val">↑0B</span>
-    </div>
+    </button>
 </div>
 
 <div class="flip-clock-container">
@@ -149,7 +151,7 @@
     <div id="menu-area">
         <div id="menu-cat-nav" class="menu-cat-nav" aria-label="Nhảy nhanh nhóm món"></div>
         <div id="menu-list"></div>
-        <button class="btn-action btn-checkout" id="btn-checkout" data-action="lock-bill" disabled aria-disabled="true"><span class="btn-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h14v18l-2.3-1.5L14.4 21 12 19.5 9.6 21l-2.3-1.5L5 21V3z"/><path d="M8.5 8h7M8.5 12h7M8.5 16h4.5"/></svg></span><span class="btn-action-label">CHỐT ĐƠN &amp; XEM BILL</span></button>
+        <button type="button" class="btn-action btn-checkout" id="btn-checkout" data-action="lock-bill" disabled aria-disabled="true"><span class="btn-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h14v18l-2.3-1.5L14.4 21 12 19.5 9.6 21l-2.3-1.5L5 21V3z"/><path d="M8.5 8h7M8.5 12h7M8.5 16h4.5"/></svg></span><span class="btn-action-label">CHỐT ĐƠN &amp; XEM BILL</span></button>
     </div>
     <div id="bill-area" data-bill-lang="vi" style="display:none;">
         <div class="printer-slot"></div>
@@ -183,7 +185,7 @@
                 </div>
             </div>
         </div>
-        <button class="btn-action qr-toggle-btn btn-qr-paper" id="btn-qr-toggle" data-action="toggle-qr">
+        <button type="button" class="btn-action qr-toggle-btn btn-qr-paper" id="btn-qr-toggle" data-action="toggle-qr">
             <span class="btn-action-icon" id="btn-qr-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                     <rect x="3" y="3" width="7" height="7" rx="1.2"/>
@@ -194,7 +196,7 @@
             </span>
             <span class="btn-action-label" id="btn-qr-label">MÃ QR</span>
         </button>
-        <button class="btn-action btn-add-more" data-action="unlock-bill">
+        <button type="button" class="btn-action btn-add-more" data-action="unlock-bill">
             <span class="btn-action-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="12" cy="12" r="9"/>
@@ -203,7 +205,7 @@
             </span>
             <span class="btn-action-label">GỌI THÊM MÓN</span>
         </button>
-        <button class="btn-action btn-pay-confirm" id="btn-pay-confirm" data-action="pay-bill">
+        <button type="button" class="btn-action btn-pay-confirm" id="btn-pay-confirm" data-action="pay-bill">
             <span class="btn-action-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="12" cy="12" r="9"/>
@@ -213,36 +215,36 @@
             <span class="btn-action-label">XÁC NHẬN THANH TOÁN</span>
         </button>
         <div class="lang-grid" id="lang-grid">
-            <button class="lang-btn active-lang" data-lang="vi"><span>🇻🇳</span><span>VN</span></button>
-            <button class="lang-btn" data-lang="en"><span>🇺🇸</span><span>EN</span></button>
-            <button class="lang-btn" data-lang="fr"><span>🇫🇷</span><span>FR</span></button>
-            <button class="lang-btn" data-lang="kr"><span>🇰🇷</span><span>KR</span></button>
-            <button class="lang-btn" data-lang="jp"><span>🇯🇵</span><span>JP</span></button>
-            <button class="lang-btn" data-lang="th"><span>🇹🇭</span><span>TH</span></button>
-            <button class="lang-btn" data-lang="it"><span>🇮🇹</span><span>IT</span></button>
-            <button class="lang-btn" data-lang="pt"><span>🇵🇹</span><span>PT</span></button>
-            <button class="lang-btn" data-lang="es"><span>🇪🇸</span><span>ES</span></button>
-            <button class="lang-btn" data-lang="cn"><span>🇨🇳</span><span>CN</span></button>
-            <button class="lang-btn" data-lang="de"><span>🇩🇪</span><span>DE</span></button>
-            <button class="lang-btn" data-lang="ru"><span>🇷🇺</span><span>RU</span></button>
-            <button class="lang-btn" data-lang="be"><span>🇧🇪</span><span>BE</span></button>
-            <button class="lang-btn" data-lang="hu"><span>🇭🇺</span><span>HU</span></button>
-            <button class="lang-btn" data-lang="at"><span>🇦🇹</span><span>AT</span></button>
-            <button class="lang-btn" data-lang="tw"><span>🇹🇼</span><span>TW</span></button>
-            <button class="lang-btn" data-lang="sg"><span>🇸🇬</span><span>SG</span></button>
-            <button class="lang-btn" data-lang="id"><span>🇮🇩</span><span>ID</span></button>
-            <button class="lang-btn" data-lang="my"><span>🇲🇾</span><span>MY</span></button>
-            <button class="lang-btn" data-lang="in"><span>🇮🇳</span><span>IN</span></button>
-            <button class="lang-btn" data-lang="fi"><span>🇫🇮</span><span>FI</span></button>
-            <button class="lang-btn" data-lang="nl"><span>🇳🇱</span><span>NL</span></button>
-            <button class="lang-btn" data-lang="se"><span>🇸🇪</span><span>SE</span></button>
-            <button class="lang-btn" data-lang="ph"><span>🇵🇭</span><span>PH</span></button>
+            <button type="button" class="lang-btn active-lang" data-lang="vi"><span>🇻🇳</span><span>VN</span></button>
+            <button type="button" class="lang-btn" data-lang="en"><span>🇺🇸</span><span>EN</span></button>
+            <button type="button" class="lang-btn" data-lang="fr"><span>🇫🇷</span><span>FR</span></button>
+            <button type="button" class="lang-btn" data-lang="kr"><span>🇰🇷</span><span>KR</span></button>
+            <button type="button" class="lang-btn" data-lang="jp"><span>🇯🇵</span><span>JP</span></button>
+            <button type="button" class="lang-btn" data-lang="th"><span>🇹🇭</span><span>TH</span></button>
+            <button type="button" class="lang-btn" data-lang="it"><span>🇮🇹</span><span>IT</span></button>
+            <button type="button" class="lang-btn" data-lang="pt"><span>🇵🇹</span><span>PT</span></button>
+            <button type="button" class="lang-btn" data-lang="es"><span>🇪🇸</span><span>ES</span></button>
+            <button type="button" class="lang-btn" data-lang="cn"><span>🇨🇳</span><span>CN</span></button>
+            <button type="button" class="lang-btn" data-lang="de"><span>🇩🇪</span><span>DE</span></button>
+            <button type="button" class="lang-btn" data-lang="ru"><span>🇷🇺</span><span>RU</span></button>
+            <button type="button" class="lang-btn" data-lang="be"><span>🇧🇪</span><span>BE</span></button>
+            <button type="button" class="lang-btn" data-lang="hu"><span>🇭🇺</span><span>HU</span></button>
+            <button type="button" class="lang-btn" data-lang="at"><span>🇦🇹</span><span>AT</span></button>
+            <button type="button" class="lang-btn" data-lang="tw"><span>🇹🇼</span><span>TW</span></button>
+            <button type="button" class="lang-btn" data-lang="sg"><span>🇸🇬</span><span>SG</span></button>
+            <button type="button" class="lang-btn" data-lang="id"><span>🇮🇩</span><span>ID</span></button>
+            <button type="button" class="lang-btn" data-lang="my"><span>🇲🇾</span><span>MY</span></button>
+            <button type="button" class="lang-btn" data-lang="in"><span>🇮🇳</span><span>IN</span></button>
+            <button type="button" class="lang-btn" data-lang="fi"><span>🇫🇮</span><span>FI</span></button>
+            <button type="button" class="lang-btn" data-lang="nl"><span>🇳🇱</span><span>NL</span></button>
+            <button type="button" class="lang-btn" data-lang="se"><span>🇸🇪</span><span>SE</span></button>
+            <button type="button" class="lang-btn" data-lang="ph"><span>🇵🇭</span><span>PH</span></button>
         </div>
     </div>
     </div>
 </div>
 
-<button id="scroll-to-checkout" class="hidden" data-action="scroll-checkout" aria-label="Cuộn xuống nút chốt đơn" title="Cuộn xuống nút chốt đơn">
+<button type="button" id="scroll-to-checkout" class="hidden" data-action="scroll-checkout" aria-label="Cuộn xuống nút chốt đơn" title="Cuộn xuống nút chốt đơn">
     <span class="mini-cart-arrow" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11"/><path d="M7.5 10.5L12 15l4.5-4.5"/><path d="M6 19.5h12"/></svg></span>
 </button>
 
@@ -256,8 +258,94 @@
         </div>
     </div>
 </div>
+<div id="fb-inspector-backdrop" class="app-modal-backdrop fb-inspector-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="fb-inspector-title">
+    <div class="app-modal-card fb-inspector-card">
+        <div class="fbi-header">
+            <div class="fbi-title-wrap">
+                <span id="fbi-header-dot" class="fb-health-dot is-ok" aria-hidden="true"></span>
+                <span class="fbi-title" id="fb-inspector-title">Thông số Firebase</span>
+            </div>
+            <button type="button" id="fb-inspector-close" class="fbi-close-btn" aria-label="Đóng bảng thông số">✕</button>
+        </div>
+
+        <div class="fbi-body">
+            <section class="fbi-section">
+                <div class="fbi-sec-head">
+                    <span>1. Hàng đợi đồng bộ (Sync Queue)</span>
+                    <span id="fbi-queue-badge" class="fbi-pill is-ok">An toàn</span>
+                </div>
+                <div class="fbi-grid">
+                    <div class="fbi-row">
+                        <span class="fbi-label">Chưa lên server</span>
+                        <span class="fbi-val" id="fbi-queue-total">0 tác vụ</span>
+                    </div>
+                    <div class="fbi-row">
+                        <span class="fbi-label">Chi tiết hàng chờ</span>
+                        <span class="fbi-val" id="fbi-queue-detail">0 chờ · 0 đang gửi</span>
+                    </div>
+                    <div class="fbi-row">
+                        <span class="fbi-label">Tác vụ treo lâu nhất</span>
+                        <span class="fbi-val" id="fbi-queue-oldest">0.0s</span>
+                    </div>
+                </div>
+            </section>
+
+            <section class="fbi-section">
+                <div class="fbi-sec-head">
+                    <span>2. Độ trễ &amp; Kết nối (Write RTT)</span>
+                    <span id="fbi-conn-pill" class="fbi-pill is-ok">Online</span>
+                </div>
+                <div class="fbi-grid">
+                    <div class="fbi-row">
+                        <span class="fbi-label">Ghi trực tiếp (set/update)</span>
+                        <span class="fbi-val" id="fbi-direct-rtt">--</span>
+                    </div>
+                    <div class="fbi-row">
+                        <span class="fbi-label">Giao dịch món (transaction)</span>
+                        <span class="fbi-val" id="fbi-tx-rtt">--</span>
+                    </div>
+                    <div class="fbi-row">
+                        <span class="fbi-label">Rớt mạng / Lệch giờ server</span>
+                        <span class="fbi-val" id="fbi-link-meta">0 lần · --</span>
+                    </div>
+                </div>
+            </section>
+
+            <section class="fbi-section">
+                <div class="fbi-sec-head">
+                    <span>3. Lưu lượng &amp; Phiên (Payload)</span>
+                </div>
+                <div class="fbi-grid">
+                    <div class="fbi-row">
+                        <span class="fbi-label">Bán hàng (orders/locked/times)</span>
+                        <span class="fbi-val" id="fbi-sales-traffic">↓0B / ↑0B · 0 lượt</span>
+                    </div>
+                    <div class="fbi-row">
+                        <span class="fbi-label">Đồng bộ (sessions)</span>
+                        <span class="fbi-val" id="fbi-rt-traffic">↓0B / ↑0B · 0 lượt</span>
+                    </div>
+                    <div class="fbi-row">
+                        <span class="fbi-label">Sức khỏe phiên</span>
+                        <span class="fbi-val" id="fbi-session-health">1 hoạt động / 1 node</span>
+                    </div>
+                </div>
+            </section>
+
+            <section class="fbi-section">
+                <div class="fbi-sec-head">
+                    <span>4. Nhật ký lỗi gần nhất</span>
+                    <span id="fbi-error-count" class="fbi-muted-tag">0 lỗi</span>
+                </div>
+                <div id="fbi-error-list" class="fbi-error-list">
+                    <div class="fbi-error-empty">Chưa ghi nhận lỗi trong phiên này</div>
+                </div>
+            </section>
+        </div>
+    </div>
+</div>
+
 <div id="app-toast-container" class="app-toast-container" aria-live="polite"></div>
 
-<script type="module" src="app.js?v=fx-sound-v30"></script>
+<script type="module" src="app.js?v=fb-inspector-v2"></script>
 </body>
 </html>
