@@ -239,99 +239,13 @@ const perfMetrics = {
     longTaskSupported: false,
     fps: null,
     eventLoopLagMs: 0,
-    maxEventLoopLagMs: 0,
-    frameTimeMs: null,
-    maxFrameTimeMs: 0,
-    droppedFrames: 0
+    maxEventLoopLagMs: 0
 };
 let perfRafId = 0;
 let perfLagTimer = null;
 let perfFrameCount = 0;
 let perfFpsWindowStart = 0;
-let perfLastFrameTime = 0;
 let perfExpectedTick = 0;
-let cachedGpuInfo = null;
-
-function cleanGpuRendererName(rawRenderer) {
-    const raw = String(rawRenderer || '').trim();
-    if (!raw) return 'Không xác định';
-    const angleMatch = raw.match(/^ANGLE\s*\((.+)\)$/i);
-    if (!angleMatch) return raw;
-    const parts = angleMatch[1]
-        .split(',')
-        .map(p => p.trim())
-        .filter(p => p && !/^Unspecified Version$/i.test(p));
-    if (parts.length >= 2) {
-        let model = parts[1]
-            .replace(/^ANGLE Metal Renderer:\s*/i, '')
-            .replace(/\s*\(0x[0-9a-fA-F]+\)/g, '')
-            .replace(/\s+Direct3D\d+.*$/i, '')
-            .replace(/\s+vs_\d+_\d+.*$/i, '')
-            .trim();
-        const backend = parts.find(p => /^(D3D11|D3D9|Metal|OpenGL|Vulkan)$/i.test(p));
-        if (model) return backend ? `${model} (${backend})` : model;
-    }
-    return parts.join(' · ') || raw;
-}
-
-function getGpuHardwareInfo() {
-    if (cachedGpuInfo) return cachedGpuInfo;
-    try {
-        const canvas = document.createElement('canvas');
-        const opts = {
-            powerPreference: 'default',
-            antialias: false,
-            depth: false,
-            stencil: false,
-            preserveDrawingBuffer: false
-        };
-        let api = 'WebGL2';
-        let gl = canvas.getContext('webgl2', opts);
-        if (!gl) {
-            api = 'WebGL1';
-            gl = canvas.getContext('webgl', opts) || canvas.getContext('experimental-webgl', opts);
-        }
-        if (!gl) {
-            cachedGpuInfo = {
-                supported: false,
-                renderer: 'Không hỗ trợ WebGL',
-                rawRenderer: '',
-                api: 'None',
-                maxTex: 0,
-                isSoftware: true
-            };
-            return cachedGpuInfo;
-        }
-        const dbg = gl.getExtension('WEBGL_debug_renderer_info');
-        const rawRenderer = dbg
-            ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL)
-            : gl.getParameter(gl.RENDERER);
-        const maxTex = Number(gl.getParameter(gl.MAX_TEXTURE_SIZE)) || 0;
-        const renderer = cleanGpuRendererName(rawRenderer);
-        const isSoftware = /swiftshader|llvmpipe|software rasterizer|microsoft basic render|mesa offscreen/i.test(
-            `${rawRenderer} ${renderer}`
-        );
-        gl.getExtension('WEBGL_lose_context')?.loseContext();
-        cachedGpuInfo = {
-            supported: true,
-            renderer,
-            rawRenderer: String(rawRenderer || renderer),
-            api,
-            maxTex,
-            isSoftware
-        };
-    } catch (e) {
-        cachedGpuInfo = {
-            supported: false,
-            renderer: 'Bị chặn bởi trình duyệt',
-            rawRenderer: '',
-            api: 'Blocked',
-            maxTex: 0,
-            isSoftware: false
-        };
-    }
-    return cachedGpuInfo;
-}
 
 (function initPassiveLongTaskObserver() {
     if (typeof PerformanceObserver === 'undefined') return;
@@ -355,36 +269,16 @@ function startInspectorPerfSampler() {
     stopInspectorPerfSampler();
     perfFrameCount = 0;
     perfFpsWindowStart = performance.now();
-    perfLastFrameTime = 0;
     perfMetrics.fps = null;
     perfMetrics.eventLoopLagMs = 0;
     perfMetrics.maxEventLoopLagMs = 0;
-    perfMetrics.frameTimeMs = null;
-    perfMetrics.maxFrameTimeMs = 0;
-    perfMetrics.droppedFrames = 0;
     perfExpectedTick = performance.now() + 250;
 
     const tickFrame = (now) => {
         if (!fbInspectorOpen || document.hidden) {
             perfRafId = 0;
-            perfLastFrameTime = 0;
             return;
         }
-        if (perfLastFrameTime > 0) {
-            const dt = now - perfLastFrameTime;
-            if (dt > 0 && dt < 1000) {
-                perfMetrics.frameTimeMs = perfMetrics.frameTimeMs === null
-                    ? dt
-                    : (perfMetrics.frameTimeMs * 0.8 + dt * 0.2);
-                if (dt > perfMetrics.maxFrameTimeMs) {
-                    perfMetrics.maxFrameTimeMs = dt;
-                }
-                if (dt > 34) {
-                    perfMetrics.droppedFrames++;
-                }
-            }
-        }
-        perfLastFrameTime = now;
         perfFrameCount++;
         const elapsed = now - perfFpsWindowStart;
         if (elapsed >= 500) {
@@ -4477,13 +4371,11 @@ function renderFirebaseInspector() {
         sessEl.textContent = `${activeCount} hoạt động / ${totalNodes} node${leaderTag}`;
     }
 
-    // 4. Browser RAM, CPU & GPU (Main-thread & Compositor load)
+    // 4. Browser RAM & CPU (Main-thread load)
     const perfBadge = document.getElementById('fbi-perf-badge');
     const ramEl = document.getElementById('fbi-ram-usage');
     const cpuEl = document.getElementById('fbi-cpu-load');
     const longTaskEl = document.getElementById('fbi-long-tasks');
-    const gpuRendererEl = document.getElementById('fbi-gpu-renderer');
-    const gpuPacingEl = document.getElementById('fbi-gpu-pacing');
 
     const mem = typeof performance !== 'undefined' ? performance.memory : null;
     let ramPct = null;
@@ -4525,50 +4417,13 @@ function renderFirebaseInspector() {
         }
     }
 
-    const gpu = getGpuHardwareInfo();
-    if (gpuRendererEl) {
-        if (!gpu.supported) {
-            gpuRendererEl.textContent = `${gpu.renderer} (Tắt GPU)`;
-            gpuRendererEl.className = 'fbi-val is-error';
-        } else if (gpu.isSoftware) {
-            gpuRendererEl.textContent = `Phần mềm (${gpu.renderer}) · ${gpu.api}`;
-            gpuRendererEl.className = 'fbi-val is-warn';
-        } else {
-            gpuRendererEl.textContent = `${gpu.renderer} · ${gpu.api}`;
-            gpuRendererEl.className = 'fbi-val';
-        }
-        if (gpu.rawRenderer) {
-            gpuRendererEl.title = `${gpu.rawRenderer}${gpu.maxTex ? ` (Max texture: ${gpu.maxTex}px)` : ''}`;
-        }
-    }
-
-    const frameTimeMs = perfMetrics.frameTimeMs;
-    const droppedFrames = perfMetrics.droppedFrames;
-    if (gpuPacingEl) {
-        if (frameTimeMs !== null) {
-            gpuPacingEl.textContent = `${frameTimeMs.toFixed(1)} ms/khung · rớt ${droppedFrames} (tối đa ${Math.round(perfMetrics.maxFrameTimeMs)} ms)`;
-            const isGpuError = frameTimeMs > 40 || droppedFrames >= 10;
-            const isGpuWarn = frameTimeMs > 24 || droppedFrames >= 3;
-            gpuPacingEl.className = `fbi-val${isGpuError ? ' is-error' : (isGpuWarn ? ' is-warn' : '')}`;
-        } else {
-            gpuPacingEl.textContent = 'đang đo...';
-            gpuPacingEl.className = 'fbi-val is-muted';
-        }
-    }
-
     if (perfBadge) {
         const isPerfError = (ramPct !== null && ramPct >= 90)
             || (perfMetrics.fps !== null && perfMetrics.fps < 25)
-            || lagMs > 120
-            || !gpu.supported
-            || (frameTimeMs !== null && frameTimeMs > 40)
-            || droppedFrames >= 10;
+            || lagMs > 120;
         const isPerfWarn = (ramPct !== null && ramPct >= 75)
             || (perfMetrics.fps !== null && perfMetrics.fps < 45)
-            || lagMs > 40
-            || gpu.isSoftware
-            || (frameTimeMs !== null && frameTimeMs > 24)
-            || droppedFrames >= 3;
+            || lagMs > 40;
         if (isPerfError) {
             perfBadge.className = 'fbi-pill is-error';
             perfBadge.textContent = 'Quá tải';

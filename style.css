@@ -1578,9 +1578,6 @@ body.dark-mode .fbi-pill.is-error {
     font-weight: 750;
     text-align: right;
     font-variant-numeric: tabular-nums;
-    min-width: 0;
-    overflow-wrap: break-word;
-    word-break: break-word;
 }
 .fbi-val.is-warn { color: #d97706; }
 .fbi-val.is-error { color: #dc2626; }
