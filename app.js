@@ -36,6 +36,17 @@ const app = initializeApp(firebaseConfig);
 const database = getDatabase(app);
 const dbRef = ref(database, 'combetram_v6_data');
 
+// ─── TRẠNG THÁI ĐỒNG BỘ & KẾT NỐI KHỞI TẠO SỚM (TRÁNH LỖI TDZ KHI BOOT) ───
+let isFirebaseConnected = false;
+let hasEverConnected = false;
+const pendingDeltas = {};
+const localEchoDeltas = {};
+const initialBranchesLoaded = new Set();
+const inFlightItemCommits = new Map(); // tableId -> Set<Promise>
+const payingTables = new Set();
+const localPaymentEchoTables = new Set();
+const lockInProgressTables = new Set();
+
 // ─── CẤU HÌNH & TẠO MÃ VIETQR ĐỘNG THEO TỔNG BILL ────────────────────
 const VIETQR_CONFIG = {
     bankId: 'TCB',                          // Techcombank (BIN: 970407)
@@ -925,9 +936,6 @@ let billWasShown = false;
 // Chặn double-click / thao tác chồng chéo theo từng bàn khi đang thanh toán hoặc chốt/mở đơn lên Firebase.
 let payingModalTable = null;
 let payingHeartbeatTimer = null;
-const payingTables = new Set();
-const localPaymentEchoTables = new Set();
-const lockInProgressTables = new Set();
 
 function syncLockButtonsState(tab = currentTab) {
     const tableNum = Number(tab);
@@ -2029,8 +2037,6 @@ const sessionsRef = ref(database, `${RT_ROOT}/sessions`);
 const mySessionRef = push(sessionsRef);
 const mySessionId = mySessionRef.key;
 
-let isFirebaseConnected = false;
-let hasEverConnected = false;
 const sessionsMap = {};
 const cleanedStaleSessionKeys = new Set();
 let lastServerStaleSweepAt = 0;
@@ -2992,10 +2998,7 @@ if (checkoutBtnEl && 'IntersectionObserver' in window) {
 }
 
 // ─── DỮ LIỆU CHÍNH FIREBASE (SINGLE-SHOT INIT + GRANULAR CHILD LISTENERS) ──
-const pendingDeltas = {};
-const localEchoDeltas = {};
 const tableEpoch = Array(10).fill(0);
-const initialBranchesLoaded = new Set();
 let initialDataReady = false;
 const pendingRemoteOrderFlashes = [];
 const loadingTapTimers = {};
@@ -3349,7 +3352,6 @@ function selectTable(n, options = {}) {
 const debounceTimers = {};
 const debounceVersions = {};
 const pendingStartTimes = new Set();
-const inFlightItemCommits = new Map(); // tableId -> Set<Promise>
 
 function trackTableCommit(tab, promise) {
     const tableNum = Number(tab);
