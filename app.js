@@ -4229,6 +4229,37 @@ updateNetWidget();
 
 
 // ─── FIREBASE INSPECTOR MODAL (1-BUTTON DIAGNOSTICS) ────────────────────
+let cachedNavTimingMetrics = null;
+function getNavTimingMetrics() {
+    if (cachedNavTimingMetrics) return cachedNavTimingMetrics;
+    if (typeof performance === 'undefined' || typeof performance.getEntriesByType !== 'function') {
+        return { supported: false };
+    }
+    const nav = performance.getEntriesByType('navigation')[0];
+    if (!nav) return { supported: false };
+
+    const reqStart = Number(nav.requestStart);
+    const resStart = Number(nav.responseStart);
+    const fetchStart = Number(nav.fetchStart);
+    const domEnd = Number(nav.domContentLoadedEventEnd);
+
+    const hasTtfb = Number.isFinite(reqStart) && Number.isFinite(resStart) && resStart >= reqStart && resStart > 0;
+    const ttfbMs = hasTtfb ? Math.max(0, Math.round(resStart - reqStart)) : null;
+
+    const hasDomReady = Number.isFinite(fetchStart) && Number.isFinite(domEnd) && domEnd >= fetchStart && domEnd > 0;
+    const domReadyMs = hasDomReady ? Math.max(0, Math.round(domEnd - fetchStart)) : null;
+
+    const result = {
+        supported: true,
+        ttfbMs,
+        domReadyMs
+    };
+    if (hasTtfb && hasDomReady) {
+        cachedNavTimingMetrics = result;
+    }
+    return result;
+}
+
 function calcAvgRtt(samples) {
     if (!samples || samples.length === 0) return null;
     let sum = 0;
@@ -4351,6 +4382,55 @@ function renderFirebaseInspector() {
             : 'Chưa đồng bộ';
         linkMetaEl.textContent = `${fbMetrics.disconnectCount} lần rớt · Lệch: ${offsetTxt}`;
         linkMetaEl.className = `fbi-val${fbMetrics.disconnectCount > 0 ? ' is-warn' : ''}`;
+    }
+
+    const navTimingEl = document.getElementById('fbi-nav-timing');
+    if (navTimingEl) {
+        const navTiming = getNavTimingMetrics();
+        if (!navTiming.supported) {
+            navTimingEl.textContent = 'Không hỗ trợ';
+            navTimingEl.className = 'fbi-val is-muted';
+        } else {
+            const ttfbTxt = navTiming.ttfbMs !== null ? `${navTiming.ttfbMs} ms` : '--';
+            const domTxt = navTiming.domReadyMs !== null ? `${navTiming.domReadyMs} ms` : 'đang tải...';
+            navTimingEl.textContent = `${ttfbTxt} / ${domTxt}`;
+            const isNavError = (navTiming.ttfbMs !== null && navTiming.ttfbMs >= 800)
+                || (navTiming.domReadyMs !== null && navTiming.domReadyMs >= 2500);
+            const isNavWarn = (navTiming.ttfbMs !== null && navTiming.ttfbMs >= 300)
+                || (navTiming.domReadyMs !== null && navTiming.domReadyMs >= 1200);
+            navTimingEl.className = `fbi-val${isNavError ? ' is-error' : (isNavWarn ? ' is-warn' : '')}`;
+        }
+    }
+
+    const netInfoEl = document.getElementById('fbi-net-info');
+    if (netInfoEl) {
+        const navConn = typeof navigator !== 'undefined'
+            ? (navigator.connection || navigator.mozConnection || navigator.webkitConnection || null)
+            : null;
+        if (!navConn) {
+            netInfoEl.textContent = 'Không hỗ trợ (Safari/iOS)';
+            netInfoEl.className = 'fbi-val is-muted';
+        } else if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+            netInfoEl.textContent = 'Offline · 0 ms · 0 Mbps';
+            netInfoEl.className = 'fbi-val is-error';
+        } else {
+            const eff = typeof navConn.effectiveType === 'string' && navConn.effectiveType
+                ? navConn.effectiveType.toUpperCase()
+                : '?';
+            const rttVal = Number(navConn.rtt);
+            const dlVal = Number(navConn.downlink);
+            const rttTxt = Number.isFinite(rttVal) ? `${Math.round(rttVal)} ms` : '--';
+            const dlTxt = Number.isFinite(dlVal) ? `${Number(dlVal.toFixed(1))} Mbps` : '--';
+            netInfoEl.textContent = `${eff} · ${rttTxt} · ${dlTxt}`;
+            const isConnError = navConn.effectiveType === 'slow-2g'
+                || navConn.effectiveType === '2g'
+                || (Number.isFinite(rttVal) && rttVal >= 500)
+                || (Number.isFinite(dlVal) && dlVal > 0 && dlVal < 1);
+            const isConnWarn = navConn.effectiveType === '3g'
+                || (Number.isFinite(rttVal) && rttVal >= 200)
+                || (Number.isFinite(dlVal) && dlVal > 0 && dlVal < 3);
+            netInfoEl.className = `fbi-val${isConnError ? ' is-error' : (isConnWarn ? ' is-warn' : '')}`;
+        }
     }
 
     // 3. Traffic & Sessions
