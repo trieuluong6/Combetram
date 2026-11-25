@@ -258,6 +258,17 @@ let perfExpectedTick = 0;
                 if (entry.duration > perfMetrics.maxLongTaskMs) {
                     perfMetrics.maxLongTaskMs = entry.duration;
                 }
+                if (entry.duration >= 350) {
+                    const tabNum = Number(currentTab);
+                    let viewCtx = 'Màn hình chính';
+                    if (tabNum) {
+                        const modeTxt = data.locked?.[tabNum]
+                            ? (billViewMode === 'qr' ? 'Mã QR' : 'Xem bill')
+                            : 'Chọn món';
+                        viewCtx = `Bàn ${tabNum} (${modeTxt})`;
+                    }
+                    recordFbError('UI_FREEZE', `Đơ giao diện ${Math.round(entry.duration)}ms tại ${viewCtx}`);
+                }
             }
         });
         observer.observe({ type: 'longtask', buffered: true });
@@ -380,7 +391,8 @@ function beginInFlightOp(kind, bucket, table = null) {
         kind,
         bucket,
         table,
-        startedAt: performance.now()
+        startedAt: performance.now(),
+        warnedHang: false
     });
     if (bucket === 'sales') updateHealthDot();
     return id;
@@ -392,6 +404,17 @@ function endInFlightOp(id) {
     if (op?.bucket === 'sales') updateHealthDot();
 }
 
+function checkStalledInFlightOps(nowPerf = performance.now()) {
+    for (const op of fbMetrics.inFlightOps.values()) {
+        if (op.bucket !== 'sales' || op.warnedHang) continue;
+        if ((nowPerf - op.startedAt) >= 8000) {
+            op.warnedHang = true;
+            const label = op.kind === 'tx' ? 'transaction' : 'ghi dữ liệu';
+            recordFbError('OP_HANG', `Lệnh ${label} treo >8s chưa phản hồi`, op.table);
+        }
+    }
+}
+
 function formatClockTime(d = new Date()) {
     const hh = String(d.getHours()).padStart(2, '0');
     const mm = String(d.getMinutes()).padStart(2, '0');
@@ -399,21 +422,101 @@ function formatClockTime(d = new Date()) {
     return `${hh}:${mm}:${ss}`;
 }
 
+let isRecordingFbError = false;
 function recordFbError(code, message, table = null) {
-    const prefix = table ? `Bàn ${table}: ` : '';
-    fbMetrics.errors.unshift({
-        time: formatClockTime(),
-        code: String(code || 'ERR'),
-        msg: `${prefix}${String(message || 'Lỗi không xác định')}`
-    });
-    if (fbMetrics.errors.length > FB_ERROR_MAX) {
-        fbMetrics.errors.length = FB_ERROR_MAX;
+    if (isRecordingFbError) return;
+    isRecordingFbError = true;
+    try {
+        const prefix = table ? `Bàn ${table}: ` : '';
+        const cleanCode = String(code || 'ERR');
+        const cleanMsg = `${prefix}${String(message || 'Lỗi không xác định')}`;
+        const nowStr = formatClockTime();
+
+        const existingIdx = fbMetrics.errors.findIndex(
+            (e) => e.code === cleanCode && e.msg === cleanMsg
+        );
+        if (existingIdx !== -1) {
+            const existing = fbMetrics.errors[existingIdx];
+            existing.time = nowStr;
+            existing.count = (existing.count || 1) + 1;
+            if (existingIdx > 0) {
+                fbMetrics.errors.splice(existingIdx, 1);
+                fbMetrics.errors.unshift(existing);
+            }
+        } else {
+            fbMetrics.errors.unshift({
+                time: nowStr,
+                code: cleanCode,
+                msg: cleanMsg,
+                count: 1
+            });
+            if (fbMetrics.errors.length > FB_ERROR_MAX) {
+                fbMetrics.errors.length = FB_ERROR_MAX;
+            }
+        }
+        if (!fbInspectorOpen) {
+            fbMetrics.hasUnreadError = true;
+        }
+        updateHealthDot();
+    } finally {
+        isRecordingFbError = false;
     }
-    if (!fbInspectorOpen) {
-        fbMetrics.hasUnreadError = true;
-    }
-    updateHealthDot();
 }
+
+function extractAppSourceLocation(rawText) {
+    if (!rawText) return null;
+    const str = String(rawText);
+    if (/^(?:chrome|moz|safari-web)-extension:\/\//i.test(str)) return null;
+    const match = str.match(/((?:app|menu|dict)\.js|index\.html)(?:\?[^:\s)]*)?:(\d+)(?::(\d+))?/i);
+    if (match) {
+        return `${match[1]}:${match[2]}`;
+    }
+    if (typeof window !== 'undefined' && window.location?.origin && str.includes(window.location.origin)) {
+        const tail = str.split('/').pop() || '';
+        return tail.replace(/\?[^:]*/, '').slice(0, 48) || 'local';
+    }
+    return null;
+}
+
+(function initCrashBlackboxListeners() {
+    if (typeof window === 'undefined') return;
+
+    window.addEventListener('error', (event) => {
+        if (!event) return;
+        const target = event.target;
+        if (target && target !== window && (target.tagName === 'SCRIPT' || target.tagName === 'IMG' || target.tagName === 'LINK')) {
+            const rawUrl = target.src || target.href || '';
+            const assetMatch = rawUrl.match(/((?:app|menu|dict)\.js|style\.css|payment-qr\.png)/i);
+            if (assetMatch) {
+                recordFbError('ASSET_ERR', `Không tải được tệp ${assetMatch[1]}`);
+            }
+            return;
+        }
+
+        const loc = extractAppSourceLocation(event.filename) || extractAppSourceLocation(event.error?.stack);
+        if (!loc) return;
+        const rawMsg = event.message || event.error?.message || 'Lỗi thực thi JavaScript';
+        const cleanMsg = String(rawMsg).replace(/^Uncaught\s+\w*Error:\s*/i, '').slice(0, 140);
+        recordFbError('RUNTIME_ERR', `${cleanMsg} (${loc})`);
+    }, true);
+
+    window.addEventListener('unhandledrejection', (event) => {
+        const reason = event?.reason;
+        if (!reason) return;
+        if (reason.name === 'AbortError') return;
+
+        const stack = typeof reason === 'object' ? reason.stack : '';
+        if (stack && /(?:chrome|moz|safari-web)-extension:\/\//i.test(String(stack)) && !extractAppSourceLocation(stack)) {
+            return;
+        }
+        const loc = extractAppSourceLocation(stack);
+        const rawMsg = typeof reason === 'string'
+            ? reason
+            : (reason.message || reason.code || 'Promise bị từ chối chưa xử lý');
+        const cleanMsg = String(rawMsg).slice(0, 140);
+        recordFbError('PROMISE_ERR', loc ? `${cleanMsg} (${loc})` : cleanMsg);
+    });
+})();
 
 function getSyncQueueSnapshot(nowPerf = performance.now(), nowServer = getServerNow()) {
     let pendingItems = 0;
@@ -2167,6 +2270,7 @@ function refreshPresenceHeartbeat() {
 
 function runPeriodicMaintenance() {
     if (document.hidden) return;
+    checkStalledInFlightOps();
     const now = getServerNow();
     for (let i = 1; i <= 9; i++) renderTableTime(i, now);
     refreshPresenceHeartbeat();
@@ -2634,16 +2738,20 @@ function bindActiveSessionsListeners(forceRebind = false) {
         startAt(cutoffTs)
     );
 
+    const onSessionStreamError = (err) => {
+        recordFbError('SESSION_ERR', err?.message || 'Lỗi luồng đồng bộ phiên');
+    };
+
     activeSessionUnsubs.push(
         onChildAdded(activeSessionsQuery, (snap) => {
             if (snap.key) handleRemoteSessionChange(snap.key, snap.val(), 'added');
-        }),
+        }, onSessionStreamError),
         onChildChanged(activeSessionsQuery, (snap) => {
             if (snap.key) handleRemoteSessionChange(snap.key, snap.val(), 'changed');
-        }),
+        }, onSessionStreamError),
         onChildRemoved(activeSessionsQuery, (snap) => {
             if (snap.key) handleRemoteSessionChange(snap.key, null, 'removed');
-        })
+        }, onSessionStreamError)
     );
 
     renderPresenceCount(now);
@@ -2995,11 +3103,20 @@ function flushRemoteOrderFlashes() {
     }
 }
 
+let initialLoadWatchdogTimer = setTimeout(() => {
+    initialLoadWatchdogTimer = null;
+    if (initialDataReady) return;
+    const missing = ['orders', 'locked', 'times'].filter(b => !initialBranchesLoaded.has(b));
+    recordFbError('INIT_HANG', `Nạp dữ liệu gốc quá 6s, thiếu [${missing.join(', ')}]`);
+}, 6000);
+
 function markInitialBranchLoaded(branch) {
     if (initialDataReady) return;
     initialBranchesLoaded.add(branch);
     if (initialBranchesLoaded.size === 3) {
         initialDataReady = true;
+        clearTimeout(initialLoadWatchdogTimer);
+        initialLoadWatchdogTimer = null;
         const tablesContainer = document.getElementById('tables-container');
         if (tablesContainer) {
             tablesContainer.classList.remove('is-loading');
@@ -3817,6 +3934,7 @@ async function setLock(v) {
         }
     } catch (err) {
         console.error('[lock] Lỗi ghi trạng thái khóa Firebase:', err);
+        recordFbError('LOCK_ERR', err?.message || (v ? 'Lỗi chốt đơn' : 'Lỗi mở khóa bàn'), tab);
         showToast('Không thể cập nhật trạng thái bàn, vui lòng thử lại!', 'error', 2800);
     } finally {
         lockInProgressTables.delete(tab);
@@ -4279,6 +4397,7 @@ function renderFirebaseInspector() {
     if (!fbInspectorOpen) return;
     const nowPerf = performance.now();
     const nowServer = getServerNow();
+    checkStalledInFlightOps(nowPerf);
 
     // Header dot
     const headerDot = document.getElementById('fbi-header-dot');
@@ -4520,7 +4639,10 @@ function renderFirebaseInspector() {
     const errCountEl = document.getElementById('fbi-error-count');
     const errListEl = document.getElementById('fbi-error-list');
     if (errCountEl) {
-        errCountEl.textContent = `${fbMetrics.errors.length} lỗi`;
+        const totalRepeats = fbMetrics.errors.reduce((acc, item) => acc + (item.count || 1), 0);
+        errCountEl.textContent = totalRepeats > fbMetrics.errors.length
+            ? `${fbMetrics.errors.length} loại (${totalRepeats} lần)`
+            : `${fbMetrics.errors.length} lỗi`;
     }
     if (errListEl) {
         if (fbMetrics.errors.length === 0) {
@@ -4530,7 +4652,8 @@ function renderFirebaseInspector() {
             for (const item of fbMetrics.errors) {
                 const row = document.createElement('div');
                 row.className = 'fbi-error-item';
-                row.textContent = `[${item.time}] ${item.code}: ${item.msg}`;
+                const repeatSuffix = (item.count || 1) > 1 ? ` (x${item.count})` : '';
+                row.textContent = `[${item.time}] ${item.code}: ${item.msg}${repeatSuffix}`;
                 frag.appendChild(row);
             }
             errListEl.replaceChildren(frag);
