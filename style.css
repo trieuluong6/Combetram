@@ -1941,8 +1941,7 @@ body.tab-hidden .remote-paying-badge,
 body.tab-hidden .remote-paying-banner,
 body.tab-hidden .btn-action.is-busy::before,
 body.tab-hidden .fb-health-dot,
-body.tab-hidden .mini-cart-arrow,
-body.tab-hidden #scroll-to-checkout {
+body.tab-hidden .mini-cart-arrow {
     animation-play-state: paused !important;
 }
 

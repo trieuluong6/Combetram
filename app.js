@@ -532,7 +532,6 @@ function extractAppSourceLocation(rawText) {
 function getSyncQueueSnapshot(nowPerf = performance.now(), nowServer = getServerNow()) {
     let pendingItems = 0;
     let pendingQty = 0;
-    const pendingTables = [];
     const pendingByTable = new Map();
     if (typeof pendingDeltas === 'object' && pendingDeltas !== null) {
         for (const [rawTab, items] of Object.entries(pendingDeltas)) {
@@ -548,7 +547,6 @@ function getSyncQueueSnapshot(nowPerf = performance.now(), nowServer = getServer
             if (tableItems > 0) {
                 const tabNum = Number(rawTab);
                 pendingItems += tableItems;
-                pendingTables.push(tabNum);
                 pendingByTable.set(tabNum, tableItems);
             }
         }
@@ -628,7 +626,6 @@ function getSyncQueueSnapshot(nowPerf = performance.now(), nowServer = getServer
     return {
         pendingItems,
         pendingQty,
-        pendingTables,
         pendingByTable,
         inFlightSales,
         inFlightByTable,
@@ -3081,7 +3078,6 @@ function queueRemoteOrderFlashes(prevOrders, nextOrders, ignoredTables = null) {
 
             pendingRemoteOrderFlashes.push({
                 tableId,
-                itemId,
                 delta: observedDelta
             });
             queued++;
